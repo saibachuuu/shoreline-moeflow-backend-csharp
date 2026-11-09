@@ -18,6 +18,7 @@ builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<UserView>();
 builder.Services.AddScoped<UserProfileService>();
 builder.Services.AddSingleton<SiteSettings>();
+builder.Services.AddScoped<IdentityPermissions>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
 builder.Services.AddSingleton<EmailCodeService>();

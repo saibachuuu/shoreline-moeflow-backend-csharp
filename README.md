@@ -6,9 +6,10 @@ The ASP.NET Core service runs HTTP requests and bounded, durable MongoDB jobs in
 one process. MongoDB and object-storage clients are shared. Password hashing has
 a separate concurrency limit. The current implementation includes legacy password
 and token compatibility, captchas, user profiles and aliases, email verification,
-password recovery, a leased job queue, and streaming S3 operations.
+password recovery, site settings, administrator user management, identity
+permission calculation, a leased job queue, and streaming S3 operations.
 
-Project/team permissions, translation workflows, files, snapshots, exports,
+Project/team business endpoints, translation workflows, files, snapshots, exports,
 storage transfers and other business modules still need to be ported and tested.
 No memory-saving claim applies to the complete backend yet.
 
