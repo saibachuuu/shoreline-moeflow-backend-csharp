@@ -12,7 +12,7 @@ using Shoreline.Api.Storage;
 
 namespace Shoreline.Tests;
 
-[Collection("local-services")]
+[Collection("local-services-file")]
 public sealed class FileTests(LocalServices services)
 {
     private static readonly ObjectId ProjectId = ObjectId.Parse("653333333333333333333333");
@@ -587,17 +587,44 @@ public sealed class FileTests(LocalServices services)
         await InsertMemberAsync(project, actor, ["creator"]);
         var a = await InsertFileAsync(Image(project, "a.png", root: true));
         var b = await InsertFileAsync(Image(project, "b.png", root: true));
+        var c = await InsertFileAsync(Image(project, "c.png", root: true));
 
         var view = await files.OrderAsync(actor, project, CancellationToken.None);
-        var reversed = new[] { b["_id"].AsObjectId.ToString(), a["_id"].AsObjectId.ToString() };
-        var original = new[] { a["_id"].AsObjectId.ToString(), b["_id"].AsObjectId.ToString() };
+        // Both requested orders differ from the current default order. Python's
+        // save_order (app/services/file_order.py) explicitly returns without
+        // writing when file_ids equals the current order, so a two-file
+        // "original vs reversed" pair is not a deterministic conflict: the
+        // no-op can win the lease and both requests succeed. Using two
+        // effectful permutations makes exactly one of them commit the version
+        // CAS and the other observe the changed snapshot.
+        var firstOrder = new[]
+        {
+            b["_id"].AsObjectId.ToString(), a["_id"].AsObjectId.ToString(),
+            c["_id"].AsObjectId.ToString()
+        };
+        var secondOrder = new[]
+        {
+            c["_id"].AsObjectId.ToString(), b["_id"].AsObjectId.ToString(),
+            a["_id"].AsObjectId.ToString()
+        };
 
-        var first = files.SaveOrderAsync(actor, project, reversed, view.Version, false, CancellationToken.None);
-        var second = files.SaveOrderAsync(actor, project, original, view.Version, false, CancellationToken.None);
+        var first = files.SaveOrderAsync(actor, project, firstOrder, view.Version, false, CancellationToken.None);
+        var second = files.SaveOrderAsync(actor, project, secondOrder, view.Version, false, CancellationToken.None);
         var results = await Task.WhenAll(CatchAsync(first), CatchAsync(second));
 
         Assert.Single(results, result => result is null);
         Assert.Single(results, result => result is ApiError);
+        var stored = await services.Store.Collection("file")
+            .Find(Builders<BsonDocument>.Filter.Eq("p", project["_id"].AsObjectId)
+                  & Builders<BsonDocument>.Filter.Eq("f", BsonNull.Value)
+                  & Builders<BsonDocument>.Filter.Eq("t", FileService.TypeImage)
+                  & Builders<BsonDocument>.Filter.Eq("ac", true))
+            .Sort(Builders<BsonDocument>.Sort.Ascending("mo"))
+            .ToListAsync();
+        var persisted = stored.Select(file => file["_id"].AsObjectId.ToString()).ToArray();
+        Assert.True(
+            persisted.SequenceEqual(firstOrder) || persisted.SequenceEqual(secondOrder),
+            "the committed order must be exactly one of the two requested orders");
         Assert.False((await LoadProjectAsync(project["_id"].AsObjectId)).Contains("fol"));
     }
 

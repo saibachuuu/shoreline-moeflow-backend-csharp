@@ -9,7 +9,7 @@ using Shoreline.Api.Security;
 
 namespace Shoreline.Tests;
 
-[Collection("local-services")]
+[Collection("local-services-admin-user")]
 public sealed class AdminUserTests(LocalServices services)
 {
     [Fact]

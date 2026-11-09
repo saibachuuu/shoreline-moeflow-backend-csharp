@@ -9,7 +9,7 @@ using Shoreline.Api.Infrastructure;
 
 namespace Shoreline.Tests;
 
-[Collection("local-services")]
+[Collection("local-services-language")]
 public sealed class LanguageTests(LocalServices services)
 {
     [Theory]

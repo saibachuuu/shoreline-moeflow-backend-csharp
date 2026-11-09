@@ -11,8 +11,8 @@ using Shoreline.Imaging;
 
 namespace Shoreline.Tests;
 
-[Collection("local-services")]
-public sealed class ThumbnailTests(LocalServices services) : IDisposable
+[Collection("local-services-thumbnail")]
+public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDisposable
 {
     private readonly List<string> _tempRoots = [];
     private readonly CancellationToken ct = CancellationToken.None;
