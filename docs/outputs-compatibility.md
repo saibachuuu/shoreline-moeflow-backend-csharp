@@ -280,13 +280,15 @@ races remain a later cross-module integration item.
 - `src/Shoreline.Api/Formats/PythonJson.cs`
 - `src/Shoreline.Api/Formats/OutputArchive.cs`
 - `tests/Shoreline.Tests/OutputTests.cs`
+- `tests/Shoreline.Tests/OutputHttpTests.cs`
+- `tests/Shoreline.Tests/OutputGoldenTests.cs`
 
 `AddOutputServices()` registers the scoped services and the singleton job
 handler; `MapOutputs()` maps the routes. The integrator must call both.
 
-## Direct-service facts (27)
+## Direct-service facts (28)
 
-`tests/Shoreline.Tests/OutputTests.cs` contains 27 `[Fact]` tests covering:
+`tests/Shoreline.Tests/OutputTests.cs` contains 28 `[Fact]` tests covering:
 canonical BSON/job payload; pooled storage fail-closed 9003; cooldown 9002 and
 all-target skip; prune keeps two and deletes objects before rows;
 physical-delete failure preserves rows/bytes; foreign target 4024; status
@@ -300,8 +302,19 @@ double accounting; stale revision; deleted target; deleted frozen file metadata
 (409); changed frozen save name (409); concurrent duplicate runs publishing once;
 stale owner after lease expiry; and staging cleanup after success.
 
-These are direct-service facts. The shared `dotnet build/test` was intentionally
-not run because other agents' files are still incomplete.
+These are direct-service facts. `OutputHttpTests.cs` adds 4 real
+`WebApplicationFactory<Program>` facts for token/permission/foreign-target,
+canonical queued creation followed by an explicit real job-handler run,
+schema/cooldown/all-target skipping, and epoch-header/restore-stale failure.
+`OutputGoldenTests.cs` adds 3 facts reading the committed Python AST goldens for
+file LabelPlus bytes, staff-block placement, and manual export names.
+
+Isolated verification used `git archive 3edd683` plus only the G1 files and a
+private `Program.cs` wiring patch (the shared worktree `Program.cs` was not
+edited). `dotnet build -warnaserror` completed with 0 warnings/0 errors; the
+focused output run passed 36/36 and the full isolated suite passed 421/421.
+The focused count is 35 new output Facts plus one pre-existing test matching the
+`Output` filter.
 
 ## Open boundaries / integration notes
 

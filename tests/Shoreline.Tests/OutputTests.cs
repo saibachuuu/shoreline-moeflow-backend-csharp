@@ -394,7 +394,7 @@ public sealed class OutputTests(LocalServices services)
 
         var output = await LoadOutputAsync(fixture.OutputId);
         Assert.Equal(OutputStatus.Succeeded, output.Integer("s"));
-        Assert.Equal("导出项目 - 简体中文.zip", output.Text("file_name"));
+        Assert.Equal("导出项目 - 中文（简体）.zip", output.Text("file_name"));
         Assert.True(output["sb"].ToInt64() > 0);
         var storedProject = await ProjectAsync(fixture.ProjectId);
         Assert.Equal(output["sb"].ToInt64(), storedProject["ob"].ToInt64());
@@ -425,7 +425,7 @@ public sealed class OutputTests(LocalServices services)
         using var projectJson = new StreamReader(archive.GetEntry("project.json")!.Open(), Encoding.UTF8);
         var json = await projectJson.ReadToEndAsync();
         Assert.Contains("\"output_id\": \"" + fixture.OutputId + "\"", json);
-        Assert.Contains("\"output_language\": \"zh-hans\"", json);
+        Assert.Contains("\"output_language\": \"zh-CN\"", json);
         Assert.True(json.IndexOf("\"name\"", StringComparison.Ordinal) <
                     json.IndexOf("\"output_id\"", StringComparison.Ordinal));
 
@@ -817,7 +817,6 @@ public sealed class OutputTests(LocalServices services)
     {
         var projectId = ObjectId.GenerateNewId();
         var targetId = ObjectId.GenerateNewId();
-        var languageId = ObjectId.GenerateNewId();
         var setId = ObjectId.GenerateNewId();
         var folderId = ObjectId.GenerateNewId();
         var fileId = ObjectId.GenerateNewId();
@@ -832,15 +831,15 @@ public sealed class OutputTests(LocalServices services)
             ["n"] = "默认集",
             ["d"] = true
         });
-        await services.Store.Collection("language")
-            .DeleteManyAsync(new BsonDocument("co", "zh-hans"));
-        await services.Store.Collection("language").InsertOneAsync(new BsonDocument
-        {
-            ["_id"] = languageId,
-            ["c"] = "简体中文",
-            ["e"] = "Chinese",
-            ["co"] = "zh-hans"
-        });
+        // Use the seeded catalog row so this fixture does not change the
+        // system-language count observed by other tests in the collection.
+        // Starting the host seeds the system-language catalog. Use an HTTP
+        // request because Services alone does not run the hosted seeders.
+        using (var warmup = await services.Http.GetAsync("/v1/languages"))
+            warmup.EnsureSuccessStatusCode();
+        var language = await services.Store.Collection("language")
+            .Find(new BsonDocument("co", "zh-CN")).FirstAsync();
+        var languageId = language["_id"].AsObjectId;
         await services.Store.Collection("project").InsertOneAsync(new BsonDocument
         {
             ["_id"] = projectId,

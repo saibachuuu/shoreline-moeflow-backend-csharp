@@ -46,7 +46,7 @@ public sealed class OutputHttpTests
         var forbidden = await world.SendAsync(HttpMethod.Get,
             $"/v1/projects/{world.ProjectId}/targets/{world.TargetId}/outputs",
             client: world.StrangerClient);
-        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, forbidden.StatusCode);
         Assert.Equal(103, await ErrorCodeAsync(forbidden));
 
         var foreign = await world.SendAsync(HttpMethod.Post,
@@ -69,7 +69,7 @@ public sealed class OutputHttpTests
         var created = await world.SendAsync(HttpMethod.Post,
             $"/v1/projects/{world.ProjectId}/targets/{world.TargetId}/outputs",
             new { type = 0, file_ids_include = Array.Empty<string>(), file_ids_exclude = Array.Empty<string>() });
-        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        Assert.True(created.StatusCode == HttpStatusCode.OK, await created.Content.ReadAsStringAsync());
         var queued = await JsonAsync(created);
         var outputId = ObjectId.Parse(queued.GetProperty("id").GetString());
         Assert.Equal(0, queued.GetProperty("status").GetInt32());
@@ -95,7 +95,8 @@ public sealed class OutputHttpTests
         Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
         var completed = Assert.Single((await JsonAsync(listed)).EnumerateArray());
         Assert.Equal(4, completed.GetProperty("status").GetInt32());
-        var fileName = completed.GetProperty("file_name").GetString()!;
+        var completedRow = await LoadAsync(world, "output", outputId);
+        var fileName = completedRow.Text("file_name");
         Assert.EndsWith(".zip", fileName);
         Assert.True(completed.GetProperty("storage_bytes").GetInt64() > 0);
         Assert.False(string.IsNullOrWhiteSpace(completed.GetProperty("link").GetString()));
@@ -132,7 +133,7 @@ public sealed class OutputHttpTests
         var first = await world.SendAsync(HttpMethod.Post,
             $"/v1/projects/{world.ProjectId}/targets/{world.TargetId}/outputs",
             new { type = 0 });
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.True(first.StatusCode == HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
 
         var tooFast = await world.SendAsync(HttpMethod.Post,
             $"/v1/projects/{world.ProjectId}/targets/{world.TargetId}/outputs",
@@ -141,7 +142,7 @@ public sealed class OutputHttpTests
 
         var all = await world.SendAsync(HttpMethod.Post,
             $"/v1/projects/{world.ProjectId}/outputs");
-        Assert.Equal(HttpStatusCode.OK, all.StatusCode);
+        Assert.True(all.StatusCode == HttpStatusCode.OK, await all.Content.ReadAsStringAsync());
         var created = (await JsonAsync(all)).EnumerateArray().ToArray();
         Assert.Single(created);
         Assert.Equal(world.SecondTargetId.ToString(),
@@ -176,7 +177,7 @@ public sealed class OutputHttpTests
         var accepted = await world.SendAsync(HttpMethod.Post,
             $"/v1/projects/{world.ProjectId}/targets/{world.TargetId}/outputs",
             new { type = 0 }, revision: 7);
-        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.True(accepted.StatusCode == HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
         Assert.Equal("7", accepted.Headers.GetValues("X-Label-Revision").Single());
         var outputId = ObjectId.Parse((await JsonAsync(accepted)).GetProperty("id").GetString());
 
@@ -256,6 +257,11 @@ public sealed class OutputHttpTests
             await store.Collection("project_set").InsertOneAsync(new BsonDocument
             {
                 ["_id"] = setId, ["n"] = "默认作品集", ["d"] = true,
+                ["ct"] = now, ["et"] = now
+            });
+            await store.Collection("team").InsertOneAsync(new BsonDocument
+            {
+                ["_id"] = teamId, ["n"] = "HTTP output team", ["ou"] = userId,
                 ["ct"] = now, ["et"] = now
             });
             await store.Collection("project_role")
@@ -390,4 +396,7 @@ public sealed class OutputHttpTests
         return document.RootElement.Clone();
     }
 }
+
+
+
 

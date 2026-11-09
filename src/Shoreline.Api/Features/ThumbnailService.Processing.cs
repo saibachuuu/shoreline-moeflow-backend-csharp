@@ -1,3 +1,5 @@
+using System.Net;
+using Amazon.S3;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
@@ -196,6 +198,12 @@ public sealed partial class ThumbnailService
             await download.Content.CopyToAsync(output, 81920, ct);
         }
         catch (FileNotFoundException)
+        {
+            throw new SourceMissingException();
+        }
+        catch (AmazonS3Exception error) when (
+            error.StatusCode == HttpStatusCode.NotFound
+            || string.Equals(error.ErrorCode, "NoSuchKey", StringComparison.Ordinal))
         {
             throw new SourceMissingException();
         }

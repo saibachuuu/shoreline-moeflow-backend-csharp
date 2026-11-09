@@ -226,6 +226,7 @@ public sealed class ArchiveImportClaimStore(MongoStore store, TimeProvider clock
             ["task_id"] = taskId,
             ["owner"] = BsonNull.Value,
             ["lease_until"] = BsonNull.Value,
+            ["reserved_until"] = now.AddSeconds(60),
             ["created_at"] = now,
             ["updated_at"] = now,
         };
@@ -257,6 +258,7 @@ public sealed class ArchiveImportClaimStore(MongoStore store, TimeProvider clock
             ["task_id"] = taskId,
             ["owner"] = BsonNull.Value,
             ["lease_until"] = BsonNull.Value,
+            ["reserved_until"] = BsonNull.Value,
             ["updated_at"] = Now,
         });
         var result = await _claims.UpdateOneAsync(filter, update, cancellationToken: ct);
@@ -278,6 +280,7 @@ public sealed class ArchiveImportClaimStore(MongoStore store, TimeProvider clock
         {
             ["owner"] = owner,
             ["lease_until"] = leaseUntil,
+            ["reserved_until"] = BsonNull.Value,
             ["updated_at"] = now,
         });
         var result = await _claims.UpdateOneAsync(filter, update, cancellationToken: ct);

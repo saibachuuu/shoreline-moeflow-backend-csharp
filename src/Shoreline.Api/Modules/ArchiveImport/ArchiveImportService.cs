@@ -175,6 +175,10 @@ public sealed class ArchiveImportService
         {
             throw;
         }
+        catch (ArchiveRetryException)
+        {
+            throw;
+        }
         catch (ArchiveImportFailure failure)
         {
             await FailAsync(owner, failure.Stage, failure.Message);
@@ -327,7 +331,7 @@ public sealed class ArchiveImportService
             }
 
             await StageAsync(owner, ArchiveImportStatus.Validating, ArchiveImportText.ValidatingStage, ct);
-            using var archive = new ArchiveZipArchive(zipPath);
+            using var archive = OpenArchive(zipPath);
             IReadOnlyList<ArchiveZipEntry> entries;
             try
             {
@@ -362,6 +366,16 @@ public sealed class ArchiveImportService
                 ct.ThrowIfCancellationRequested();
                 if (!await _tasks.TouchOwnerAsync(owner.TaskId, owner, ct))
                     throw new ArchiveLostException("task claim lost");
+
+                // Re-check the project epoch immediately before each short upload. FileService then takes the shared
+                // ProjectLabelLock for the upload itself; this worker never holds that lock across download/zip work.
+                project = await _projects.Find(Builders<BsonDocument>.Filter.Eq("_id", owner.ProjectId))
+                    .FirstOrDefaultAsync(ct);
+                if (project is null) throw new ArchiveImportFailure("项目不存在", "项目不存在");
+                if (project.Integer("st") != 0)
+                    throw new ArchiveImportFailure(ArchiveImportText.FailedStage, "项目已完结");
+                if (expectedRevision is not null && project.Integer("label_revision", 0) != expectedRevision.Value)
+                    throw new ArchiveImportFailure(ArchiveImportText.FailedStage, "项目标签版本已变更，导入已取消");
 
                 var entry = entries[index];
                 var entryPath = Path.Combine(tempDir, "entry-" + index.ToString("D6", CultureInfo.InvariantCulture));
@@ -426,6 +440,19 @@ public sealed class ArchiveImportService
         finally
         {
             await CleanupAsync(tempDir);
+        }
+    }
+
+    private static ArchiveZipArchive OpenArchive(string path)
+    {
+        try
+        {
+            return new ArchiveZipArchive(path);
+        }
+        catch (Exception error) when (error is InvalidDataException or IOException or NotSupportedException
+                                          or ArgumentException)
+        {
+            throw new ArchiveImportFailure(ArchiveImportText.FailedStage, "归档不是有效的 zip 或已损坏");
         }
     }
 
@@ -531,6 +558,15 @@ public sealed class ArchiveImportService
             var claim = await _claims.GetAsync(projectId, ct);
             if (claim is null)
             {
+                // A Python-created running row has no C# claim. Reject it unless it is old enough to retire.
+                var legacy = await _tasks.FindActiveAsync(projectId, ct);
+                if (legacy is not null)
+                {
+                    var legacyId = legacy["_id"].AsObjectId;
+                    if (!await _tasks.TryMarkStaleFailedAsync(legacyId, Now - _options.StaleTaskAge, ct))
+                        throw new ApiError("ValidateError", 2, "该项目已有归档导入任务进行中");
+                    await _claims.DeleteAsync(projectId, legacyId, ct);
+                }
                 if (await _claims.TryInsertAsync(projectId, taskId, ct)) return;
                 continue;
             }
@@ -546,6 +582,10 @@ public sealed class ArchiveImportService
                 if (await TryRecoverStaleAsync(projectId, active, claim, ct)) continue;
                 throw new ApiError("ValidateError", 2, "该项目已有归档导入任务进行中");
             }
+
+            // A concurrent POST may have reserved the claim but not inserted its task yet.
+            if (ArchiveImportIds.Time(claim, "reserved_until") > Now)
+                throw new ApiError("ValidateError", 2, "该项目已有归档导入任务进行中");
 
             if (await _claims.RebindAsync(projectId, bound, taskId, ct)) return;
         }
@@ -594,7 +634,7 @@ public sealed class ArchiveImportService
             if (await _claims.TryTakeAsync(projectId, taskId, token, lease, now, ct))
                 return new ArchiveClaimOwner(projectId, taskId, token, lease);
         }
-        return null;
+        throw new ArchiveRetryException("archive claim is busy");
     }
 
     private string CreateTempDirectory()

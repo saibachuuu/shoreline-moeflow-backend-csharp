@@ -51,15 +51,15 @@ public sealed class ArchiveImportOptions
     public const int DefaultMaxEntries = 5000;
     public const long DefaultMaxEntryBytes = 128L * 1024 * 1024;
 
-    public string ProviderApiUrl { get; init; } = "";
-    public IReadOnlyList<string> AllowedHosts { get; init; } = Array.Empty<string>();
-    public long MaxZipBytes { get; init; } = DefaultMaxZipBytes;
-    public long MaxUncompressedBytes { get; init; } = DefaultMaxUncompressedBytes;
-    public int MaxEntries { get; init; } = DefaultMaxEntries;
-    public long MaxEntryBytes { get; init; } = DefaultMaxEntryBytes;
-    public string? TempRoot { get; init; }
-    public TimeSpan ClaimLease { get; init; } = TimeSpan.FromSeconds(90);
-    public TimeSpan StaleTaskAge { get; init; } = TimeSpan.FromHours(1);
+    public string ProviderApiUrl { get; set; } = "";
+    public IReadOnlyList<string> AllowedHosts { get; set; } = Array.Empty<string>();
+    public long MaxZipBytes { get; set; } = DefaultMaxZipBytes;
+    public long MaxUncompressedBytes { get; set; } = DefaultMaxUncompressedBytes;
+    public int MaxEntries { get; set; } = DefaultMaxEntries;
+    public long MaxEntryBytes { get; set; } = DefaultMaxEntryBytes;
+    public string? TempRoot { get; set; }
+    public TimeSpan ClaimLease { get; set; } = TimeSpan.FromSeconds(90);
+    public TimeSpan StaleTaskAge { get; set; } = TimeSpan.FromHours(1);
 
     public static ArchiveImportOptions From(IConfiguration configuration)
     {
@@ -117,6 +117,9 @@ public sealed class ArchiveDownloadLimitException(long maxBytes)
 
 public sealed class ArchiveUploaderUnavailableException()
     : Exception("文件服务不可用");
+
+/// <summary>Transient claim/job contention; the job handler rethrows so the core queue retries with backoff.</summary>
+public sealed class ArchiveRetryException(string message) : Exception(message);
 
 /// <summary>Small helpers for legacy BSON documents shared by the task store and the worker.</summary>
 public static class ArchiveImportIds

@@ -2,6 +2,58 @@
 
 更新日期：2026-11-09。当前为收尾草稿，现有后台任务交付后继续补充。
 
+## 断电前最终状态：全部 agent 已停止交付
+
+最后五个 G1、G3、G4、Archive、Ziteng 均已响应紧急停工，报告没有运行中的长命令。不再派发、续派、构建或修业务代码。下文“待交付/进行中”表项属于历史计划，以本节及各最新交付记录为准。当前保存的是未完成 WIP，整树未验证且有已知编译 blocker；不能部署。
+
+### G3 校对反馈最终交付
+
+- 已保存 Imaging/ProofreadImageProcessor、Features/ProofreadFeedbackService（含 Models/Bake partial）、Endpoints、Registration、Proofread/ProofreadMailRenderer、Jobs/ProofreadDraftJobHandler 和 `tests/Shoreline.Tests/ProofreadFeedbackTests.cs`。`docs/proofread-feedback-compatibility.md` **未创建**。
+- 隔离 `C:\Users\88888888\AppData\Local\Temp\g3snap-3edd683` 基于 3edd683；Imaging/API/Tests build **0 warning / 0 error**，但有仅留在 Temp 的 `ProofreadImagingAdapter.cs`、API csproj ProjectReference、Program 接线，**未回迁共享目录，也不在 Git bundle 内**。云端须重建该 adapter 与项目引用，不能据此认为 WIP 整树可编译。
+- 测试执行 **36 failed / 0 passed / 0 skipped**，全部 fixture 初始化连接 27128 被拒绝，未运行到业务断言。没有任何 G3 direct/HTTP/native image/fingerprint 验证通过；full 未跑。真实 Python marker golden 为 `1bc2823a`、`d7ad7162`、`a361217a`，已写入测试，但 C# 断言未验证。
+- 实现声称包含通知开/关反馈、trusted draft/pending、202、sender receipt、bake/8MiB 检查、640 图像与 WebP85；均须后续实测，不能以实现列表代替验证。
+
+### G4 缩略图最终交付
+
+- 已保存 Imaging csproj/ImageProcessor、ThumbnailService（含 Processing）、Endpoints/Registration、Jobs/ThumbnailJobHandler、ThumbnailTests/ThumbnailHttpTests 和 `docs/thumbnails-compatibility.md`；共享 API csproj/SLN/Program 未接线。
+- 隔离 `C:\Users\88888888\AppData\Local\Temp\opencode\g4-verify-c70c67b-20261109-2315`，c70c67b + G4 + 显式 E1 lock 依赖。最新编译 **0 warning / 0 error**；历史 focused **22/22**（17 direct + 5 HTTP）曾通过。
+- 历史 full **344 passed / 1 failed / 345 total**，先后有 staging 残留/共享对象名碰撞，已改五秒 cleanup 与唯一对象名前缀；**最新加固版未验证断言**，重跑 full **48 passed / 297 failed**，Mongo 27128 fixture 连接被拒。绝不能写成最新 focused/full 已绿或 345/345。
+- 已报告共享 Mongo `Exited (137)`，未重启；Linux Magick/RID 未验证。Worker 不传 job id/attempts，当前实现查询最近 running job attempts，主审需检查该近似识别的并发正确性。非空 csid 409 fail closed，D1 上传后自动调度尚未接入。
+
+### Archive Import 最终交付
+
+- 十个 `Modules/ArchiveImport/` 文件（Types、Crc32、Transport、ZipArchive、Uploader、TaskStore、View、Service、Endpoints、Registration）、Jobs/ArchiveImportJobHandler 与 `tests/Shoreline.Tests/ArchiveImportTests.cs`（32 direct 测试代码）已写入。
+- **从未编译、从未执行测试，无任何通过证据。** `ArchiveImportHttpTests.cs`（计划四项）和 `docs/archive-import-compatibility.md` 均未创建。共享 Program/csproj/SLN 未修改，无真实 provider 请求。
+- uploader 通过反射适配 D1，需云端编译审查；每图“先读 label_revision 再调用 D1”的复验与 D1 内部取锁之间仍可能发生 epoch 变更，须设计严格 expectedRevision 锁契约，不可描述为已实现完整 fencing。
+- 其余明确风险：缺失 ut 的 stale task 不恢复；X-Client 空头、测试集合表达式/反射调用未编译确认；公网 IP connect guard 未实测。先统一基线编译，再接幂等排队/上传、补 HTTP 与文档、安全故障测试。
+
+### 云端携带范围
+
+- 本仓库无 remote，未 push。`shoreline-csharp-cloud-handoff.bundle` 是完整 Git 历史和本次所有 WIP 文件，最后由主重新生成并 verify；请使用最后生成的同名文件。
+- Git bundle **不包含本机 Temp 的隔离快照、TRX/日志、临时 adapter、原 Python 参考仓库或仍运行的 Mongo 容器**。交接所列绝对路径主要是证据定位；云端应携带 Python 参考源码或另行获取授权仓库，按 provenance 重建验证。
+- 主不为通过编译而隐藏失败测试。Ziteng 测试缺 helper、Archive 未编译、G3 adapter/Imaging 引用和各模块 Program 未接线等都是实际待办。
+
+## 紧急停工：Ziteng 已停止，测试尚未编译通过
+
+- Agent 已停止，无运行命令。新增十个 `src/Shoreline.Api/Modules/ZitengPartner/` 源文件、`Jobs/ZitengCheckJobHandler.cs`、`tests/Shoreline.Tests/ZitengPartnerTests.cs`、`tests/Shoreline.Tests/Fixtures/ZitengPartnerGolden.json`；兼容文档 **尚未创建**，不能按任务计划描述为已完成。
+- `C:\Users\88888888\AppData\Local\Temp\opencode\ziteng-snapshot` 基于 `git archive 3edd683`，应用模块在添加测试前报告 build **0 warning / 0 error**；**之后测试项目编译出现 43 errors，修过部分后未重编译**，不能认为当前组合编译通过。
+- 明确 blocker：索引测试调用 `ListDocumentsAsync(...)`，尚未补入对应 helper。另已改 partner Store 错用、ToListAsync 二义性和 Assert.Contains 重载，均待重编译确认。focused/full/HTTP/SHA 对比全部未完成，不能宣称 ready 或测试通过。
+- 真实 AST golden：Python 3.10.11，title 15 例、score 7 例、suspects 排序 1 例。原 title.py SHA-256 `3fad076ff107e20c5cb43a1992baca0ed3a866166ac2847d9c315a9c2c9f7956`；matching.py SHA-256 `91910037d880f5f3b32ec8229225c6370c09ffb97aabc7fa4052982015b53de9`。
+- 生成器只在本机 Temp：`C:\Users\88888888\AppData\Local\Temp\opencode\ziteng_golden_gen.py`；云端 bundle 默认不含 Temp，fixture 有 provenance，若需要重新生成必须重新建立安全 AST 提取，不 import 原 app/config/conftest。
+- 后续：补 helper → 正常审计重新编译 → focused/full/HTTP → 核对 SHA → 写兼容文档 → 通用 project-created hook；模块建议 `ZitengPartnerProjectCreatedNotifier.TryNotifyAsync(projectId, ct)`，不得直接将可选模块名耦合进核心 ProjectService。共享 Program 未接线。
+- 主只保存当前失败现场和待办，不在断电前修这些错误，不再续派。
+
+## 紧急停工：G1 导出已停止并交付
+
+- 用户约 24:00 断电，23:53 已向剩余 G1/G3/G4/Archive/Ziteng 五个任务发出停止实现、测试并立即报告的通知，仅收尾，不再扩展工作。
+- G1 已停止，无运行中的长命令，未自行 commit；十三个生产文件、三个测试及 `docs/outputs-compatibility.md` 已在 WIP 现场中。生产文件为 Features 下 OutputService / OutputExportService / OutputEndpoints / OutputRegistration / OutputPolicies / OutputLease / OutputAccounting / OutputObjectCleanup，Jobs/OutputJobHandler，以及 Formats 下 LabelPlusWriter / ProjectOutputJson / PythonJson / OutputArchive。
+- `git archive 3edd683` + G1 + 私有 Program，build --no-restore -warnaserror **0 warning / 0 error**；focused **36/36**（35 新 Fact：28 service + 4 HTTP + 3 golden，另一个是匹配 Output 过滤词的既有测试）；full **421/421 / 0 skipped**（386 + 35）。
+- **环境/快照差异：** 共享 Mongo 27128 OOM/端口异常，G1 使用临时 Mongo **27129**；隔离副本 LocalServices、OutputHttpTests、LanguageTests、LabelHttpTests、LegacyTypeTests 临时改端口。修改未回写交付文件，OutputHttpTests 恢复 27128。因此测试快照与交付文件并非逐字完全相同，端口差异需保留；后续恢复正常 27128 后复验，不能声称共享环境 421 已通过。
+- Agent 报告临时容器 `shoreline-g1-mongo-temp` 仍在 **27129** 运行；共享 Mongo 未动。停工时记录状态，不擅自停止未知其他任务依赖的服务；云端环境不应依赖本机临时容器。
+- 共享 Program 仍未接 `AddOutputServices()` / `MapOutputs()`，任务仅 queued，依赖 in-process JobWorker，无旧同步 fallback；非默认 csid 9003 fail closed；CopyAsync 无 fallback；七天签名尚缺旧 download=True 的 response-content-disposition。
+- 剩余一致性缺口：final copy 后 artifact record 前崩溃可能留下孤儿 final 对象；target delete/计量并发、snapshot/recovery 与原生产物跨模块整合仍待审查。Photoshop 脚本在 Python 已注释，未迁移不应描述为新删功能。
+- 本轮仅收报告和保存 WIP/bundle，不再续派，不为这些缺口启动构建或实现。
+
 ## 最新补充：Partner Search 已交付
 
 - 六文件已被主 WIP `55f6bc6` 收入：`Modules/PartnerSearch/PartnerSearchService.cs`、`PartnerSearchEndpoints.cs`、`PartnerSearchRegistration.cs`（均在 `src/Shoreline.Api/` 下），`tests/Shoreline.Tests/PartnerSearchTests.cs` / `PartnerSearchHttpTests.cs`、`docs/partner-search-compatibility.md`。Agent 未自行 commit，报告对应路径干净。
