@@ -17,6 +17,7 @@ builder.Services.AddSingleton<CaptchaService>();
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<UserView>();
 builder.Services.AddScoped<UserProfileService>();
+builder.Services.AddScoped<UserRegistrationService>();
 builder.Services.AddSingleton<SiteSettings>();
 builder.Services.AddSingleton<LanguageCatalog>();
 builder.Services.AddSingleton<LegacyTypes>();

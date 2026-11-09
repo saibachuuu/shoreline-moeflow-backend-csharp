@@ -47,9 +47,18 @@ the Python deployment yet.
   rules, legacy role IDs and masked archive-key handling. Own-team navigation projects
   only compact fields and calculates page permissions in batches; global discovery
   remains test-only. Trusted joining is internal, not an authorization bypass API.
+- Registration `POST /v1/users` ports Python's RegisterSchema + User.create:
+  multi-field ValidateError collection before the type-2 code is consumed (local
+  failures never burn the one-time code), bounded password hashing also before
+  consumption, Python-order whitelist check after consumption (`1012` therefore
+  needs a fresh code), insertion under the shared user-name gate with
+  duplicate-key fallback, and best-effort `site_setting.ajt` auto-joins via the
+  internal trusted join (missing teams skipped; a failed join is logged but the
+  persisted account and its token still return, whereas Python would 500 after
+  the user was saved). Response is `{"message": "注册成功", "token"}`.
 
 Current verification: `dotnet test --no-restore --verbosity minimal` passes
-130 tests against disposable local MongoDB, S3Mock and Mailpit, including concurrent
+137 tests against disposable local MongoDB, S3Mock and Mailpit, including 7 registration tests (lowercase email, single-use consumption, field-error collection without consumption, whitelist `1012`, `ajt` member/admin base tags with missing-team skip, legacy code deletion and concurrent same-name admission), concurrent
 admission/edit/creation tests, partial-creation recovery and cross-team/hierarchy checks. The service builds with zero
 warnings. Its Docker image has not been
 rebuilt; the existing API container still runs the earlier foundation image.
@@ -61,15 +70,13 @@ the running C# service requires neither Python nor the old repository.
 
 ## Next work
 
-1. Complete registration with email-code consumption and automatic team joining.
-   The Python registration path uses site_setting.ajt; do not omit this behavior.
-2. Project/member services and ownership, position locks, lifecycle operations,
+1. Project/member services and ownership, position locks, lifecycle operations,
    project sets, listings and identity policy endpoints.
-3. Team dissolution must be implemented together with complete project lifecycle
+2. Team dissolution must be implemented together with complete project lifecycle
    cleanup; do not expose a partial delete that leaves project/storage data behind.
-4. Files, targets, labels/translations/tips, complete snapshots and recovery,
+3. Files, targets, labels/translations/tips, complete snapshots and recovery,
    text parsing/OCR/import, exports, notifications, term banks and optional modules.
-5. Storage transfers, quota/capacity reconciliation and their progress/cancellation
+4. Storage transfers, quota/capacity reconciliation and their progress/cancellation
    endpoints; then full API/data compatibility and equivalent workload RAM testing.
 
 ## Remaining safety constraints

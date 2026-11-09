@@ -27,6 +27,12 @@ public static class UserEndpoints
             return new { token = token.Issue(user["_id"].ToString()!, user.Text("p")) };
         }).RequireRateLimiting("auth");
 
+        app.MapPost("/v1/users", async (JsonElement data, HttpContext ctx, UserRegistrationService registrations, CancellationToken ct) =>
+        {
+            var (_, token) = await registrations.RegisterAsync(data, RequestId(ctx), ct);
+            return new { message = "注册成功", token };
+        });
+
         app.MapGet("/v1/user/info", async (HttpContext ctx, CurrentUser current, UserView view, CancellationToken ct) =>
             await view.ToApiAsync(await current.RequireAsync(ctx, ct), ctx));
         app.MapGet("/v1/users/{name}", async (string name, MongoStore store, UserView view, HttpContext ctx, CancellationToken ct) =>
