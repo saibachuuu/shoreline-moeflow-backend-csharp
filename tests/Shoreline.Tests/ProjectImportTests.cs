@@ -12,8 +12,18 @@ using Shoreline.Api.Security;
 
 namespace Shoreline.Tests;
 
-[Collection("local-services")]
-public sealed class ProjectImportTests(LocalServices services)
+/// <summary>
+/// Import tests invoke <see cref="ProjectImportService.RunImportAsync"/> directly
+/// to observe per-label checkpoints, cancellation and replay. The shared
+/// background <see cref="JobWorker"/> would otherwise claim the same queued job
+/// concurrently and make those observations nondeterministic. This mirrors the
+/// existing thumbnail test collection, which also owns its job.
+/// </summary>
+[CollectionDefinition("local-services-import")]
+public sealed class ProjectImportCollection : ICollectionFixture<LocalServicesWithoutWorker>;
+
+[Collection("local-services-import")]
+public sealed class ProjectImportTests(LocalServicesWithoutWorker services)
 {
     private static readonly string Password = PasswordHash.Create("test-password");
     private static readonly TimeProvider Clock = TimeProvider.System;
@@ -170,12 +180,26 @@ public sealed class ProjectImportTests(LocalServices services)
         Assert.Equal(0L, projectDoc.Integer("ip"));
         Assert.Equal(GoldenText, projectDoc.Text("it"));
 
+        // ij is durable intent, written before the queue upsert.
+        Assert.Equal(jobId.Value, projectDoc["ij"].AsObjectId);
+
         var job = await services.Store.Collection("csharp_job")
             .Find(new BsonDocument("_id", jobId.Value)).FirstAsync();
         Assert.Equal(ProjectImportService.JobKind, job.Text("kind"));
         Assert.Equal(project, job["payload"]["project_id"].AsObjectId);
         Assert.Equal(projectDoc.Integer("label_revision"),
             job["payload"]["label_revision"].ToInt32());
+
+        // Replaying the same generation reuses the exact same id and row.
+        var replayed = await imports.InitializeAfterCreateAsync(projectDoc, creator, GoldenText, "req-2",
+            CancellationToken.None);
+        Assert.Equal(jobId.Value, replayed!.Value);
+        Assert.Equal(1, await services.Store.Collection("csharp_job")
+            .CountDocumentsAsync(new BsonDocument
+            {
+                ["kind"] = ProjectImportService.JobKind,
+                ["payload.project_id"] = project
+            }));
     }
 
     [Fact]
@@ -213,7 +237,7 @@ public sealed class ProjectImportTests(LocalServices services)
         Assert.Equal(1L, (await ProjectAsync(project)).Integer("is"));
     }
 
-    [Fact(Skip = "Requires E1 CreateSourceOnceAsync stable-id writer")]
+    [Fact]
     public async Task RunImportsFilesSourcesTranslationsAndCachesWithoutImageObjects()
     {
         var creator = await UserAsync();
@@ -278,7 +302,7 @@ public sealed class ProjectImportTests(LocalServices services)
             .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 
-    [Fact(Skip = "Requires E1 CreateSourceOnceAsync stable-id writer")]
+    [Fact]
     public async Task CancellationAfterSourceCommitDoesNotDuplicateSourceOnRetry()
     {
         var creator = await UserAsync();
@@ -312,7 +336,7 @@ public sealed class ProjectImportTests(LocalServices services)
         Assert.Equal(1L, file.Integer("tsc"));
     }
 
-    [Fact(Skip = "Requires E1 CreateSourceOnceAsync stable-id writer")]
+    [Fact]
     public async Task CancellationAfterTranslationCommitDoesNotDuplicateTranslationOnRetry()
     {
         var creator = await UserAsync();
@@ -345,7 +369,7 @@ public sealed class ProjectImportTests(LocalServices services)
         Assert.Equal(1L, file.Integer("tsc"));
     }
 
-    [Fact(Skip = "Requires E1 CreateSourceOnceAsync stable-id writer")]
+    [Fact]
     public async Task UnknownSourceResultIsRecoveredFromDurableIntentOnReplay()
     {
         var creator = await UserAsync();
@@ -375,7 +399,7 @@ public sealed class ProjectImportTests(LocalServices services)
         Assert.Equal(1, await TranslationCountAsync(file["_id"].AsObjectId));
     }
 
-    [Fact(Skip = "Requires E1 CreateSourceOnceAsync stable-id writer")]
+    [Fact]
     public async Task NewEpochNeverReplaysOldJournalIntent()
     {
         var creator = await UserAsync();
@@ -530,22 +554,31 @@ public sealed class ProjectImportTests(LocalServices services)
         Assert.Equal(GoldenText, projectDoc.Text("it"));
     }
 
-    [Fact(Skip = "Requires E1 CreateSourceOnceAsync stable-id writer")]
+    [Fact]
     public async Task RunResumesFromCheckpointAfterPartialFailureWithoutDuplicates()
     {
         var creator = await UserAsync();
         using var owner = Client(creator);
         var (_, project) = await SetupAsync(owner);
         var (imports, _) = await ImportServicesAsync();
-        const string bad = ">>>>>>>>[a.png]<<<<<<<<\n" +
-                           "----------------[1]----------------[0.1,0.1,1]\nfirst\n" +
-                           "----------------[2]----------------[2,0.2,2]\nsecond\n";
-        const string fixedText = ">>>>>>>>[a.png]<<<<<<<<\n" +
-                                 "----------------[1]----------------[0.1,0.1,1]\nfirst\n" +
-                                 "----------------[2]----------------[0.15,0.2,2]\nsecond\n";
-        await SetPendingTextAsync(project, bad);
+        const string text = ">>>>>>>>[a.png]<<<<<<<<\n" +
+                            "----------------[1]----------------[0.1,0.1,1]\nfirst\n" +
+                            "----------------[2]----------------[0.15,0.2,2]\nsecond\n";
+        await SetPendingTextAsync(project, text);
         var payload = new BsonDocument { ["project_id"] = project, ["label_revision"] = 0 };
+
+        // Fail after the second intent is durable but before its source insert.
+        // The first label is already checkpointed, so the retry must resume at
+        // label 1 with the same durable coordinates (changing them would be a
+        // deliberate fail-closed intent conflict, covered by the journal tests).
+        var intents = 0;
+        SetHook(imports, step =>
+        {
+            if (step != "after-intent") return;
+            if (++intents == 2) throw new IOException("transient failure after checkpoint");
+        });
         await imports.RunImportAsync(payload, CancellationToken.None);
+        SetHook(imports, null);
 
         var checkpoint = await services.Store.Collection("project_import_checkpoint")
             .Find(new BsonDocument("_id", project)).FirstAsync();
@@ -554,7 +587,7 @@ public sealed class ProjectImportTests(LocalServices services)
         Assert.Equal(1, await services.Store.Collection("source").CountDocumentsAsync(
             new BsonDocument("f", (await FileAsync(project))["_id"])));
 
-        await SetPendingTextAsync(project, fixedText);
+        await SetPendingTextAsync(project, text);
         await imports.RunImportAsync(payload, CancellationToken.None);
         Assert.Equal(ProjectImportService.Succeeded, (int)(await ProjectAsync(project)).Integer("is"));
         Assert.Equal(2, await services.Store.Collection("source").CountDocumentsAsync(
@@ -676,11 +709,21 @@ public sealed class ProjectImportTests(LocalServices services)
         await imports.RunImportAsync(payload, CancellationToken.None);
 
         var updated = await ProjectAsync(project);
-        Assert.Equal(ProjectImportService.Error, (int)updated.Integer("is"));
-        Assert.Equal(ProjectImportService.ErrorUnknown, (int)updated.Integer("ie"));
-        Assert.Equal(1, await services.Store.Collection("source")
+        // The stable-id writer does not adopt the foreign rank-0 row; it inserts
+        // its own preallocated sources (both labels), so the foreign row plus two
+        // import rows remain.
+        Assert.Equal(ProjectImportService.Succeeded, (int)updated.Integer("is"));
+        Assert.Equal(3, await services.Store.Collection("source")
             .CountDocumentsAsync(new BsonDocument("f", file["_id"])));
         Assert.NotEqual(foreign["_id"], intent["source_id"]);
+        Assert.Equal(1, await services.Store.Collection("source")
+            .CountDocumentsAsync(new BsonDocument("_id", intent["source_id"])));
+        var untouched = await services.Store.Collection("source")
+            .Find(new BsonDocument("_id", foreign["_id"])).FirstAsync();
+        Assert.Equal("", untouched.Text("c"));
+        Assert.Equal(0L, untouched.Integer("r"));
+        Assert.Equal(revision, untouched.Integer("label_epoch"));
+        Assert.False(untouched.Flag("idempotent_pending"));
     }
 
     [Fact]

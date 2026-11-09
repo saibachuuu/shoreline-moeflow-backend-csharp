@@ -106,10 +106,29 @@ public JobQueue(MongoStore store, TimeProvider clock, JobQueueWriteObserver? wri
 9. 调用方在返回后修改 payload（含嵌套 document / array）→ 存储内容不变。
 10. `ObjectId.Empty`、空/空白 kind、null payload → 在数据库写入前拒绝。
 
+## G2 导入 producer 接线
+
+`ProjectImportService.InitializeAfterCreateAsync` 是第一个使用
+`EnqueueOnceAsync` 的 producer：
+
+- project 的 durable `ij` 字段在队列写入之前保存本次 generation 的 job id
+  （intent，而不是入队结果回填）。
+- 同一 project + revision 且队列行仍为 `pending/running` 时复用 `ij`；队列行缺失
+  （崩溃在 upsert 前）也复用；终态或不同 generation 分配新 id。
+- payload 每次从 `{ project_id: ObjectId, label_revision: Int64 }` 原样重建，
+  字段顺序和数值类型固定，不经过 JSON。
+- 入队异常后按 `ij` 精确读取该 job id：存在任意状态即保持 `is=Pending`，确认不存在
+  才标记 `is=Error, ie=ErrorUnknown`。不再按 kind+project+revision 近似查找。
+- `JobEnqueueConflictException` 表示同一 id 绑定了不同 typed payload，属于
+  generation 错配，导入标记 blocked 并向调用方抛出。
+
+`X-Request-ID` / `Idempotency-Key` 不参与导入去重（Python 导入路径没有该语义）。
+
 ## 限制与未做事项
 
 - 不新增唯一索引，不修改 `MongoStore`、`Program.cs`、worker、既有测试或依赖锁定。
 - 不改变 `ClaimAsync` / `RenewAsync` 的租约与过期语义；本任务只处理幂等入队。
-- 不把既有的 `EnqueueAsync` producer（outputs / imports / thumbnails / proofread 等）迁移到新接口。
+- 只迁移了 G2 导入 producer；outputs / archive / thumbnails / proofread 等仍使用
+  `EnqueueAsync`。
 - 冲突检测比较的是当前行内容，不做 generation 编号推断；调用方必须保证同一 id 只对应一个 generation payload。
 - 有界回读使用真实时间 5 秒上限，不依赖可注入时钟；这是故障确认路径，不影响正常的 upsert 快路径。

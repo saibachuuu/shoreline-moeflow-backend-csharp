@@ -65,9 +65,13 @@ public sealed partial class LabelService
     /// operation runs under the shared project label lease. Counters are
     /// rebuilt from primary rows, never incremented, so an unknown insert
     /// outcome or a partial counter write converges on retry.
+    /// <paramref name="context"/> is nullable because the import job calls this
+    /// outside an HTTP request; the helper borrows the scoped
+    /// <see cref="LabelRequestContext"/> instead of reading the HttpContext.
+    /// Python has no per-request object on the import task path.
     /// </summary>
     public async Task<SourceWriteResult> CreateSourceOnceAsync(
-        HttpContext context,
+        HttpContext? context,
         BsonDocument actor,
         ObjectId fileId,
         ObjectId sourceId,
@@ -166,10 +170,12 @@ public sealed partial class LabelService
     /// <summary>
     /// Create one translation with a stable id. Pass ObjectId.Empty to fall
     /// back to the legacy unique identity {o,t,u}. Empty content is a no-op
-    /// (no row, no counter reconcile).
+    /// (no row, no counter reconcile). <paramref name="context"/> is nullable
+    /// for the same non-HTTP import-job reason as
+    /// <see cref="CreateSourceOnceAsync"/>.
     /// </summary>
     public async Task<TranslationWriteResult> CreateTranslationOnceAsync(
-        HttpContext context,
+        HttpContext? context,
         BsonDocument actor,
         ObjectId sourceId,
         ObjectId targetId,

@@ -38,6 +38,11 @@ public sealed partial class ProjectImportService
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
+        // The E1 idempotent writer asserts file.label_epoch before inserting a
+        // stable-id source. A restored project can already be at a non-zero
+        // revision, so stamp the placeholder with the project's current epoch
+        // instead of relying on the legacy "missing means 0" default.
+        var labelEpoch = project.Integer("label_revision", 0);
         var document = new BsonDocument
         {
             ["_id"] = ObjectId.GenerateNewId(),
@@ -71,7 +76,8 @@ public sealed partial class ProjectImportService
             ["ps"] = 0,
             ["pt"] = 0,
             ["op"] = 0,
-            ["ft"] = 0
+            ["ft"] = 0,
+            ["label_epoch"] = labelEpoch
         };
 
         await Files.InsertOneAsync(document, cancellationToken: ct);

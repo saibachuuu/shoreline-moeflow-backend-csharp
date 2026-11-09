@@ -48,7 +48,6 @@ public sealed partial class ProjectImportService(
     private IMongoCollection<BsonDocument> ProjectMembers => store.Collection("project_member");
     private IMongoCollection<BsonDocument> Users => store.Collection("user");
     private IMongoCollection<BsonDocument> Sources => store.Collection("source");
-    private IMongoCollection<BsonDocument> Translations => store.Collection("translation");
     private IMongoCollection<BsonDocument> Checkpoints => store.Collection("project_import_checkpoint");
     private IMongoCollection<BsonDocument> Journal => store.Collection("project_import_journal");
     private IMongoCollection<BsonDocument> Jobs => store.Collection("csharp_job");
@@ -61,6 +60,12 @@ public sealed partial class ProjectImportService(
         new("LabelplusParseFailedError", 4029, "\"翻译数据.txt\" 解析失败");
 
     /// <summary>Parses LabelPlus text and maps every failure to legacy 4029.</summary>
+    /// <remarks>
+    /// K1 reservation: when team dissolution fencing is wired, this pre-create
+    /// hook must call <c>TeamLifecycleLock.EnsureWritableAsync(teamId)</c> before
+    /// parsing/writing anything. It is intentionally not called yet because K1
+    /// write-side wiring is a separate slice and this method has no team id.
+    /// </remarks>
     public List<LabelPlusFile> ValidateBeforeCreate(string? labelplusText)
     {
         try
@@ -77,6 +82,11 @@ public sealed partial class ProjectImportService(
     /// Persists import flags and enqueues the canonical job. Python only queues
     /// when text is non-empty, a creator exists, and there is exactly one
     /// target; callers must have run <see cref="ValidateBeforeCreate"/> first.
+    /// <paramref name="requestId"/> is retained for the HTTP call site but is
+    /// deliberately NOT an idempotency key: Python's
+    /// <c>TeamProjectImportAPI</c> has no request-id dedup and its
+    /// <c>request_id</c> only feeds audit logs. Deduplication is the durable
+    /// project <c>ij</c> job id below.
     /// </summary>
     public async Task<ObjectId?> InitializeAfterCreateAsync(
         BsonDocument project,
@@ -85,6 +95,10 @@ public sealed partial class ProjectImportService(
         string requestId,
         CancellationToken ct)
     {
+        // K1 reservation: before the first write below, the final integration
+        // must call TeamLifecycleLock.EnsureWritableAsync(project["t"]) while it
+        // still holds the project lock. This slice only reserves the call site;
+        // it must not add a second, unlocked check that gives a false guarantee.
         // Parse again defensively: this hook is public and must never enqueue an
         // unparseable legacy file.
         if (string.IsNullOrEmpty(labelplusText)) return null;
@@ -106,34 +120,58 @@ public sealed partial class ProjectImportService(
         var creator = await FindCreatorAsync(projectId, ct);
         if (targetCount != 1 || creator is null) return null;
 
+        // The payload must be rebuilt byte-for-byte on every retry: the queue
+        // compares typed BSON, including Int64 vs Int32 and field order, and
+        // never accepts a JSON round-trip.
+        var payload = new BsonDocument
+        {
+            ["project_id"] = projectId,
+            ["label_revision"] = new BsonInt64(revision)
+        };
+
+        ObjectId? jobId = null;
         try
         {
+            // The job id is durable intent, not a result: persist it before the
+            // queue write so a crash between the two can replay the same id.
+            // A queued/running row for this exact generation is reused; a
+            // terminal row or a different generation gets a fresh id so a
+            // re-created import is not silently pinned to an old job.
+            jobId = await SelectImportJobIdAsync(current, projectId, revision, ct);
+
             await Projects.UpdateOneAsync(new BsonDocument("_id", projectId),
                 new BsonDocument("$set", new BsonDocument
                 {
                     ["it"] = labelplusText,
                     ["is"] = Pending,
-                    ["ip"] = 0
+                    ["ip"] = 0,
+                    ["ij"] = jobId.Value
                 }), cancellationToken: ct);
             await Checkpoints.DeleteOneAsync(new BsonDocument("_id", projectId), ct);
 
-            var jobId = await jobs.EnqueueAsync(JobKind, new BsonDocument
-            {
-                ["project_id"] = projectId,
-                ["label_revision"] = new BsonInt64(revision)
-            }, ct);
-            await Projects.UpdateOneAsync(new BsonDocument("_id", projectId),
-                new BsonDocument("$set", new BsonDocument("ij", jobId)),
-                cancellationToken: CancellationToken.None);
+            await jobs.EnqueueOnceAsync(jobId.Value, JobKind, payload, ct);
             return jobId;
+        }
+        catch (JobEnqueueConflictException)
+        {
+            // The same id is bound to a different typed payload. That is an
+            // invariant/generation mismatch, never a retry: mark the import
+            // blocked and keep the text for inspection.
+            await Projects.UpdateOneAsync(new BsonDocument("_id", projectId),
+                new BsonDocument("$set", new BsonDocument
+                {
+                    ["is"] = Error,
+                    ["ie"] = ErrorUnknown
+                }), cancellationToken: CancellationToken.None);
+            throw;
         }
         catch
         {
             // An enqueue can fail after the insert was actually committed. Do
             // not mark Error in that window: the job may already be claimable
             // and would race an error flag. Only a confirmed absence of the
-            // canonical job makes the pending state unrecoverable here.
-            var queued = await FindImportJobAsync(projectId, revision, CancellationToken.None);
+            // durable job makes the pending state unrecoverable here.
+            var queued = jobId is { } id && await FindImportJobAsync(id, CancellationToken.None);
             if (!queued)
             {
                 await Projects.UpdateOneAsync(new BsonDocument("_id", projectId),
@@ -152,6 +190,12 @@ public sealed partial class ProjectImportService(
     /// the captured revision before changing any flag, and resumes from a
     /// durable per-file/per-label checkpoint after a partial failure.
     /// </summary>
+    /// <remarks>
+    /// K1 reservation: the run-side call site for
+    /// <c>TeamLifecycleLock.EnsureWritableAsync(project["t"])</c> belongs at the
+    /// top of this method, after the project lock and before the first flag
+    /// write. It is intentionally not wired in this slice.
+    /// </remarks>
     public async Task RunImportAsync(BsonDocument payload, CancellationToken ct)
     {
         if (!TryObjectId(payload.GetValue("project_id", BsonNull.Value), out var projectId))
@@ -267,37 +311,38 @@ public sealed partial class ProjectImportService(
                     var translationId = journal["translation_id"].AsObjectId;
                     var rank = (int)journal.Integer("source_rank", 0);
 
-                    var source = await Sources.Find(new BsonDocument("_id", sourceId))
-                        .FirstOrDefaultAsync(ct);
-                    if (source is null)
-                    {
-                        // No source with the intent's identity exists yet. The
-                        // actual insert + counter convergence must be performed
-                        // by E1's idempotent writer using this sourceId.
-                        throw IdempotentWriterUnavailable();
-                    }
-                    if (source["f"].AsObjectId != fileId ||
-                        (int)source.Integer("r", -1) != rank ||
-                        source.Integer("label_epoch", 0) != session.Revision)
-                        throw AmbiguousIntent(key);
-                    session.AssertEpoch(source);
+                    // E1 stable-id writer: insert-or-reuse by the preallocated
+                    // id, then rebuild label counters from primary rows. Rank is
+                    // ordering metadata only and is never used to adopt a row;
+                    // a conflicting id/file/epoch/content is rejected by the
+                    // helper without being claimed.
+                    await LabelWriter.CreateSourceOnceAsync(
+                        context: null,
+                        actor: creator,
+                        fileId: fileId,
+                        sourceId: sourceId,
+                        content: "",
+                        x: label.X,
+                        y: label.Y,
+                        positionType: positionType,
+                        sourceRank: rank,
+                        expectedRevision: session.Revision,
+                        ct: ct);
                     TestStepHook?.Invoke("after-source");
 
-                    var translation = await Translations.Find(new BsonDocument("_id", translationId))
-                        .FirstOrDefaultAsync(ct);
-                    if (translation is null && label.Translation.Length > 0)
-                    {
-                        // Translation is also created by E1's idempotent writer
-                        // with this preallocated id; an empty legacy translation
-                        // is a no-op and never creates a document.
-                        throw IdempotentWriterUnavailable();
-                    }
-                    if (translation is not null &&
-                        (translation["o"].AsObjectId != sourceId ||
-                         translation["t"].AsObjectId != target["_id"].AsObjectId ||
-                         translation["u"].AsObjectId != creator["_id"].AsObjectId))
-                        throw AmbiguousIntent(key);
-                    if (translation is not null) TestStepHook?.Invoke("after-translation");
+                    var translation = await LabelWriter.CreateTranslationOnceAsync(
+                        context: null,
+                        actor: creator,
+                        sourceId: sourceId,
+                        targetId: target["_id"].AsObjectId,
+                        translationId: translationId,
+                        content: label.Translation,
+                        expectedRevision: session.Revision,
+                        ct: ct);
+                    // Empty legacy content is a true no-op in the helper, so the
+                    // hook only observes a committed translation row.
+                    if (translation.Outcome != TranslationWriteOutcome.Empty)
+                        TestStepHook?.Invoke("after-translation");
 
                     await Journal.UpdateOneAsync(new BsonDocument("_id", key),
                         new BsonDocument("$set", new BsonDocument
@@ -324,9 +369,15 @@ public sealed partial class ProjectImportService(
         }
         catch (ProjectImportBlockedException)
         {
-            // The durable intent is kept for a safe retry after the idempotent
-            // writer lands; this is not a legacy parse failure.
+            // The durable intent is kept for a safe retry; this is not a
+            // legacy parse failure.
             await FinishAsync(projectId, Error, ErrorUnknown, percent: null, ct);
+        }
+        catch (ApiError error) when (error.Status == 409)
+        {
+            // A revision/fencing conflict is not a legacy parse failure. Leave
+            // the import flags and journal untouched so the owner can retry.
+            throw;
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -410,11 +461,39 @@ public sealed partial class ProjectImportService(
             $"import intent {key} no longer matches its file/epoch/label and cannot be resumed safely");
     }
 
-    private static ProjectImportBlockedException IdempotentWriterUnavailable() =>
-        new("stable-id source/translation writer is not available yet");
+    /// <summary>
+    /// Chooses the durable job id for one import generation. The project's
+    /// <c>ij</c> field holds the previously persisted intent. It is reused only
+    /// when the corresponding queue row is still pending/running for the same
+    /// project and revision (a crash retry), or when no row was written yet.
+    /// A different generation or a terminal row gets a fresh id.
+    /// </summary>
+    private async Task<ObjectId> SelectImportJobIdAsync(BsonDocument project, ObjectId projectId, long revision,
+        CancellationToken ct)
+    {
+        if (TryObjectId(project.GetValue("ij", BsonNull.Value), out var stored))
+        {
+            var job = await Jobs.Find(new BsonDocument("_id", stored)).FirstOrDefaultAsync(ct);
+            if (job is null) return stored;
+            if (IsQueuedImportJob(job, projectId, revision)) return stored;
+        }
+        return ObjectId.GenerateNewId();
+    }
 
-    private static ProjectImportBlockedException AmbiguousIntent(string key) =>
-        new($"import intent {key} refers to a conflicting source/translation");
+    private bool IsQueuedImportJob(BsonDocument job, ObjectId projectId, long revision)
+    {
+        if (job.Text("kind") != JobKind) return false;
+        var state = job.Text("state");
+        if (state is not ("pending" or "running")) return false;
+        if (!job.TryGetValue("payload", out var value) || value.BsonType != BsonType.Document) return false;
+        var payload = value.AsBsonDocument;
+        if (!TryObjectId(payload.GetValue("project_id", BsonNull.Value), out var storedProject) ||
+            storedProject != projectId)
+            return false;
+        if (!payload.TryGetValue("label_revision", out var storedRevision) || !storedRevision.IsNumeric)
+            return false;
+        return storedRevision.ToInt64() == revision;
+    }
 
     private sealed class ProjectImportBlockedException(string message) : Exception(message);
 
@@ -427,17 +506,12 @@ public sealed partial class ProjectImportService(
         return last is null ? 0 : (int)last.Integer("r", 0) + 1;
     }
 
-    private async Task<bool> FindImportJobAsync(ObjectId projectId, long revision, CancellationToken ct)
-    {
-        var existing = await Jobs.Find(new BsonDocument
-        {
-            ["kind"] = JobKind,
-            ["payload.project_id"] = projectId,
-            ["payload.label_revision"] = new BsonInt64(revision),
-            ["state"] = new BsonDocument("$in", new BsonArray { "pending", "running" })
-        }).AnyAsync(ct);
-        return existing;
-    }
+    /// <summary>
+    /// Confirms whether the durable id was actually committed. Called only
+    /// after a failed enqueue; existence at any state proves the row is there.
+    /// </summary>
+    private async Task<bool> FindImportJobAsync(ObjectId jobId, CancellationToken ct) =>
+        await Jobs.Find(new BsonDocument("_id", jobId)).AnyAsync(ct);
 
     private async Task DeleteOldJournalBatchesAsync(ObjectId projectId, long revision, CancellationToken ct)
     {

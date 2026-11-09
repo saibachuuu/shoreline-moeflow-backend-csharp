@@ -1,8 +1,8 @@
 # LabelPlus 项目导入兼容说明（G2）
 
 本文记录 C# 后端对 Python `TeamProjectImportAPI`、`Project.create(labelplus_txt)` 与
-`import_from_labelplus` 后台任务的兼容实现。生产代码尚未接入共享 `Program.cs` /
-`ProjectService.cs`，接线方式见文末。
+`import_from_labelplus` 后台任务的兼容实现。`Program.cs` 已接入导入路由与 job
+handler；普通项目创建端点把 `labelplus_txt` 传给导入 hook 的接线仍待完成，见第 8 节。
 
 ## 1. 文件与职责
 
@@ -14,7 +14,7 @@
 | `src/Shoreline.Api/Features/ProjectImportEndpoints.cs` | `POST /v1/teams/{teamId}/project-sets/{projectSetId}/project-zips` |
 | `src/Shoreline.Api/Jobs/ProjectImportJobHandler.cs` | `IJobHandler` 适配器，kind = `import_from_labelplus` |
 | `src/Shoreline.Api/Features/ProjectImportRegistration.cs` | 扩展注册/路由入口 |
-| `tests/Shoreline.Tests/ProjectImportTests.cs` | 15 个 direct Facts |
+| `tests/Shoreline.Tests/ProjectImportTests.cs` | 23 个 direct Facts |
 
 本实现只新增上述文件，不修改 `Program.cs`、`ProjectService.cs`、`FileService.cs`、
 `LabelService.cs` 或任何共享路由。
@@ -49,10 +49,21 @@
 - 空文本 → 返回 `null`，不改 `is/ip/ie/it`。
 - 再次解析并确认 target 数恰好为 1、存在 active creator；否则返回 `null` 且不写 flags。
 - 满足条件时：
-  - project `$set it=<原文>, is=0, ip=0`；
+  - 从 project 的 durable `ij` 字段取/分配 job id（`ij` 现在是 intent，不再是
+    入队结果的回填）；
+  - project `$set it=<原文>, is=0, ip=0, ij=<jobId>`，先于任何队列写入；
   - 删除该 project 的 import checkpoint；
-  - 入队 `import_from_labelplus`，payload 为
-    `{ project_id, label_revision }`。
+  - 用 `JobQueue.EnqueueOnceAsync(jobId, kind, payload)` 入队
+    `import_from_labelplus`，payload 固定为
+    `{ project_id: ObjectId, label_revision: Int64 }`（字段顺序与 BSON 类型固定，
+    重试时必须从同一 intent 重建，不能走 JSON 往返）。
+- `ij` 复用规则：同一 project + 同一 revision 且队列行仍为 `pending/running`
+  时复用；队列行缺失（上次崩溃在 upsert 之前）也复用；其它 generation 或
+  `done/failed/cancelled` 终态则分配新 id。同 id 不同 typed payload 视为
+  generation 错配，标记 `is=Error, ie=ErrorUnknown` 并抛出，不覆盖队列行。
+- `requestId`（`X-Request-ID` / `Idempotency-Key`）**不作为导入幂等键**：Python
+  `TeamProjectImportAPI` 没有 request-id 去重，`request_id` 只用于 identity 审计
+  日志。该参数仅为 HTTP 调用点保留。
 
 `is/ip/ie/it` 与 Python 常量一致：
 
@@ -72,8 +83,11 @@
    - `is == ERROR` 且 `it` 为空直接返回（避免重复报错）。
 4. 缺 target → `is=3, ie=NO_TARGET, it=""`，`ip` 保留。
 5. 缺 active creator → `is=3, ie=NO_CREATOR, it=""`。
-6. 否则 `is=RUNNING, ip=0`，按文件创建占位文件，再逐标签调用
-   `LabelService.CreateSourceAsync` / `CreateTranslationAsync`。
+6. 否则 `is=RUNNING, ip=0`，按文件创建占位文件，再逐标签调用 E1 稳定 id
+   helper：`LabelService.CreateSourceOnceAsync(... sourceId, sourceRank,
+   expectedRevision=session.Revision ...)` → `CreateTranslationOnceAsync(... translationId,
+   sourceId, targetId, content, expectedRevision ...)`。helper 内部完成 pending
+   marker + 基于主表的计数重建；空 translation 返回 `Empty`，不插行不计数。
 7. 每处理一个标签写入 `project_import_checkpoint`
    （`_id=project_id, file_index, labels_done, label_revision`）；每个文件结束更新
    `ip = int(file_index * 100 / file_count)`。
@@ -118,52 +132,54 @@
   不做整包无限缓存，也不解压 ZIP。
 - 创建成功返回 `{"message":"创建成功","project":<ProjectService.ViewAsync>}`。
 
-## 8. 接线步骤（待主代理执行）
+## 8. 接线状态
 
-1. 在 `Program.cs` 添加：
-   ```csharp
-   builder.Services.AddProjectImports();
-   ...
-   app.MapProjectImports();
-   ```
-   `AddProjectImports` 会 `TryAdd` `ProjectLabelLock`、`LabelRequestContext`、
-   `LabelService`，再注册 `ProjectImportService` 与 `ProjectImportJobHandler`。
-2. `ProjectService.CreateProjectAsync` 在创建 project 之前调用
+1. `Program.cs` 已包含 `builder.Services.AddProjectImports()` 与
+   `app.MapProjectImports()`；`AddProjectImports` 用 `TryAdd` 注册
+   `ProjectLabelLock`、`LabelRequestContext`、`LabelService`，再注册
+   `ProjectImportService` 与 `ProjectImportJobHandler`。
+2. `POST /v1/teams/{teamId}/project-sets/{projectSetId}/project-zips` 已接线，并调用
+   `ValidateBeforeCreate` → `CreateProjectAsync` → `InitializeAfterCreateAsync`。
+3. 剩余接线（普通创建端点，不在本模块）：
+   `ProjectService.CreateProjectAsync` 在创建 project 之前也应调用
    `ValidateBeforeCreate(labelplus_txt)`；创建、target、creator member 完成后调用
    `InitializeAfterCreateAsync(project, actor, labelplus_txt, requestId, ct)`。
-   注意：即使 target 数大于 1，也要先解析，不能只在最终可导入时才解析。
-3. project JSON 中的 `labelplus_txt` 需要由普通创建端点（非导入端点）传给上述 hook；
-   `ProjectService` 当前忽略该字段。
-4. `JobWorker` 已能发现所有 `IJobHandler`；确保其注册发生在 worker 启动之前。
+   即使 target 数大于 1，也要先解析，不能只在最终可导入时才解析。
+4. `JobWorker` 已能发现所有 `IJobHandler`。调用 `RunImportAsync` 的测试使用
+   `LocalServicesWithoutWorker`，由测试自己拥有 job，避免后台 worker 与直接调用
+   竞争同一个导入。
 
 ## 9. 验证与隔离
 
-验证在 task-owned 最小快照
-`C:\Users\88888888\AppData\Local\Temp\opencode\g2-min-20261109` 中进行：
+验证在 task-owned 隔离树 `/tmp/opencode/g2e1-verify` 中进行：
 
-- 基线：`git archive HEAD`（421208d，含 C1/C2/Presence）。
-- 叠加：本模块 6 个生产文件、`LabelPlusReader.cs`、`ProjectImportTests.cs`，以及
-  G2 依赖的 `FileService*` / `LabelService*` / `ProjectLabelLock.cs` /
-  `FileMutationGate.cs`。
-- 快照内仅为让并行未完成文件编译做了局部修正（`Integer` 返回 long 的强制转换、
-  `UpdateOneAsync` 命名参数、`BsonObjectId` 模式、`FileService` 静态字段初始化顺序）；
-  这些修正没有写回共享工作区。
-- 结果：build 0 warnings / 0 errors；`ProjectImportTests` 17 通过 / 6 跳过
-  （等待 E1 `CreateSourceOnceAsync`）；快照全量 271 通过 / 6 跳过。
-- 跳过的 6 个用例覆盖真实 source/translation 写入、取消恢复、未知结果回放、
-  epoch 变更和 checkpoint 续跑，不能在缺少稳定 id writer 时伪造通过。
-- 共享工作区仍有其它 agent 的未完成模块，本结果不应被当作它们的验收证据。
-- 该快照基于 421208d，只用于开发自检；最终验收需等待 e910e33 + 稳定 E1/D1
-  依赖的新快照（见第 11 节 blocker）。
+- 基线：先验证 `git archive 5bb9404`，再验证期间前进到的 HEAD `2cdc3e6`。
+  两棵树都只叠加本任务的 owned 文件：`ProjectImportService.cs`、
+  `ProjectImportService.Files.cs`、`LabelService.Idempotent.cs`、
+  `ProjectImportTests.cs` 与三份 docs；不包含其它并行 agent 的工作树修改。
+- `dotnet restore --locked-mode` → `dotnet build Shoreline.sln -warnaserror`：
+  0 warnings / 0 errors。
+- `ProjectImportTests`：23 passed / 0 skipped（原 6 个 skip 全部恢复）；
+  `LabelIdempotencyTests`：17 passed；`JobQueueIdempotencyTests`：14 passed。
+- 全量 `dotnet test`：`5bb9404` 783 passed / 0 failed / 0 skipped；
+  `2cdc3e6` 789 passed / 0 failed / 0 skipped（新增 6 个 OCR 测试）。
+- 测试 host 使用 `LocalServicesWithoutWorker`（在 `ProjectImportTests.cs` 内声明
+  独立 collection）：导入测试直接驱动 `RunImportAsync` 以观察 checkpoint /
+  取消 / 重放，后台 `JobWorker` 若同时 claim 同一个 job 会让断言不确定。这与
+  既有 thumbnail 测试“自己拥有 job”的模式一致。
+- 共享工作树同时被其它 agent 修改，未在共享工作树直接 build/test，也未把其它
+  agent 的改动写入隔离树。
 
 ## 10. 已知边界
 
-- 普通项目创建端点尚未调用导入 hook；HTTP 导入路由尚未接线。
+- HTTP 导入路由已接线；普通项目创建端点尚未把 `labelplus_txt` 传给导入 hook。
 - 生产导入仅支持图片占位文件；文本文件与多 target 不导入（与 Python 一致）。
 - 未实现图片上传/对象存储，`fs` 等字段保持 0。
-- `LabelService` 的计数缓存使用 `filetargetcache`，本模块与 `FileService` 使用
-  `file_target_cache`；该差异属于并行 Label 模块，本模块未修改。
+- 标签计数缓存统一为 canonical `file_target_cache`（E1 reconciler 与
+  `LabelService` 都使用该集合）。
 - 未改动 `UpdateAsync`、`AddExternal`、恢复等其它 identity 生命周期路径。
+- K1 团队生命周期锁只在 `ValidateBeforeCreate` / `InitializeAfterCreateAsync` /
+  `RunImportAsync` 预留调用点注释，未注入、未执行 `EnsureWritableAsync`。
 
 ## 11. 导入幂等 intent 与 E1 下层 helper 契约
 
@@ -174,22 +190,19 @@ label_revision, file_index, label_index)` 在写 source 之前先持久化 inten
 position_type；translation 完成后跳过；checkpoint 只在 journal 更新之后推进。
 旧 revision 的 journal 按 200 条一批有界清理，避免长时间占用 project label lease。
 
-**尚未通过最终验收的缺陷（必须由 E1 下层 helper 解决，不能用 rank 认领）：**
+**已由 E1 helper 解决、G2 已接线的点：**
 
 - rank 只是排序字段，不是身份。intent 已落库但 source 尚未插入时崩溃，另一个
   合法 writer 可能占用同一 rank；因此实现**不再**用 `{f, r}` 查找或认领 source。
-  找不到预分配 `source_id` 对应的 source 时直接进入可恢复的 blocked（`is=Error`,
-  `ie=ErrorUnknown`），保留 intent，等待稳定 id writer，而不是猜测。
-- 早期未包含 `source_id`/`translation_id` 的 journal 视为有歧义，直接拒绝恢复，
-  不做生产迁移；本轮 journal 尚未发布，因此不需要兼容旧格式。
-- `AdjustSourceCountAsync` 会跨 `source`、`file`、祖先文件、`project`、`target`、
-  `file_target_cache` 多个文档 `$inc`。source 已插入而计数中途失败时会产生部分
-  计数；仅靠 `(source,target,user)` 的 translation 去重也无法修复未完成的计数。
-  因此不实现“旁路写入版本”来伪造 exactly-once。
+  预分配 `source_id` 是唯一身份；只有 `_id` 相同、`f/content/x/y/p/label_epoch`
+  都匹配的行才复用（`r` 不参与身份比较），否则 helper 拒绝认领。
+- source 插入与计数不再是多次 `$inc`。helper 先写 pending marker，再由
+  `LabelCounterReconciler` 从主表 `$set` 重建 `sc/tsc/csc`、祖先 rollup、project、
+  target 与 canonical `file_target_cache`；未知结果或部分计数重试收敛。
+- 早期未包含 `source_id`/`translation_id` 的 journal 视为有歧义，`EnsureJournalShape`
+  直接拒绝恢复（`is=Error, ie=ErrorUnknown`），不做生产迁移。
 
-### 需要 E1 提供的最小公开契约
-
-建议放在 `LabelService`（或 E1 owner 指定的 lower service）上：
+### E1 已交付的公开契约（G2 已接入）
 
 ```csharp
 public enum SourceWriteOutcome { Created, AlreadyApplied }
@@ -201,7 +214,7 @@ public sealed record SourceWriteResult(
     bool CountersApplied);
 
 public Task<SourceWriteResult> CreateSourceOnceAsync(
-    HttpContext context,
+    HttpContext? context,     // 可为 null：job 不在 HTTP 请求内，helper 不读它
     BsonDocument actor,
     ObjectId fileId,
     ObjectId sourceId,        // 调用方在写 journal intent 时生成的稳定 _id
@@ -214,40 +227,40 @@ public Task<SourceWriteResult> CreateSourceOnceAsync(
     CancellationToken ct);
 ```
 
-语义要求：
+实际语义：
 
 1. source 文档以调用方传入的 `sourceId` 作为 `_id` 插入（`_id` 才是 identity）。
-2. 若同 `_id` 已存在，必须校验 `f == fileId`、`r == sourceRank`、
-   `label_epoch == expectedRevision`；匹配则返回 `AlreadyApplied` 且绝不重复计数，
-   不匹配则失败（不得覆盖/认领）。
-3. `Created` 分支必须把 source 插入和所有计数更新做成可恢复的 exactly-once：
-   `source.sc`、`file.sc`、祖先文件计数、`project` 计数、`target`/cache 计数，
-   要么全部生效，要么可通过同一 `sourceId` 的 durable marker 检测并补齐；
-   重试 `AlreadyApplied` 时不得再次 `$inc`。
-4. expectedRevision 不符时返回 409 Busy，不写任何文档。
-5. translation 也应同样接受调用方稳定 id，或提供
-   `CreateTranslationOnceAsync(..., ObjectId translationId, ObjectId sourceId, ...)`：
-   以 `(o,t,u)` 唯一键幂等，只有真正新建 translation 时才增加 `tsc`；空 content
-   返回 null 且不增加计数。
+2. 若同 `_id` 已存在，校验 `f == fileId`、`c`（ordinal）、`x/y`（`<1e-9`）、`p`
+   与 `label_epoch == expectedRevision`；匹配则返回 `AlreadyApplied` 并重跑 reconcile，
+   绝不重复计数；不匹配则 `ValidateError` code 2，不覆盖/认领。`r` 只排序。
+3. `Created` 分支插入带 `idempotent_pending/owner/revision` 的主行，然后由
+   `LabelCounterReconciler` 从主表 `$set` 重建全部 label 计数；counters 重建后
+   以 owner+revision CAS 清 marker。重试 `AlreadyApplied` 仍重跑 reconcile。
+4. expectedRevision 不符时返回 409 `LabelBusyError`，不写任何文档。
+5. `CreateTranslationOnceAsync(..., ObjectId translationId, ObjectId sourceId,
+   ObjectId targetId, ...)` 校验 `o/t/u`（非空 content 还校验 `c`）；`mt=true`
+   返回 8007；空 content 返回 `Empty`，不插行、不写 marker、不 reconcile。
 
-在 helper 落地前，G2 会预分配 intent 并把缺少 writer 的情况标记为 blocked；这
-不是可验收的导入实现，6 个真实写入/恢复测试保持 skip，直到 helper 接线完成。
-未知 enqueue 结果也已区分：捕获异常后先查找同一 kind + project_id +
-label_revision 的 pending/running job，找到则保持 `is=Pending`（job 可能已提交），
-只有确认不存在时才标记 `is=Error, ie=ErrorUnknown`。
+G2 现在直接调用上述 helper（`Features/LabelService.Idempotent.cs`），不再有
+`IdempotentWriterUnavailable` 分支。顺序保持
+`journal intent → CreateSourceOnceAsync → CreateTranslationOnceAsync → journal
+translation_done → checkpoint`；helper 的 pending marker / reconciler 保证 source 或
+translation 已提交但确认丢失的重试收敛。旧无 stable-id journal 仍然 fail-closed
+（`is=Error, ie=ErrorUnknown`，保留 intent），不做 rank 认领。
 
-### 新基线 blocker
+未知 enqueue 结果按 durable job id 区分：捕获异常后读取 `ij` 对应的队列行，存在
+任意状态即保持 `is=Pending`（job 可能已提交），只有确认不存在时才标记
+`is=Error, ie=ErrorUnknown`。这与旧实现按 kind+project+revision 近似查找不同，
+不会再误认另一个 generation 的 job。
 
-e910e33 + 当前 E1/D1 文件的最小快照 restore 成功，但 build 被并行 `FileService`
-自身的 long/int 未适配阻塞（不得在 snapshot-only 修改他人源码）：
+### K1 团队生命周期锁预留
 
-```
-src\Shoreline.Api\Features\FileService.Mutations.cs(113,73): error CS1503 参数 3: 无法从“long”转换为“int”
-src\Shoreline.Api\Features\FileService.Serialization.cs(87,82): error CS1503 参数 3: 无法从“long”转换为“int”
-src\Shoreline.Api\Features\FileService.Serialization.cs(89,81): error CS1503 参数 3: 无法从“long”转换为“int”
-src\Shoreline.Api\Features\FileService.Serialization.cs(90,87): error CS1503 参数 3: 无法从“long”转换为“int”
-src\Shoreline.Api\Features\FileService.Serialization.cs(95,86): error CS1503 参数 3: 无法从“long”转换为“int”
-src\Shoreline.Api\Features\FileService.Serialization.cs(99,77): error CS1503 参数 3: 无法从“long”转换为“int”
-```
+`ValidateBeforeCreate` / `InitializeAfterCreateAsync` / `RunImportAsync` 已加 K1
+调用点注释：最终接线时应在持有写锁的范围内调用
+`TeamLifecycleLock.EnsureWritableAsync(teamId)`，而不是在锁外做一次可能失效的
+检查。本轮不注入 `TeamLifecycleLock`、不改变任何写路径，也不新增第二个检查。
 
-需要主代理协调 E1/D1 的稳定版本或明确授权修正这些 FileService 调用。
+### 旧 blocker 已解除
+
+早期 `e910e33` 快照的 `FileService` long/int 编译错误属于并行 WIP，本任务在
+`5bb9404` 干净基线上不再出现。

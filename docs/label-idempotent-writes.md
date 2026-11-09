@@ -204,6 +204,22 @@ This is a convergence guarantee **only for these import helpers**. It does not
 retroactively make arbitrary legacy label writes crash-safe, and it does not
 introduce a transaction. Standalone MongoDB is sufficient.
 
+## G2 integration status
+
+`ProjectImportService.RunImportAsync` now calls these helpers directly with the
+journal-preallocated ids:
+
+```text
+journal(source_id, translation_id) -> CreateSourceOnceAsync
+  -> CreateTranslationOnceAsync -> journal translation_done -> checkpoint
+```
+
+The `context` argument is nullable (G2 passes `null`): the import job is not an
+HTTP request, and the helpers borrow the scoped `LabelRequestContext` used by
+the surrounding project lease. Python has no per-request object on the
+`import_from_labelplus` task path. Rank (`r`) is passed only for ordering and is
+not compared when an existing stable id is validated.
+
 ## Tests and evidence
 
 `tests/Shoreline.Tests/LabelIdempotencyTests.cs` contains 17 direct-service
