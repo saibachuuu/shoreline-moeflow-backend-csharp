@@ -53,6 +53,99 @@ public sealed class ProjectInvitationService(
         }).Sort(new BsonDocument("_id", -1)).FirstOrDefaultAsync(ct);
     }
 
+    private IMongoCollection<BsonDocument> Applications => store.Collection("application");
+
+    private static BsonDocument GroupRef(string scope, BsonDocument group) =>
+        GenericRef(scope == "project" ? "Project" : "Team", scope == "project" ? "project" : "team",
+            group["_id"].AsObjectId);
+
+    // Python: Application.objects(user=..., group=..., status=PENDING).order_by("-id").first()
+    internal async Task<BsonDocument?> FindPendingApplicationAsync(string scope, BsonDocument group,
+        ObjectId userId, CancellationToken ct) =>
+        await Applications.Find(new BsonDocument
+        {
+            ["u"] = userId, ["g"] = GroupRef(scope, group), ["s"] = PendingStatus
+        }).Sort(new BsonDocument("_id", -1)).FirstOrDefaultAsync(ct);
+
+    internal async Task<BsonDocument> GetApplicationAsync(string id, CancellationToken ct)
+    {
+        if (ObjectId.TryParse(id, out var oid))
+        {
+            var doc = await Applications.Find(new BsonDocument("_id", oid)).FirstOrDefaultAsync(ct);
+            if (doc is not null) return doc;
+        }
+        throw IdentityErrors.ApplicationNotExist();
+    }
+
+    /// <summary>Python ProjectMemberService._ensure_member_not_locked: only a
+    /// team creator may restore a member holding a locked position.</summary>
+    internal async Task EnsureMemberNotLockedAsync(BsonDocument project, BsonDocument actor, BsonDocument member,
+        CancellationToken ct)
+    {
+        if (!project.Flag("ple")) return;
+        var policy = await store.Collection("identity_tag_policy")
+            .Find(new BsonDocument("team", project["t"])).FirstOrDefaultAsync(ct);
+        var builtIn = IdentityPermissions.SystemTagDefinitions("project").Names.ToHashSet(StringComparer.Ordinal);
+        var locked = new HashSet<string>(StringComparer.Ordinal) { "admin" };
+        if (policy is not null && policy.TryGetValue("project_tags", out var tags) && tags.IsBsonDocument)
+            foreach (var element in tags.AsBsonDocument)
+                if (!builtIn.Contains(element.Name)) locked.Add(element.Name);
+        foreach (var tag in project.GetValue("plt", new BsonArray()).AsBsonArray)
+            if (tag.IsString) locked.Add(tag.AsString);
+        var memberTags = MemberTags(member);
+        if (locked.Count == 0 || !locked.Intersect(memberTags).Any()) return;
+        var relation = await ActiveTeamMemberAsync(actor["_id"].AsObjectId, project["t"].AsObjectId, ct);
+        if (relation?.Text("base_tag") != "creator")
+            throw new ApiError("NoPermissionError", 103, "该成员持有已被锁定的职位，仅团队创建者可以移除");
+    }
+
+    private async Task<string> DefaultProjectRoleCodeAsync(BsonDocument project, CancellationToken ct)
+    {
+        if (RefId(project.GetValue("dr", BsonNull.Value)) is not { } roleId) return "translator";
+        var role = await store.Collection("project_role").Find(new BsonDocument("_id", roleId)).FirstOrDefaultAsync(ct);
+        return role?.Text("m_o") ?? "translator";
+    }
+
+    /// <summary>Python Application.allow for projects: capture the existing
+    /// projection, honour position locks, join with the requested/default
+    /// legacy role, mark the application ALLOW and restore the projection.</summary>
+    internal async Task AllowPendingApplicationAsync(BsonDocument project, BsonDocument application,
+        BsonDocument operatorUser, string? roleCode, string requestId, CancellationToken ct)
+    {
+        if ((int)application.Integer("s") != PendingStatus) throw IdentityErrors.ApplicationFinished();
+        var userId = application["u"].AsObjectId;
+        var member = await MemberAsync(project, userId, ct);
+        string[]? capturedTags = null;
+        string? capturedDisplay = null;
+        if (member is not null)
+        {
+            await EnsureMemberNotLockedAsync(project, operatorUser, member, ct);
+            capturedTags = MemberTags(member);
+            capturedDisplay = member.Text("display_name");
+        }
+        await JoinProjectAsync(project, new BsonDocument("_id", userId),
+            roleCode ?? await DefaultProjectRoleCodeAsync(project, ct), ct);
+        application["s"] = AllowStatus;
+        application["o"] = operatorUser["_id"];
+        await Applications.UpdateOneAsync(new BsonDocument("_id", application["_id"]),
+            new BsonDocument("$set", new BsonDocument { ["s"] = AllowStatus, ["o"] = operatorUser["_id"] }),
+            cancellationToken: ct);
+        await ProjectActiveAsync(application,
+            capturedTags?.Select(t => (Flag: "", Value: t)).ToArray(), capturedDisplay, operatorUser, requestId, ct);
+    }
+
+    internal async Task DenyPendingApplicationAsync(BsonDocument project, BsonDocument application,
+        BsonDocument operatorUser, string requestId, CancellationToken ct)
+    {
+        if ((int)application.Integer("s") != PendingStatus) throw IdentityErrors.ApplicationFinished();
+        application["s"] = DenyStatus;
+        application["o"] = operatorUser["_id"];
+        await Applications.UpdateOneAsync(new BsonDocument("_id", application["_id"]),
+            new BsonDocument("$set", new BsonDocument { ["s"] = DenyStatus, ["o"] = operatorUser["_id"] }),
+            cancellationToken: ct);
+        await ProjectRemovedAsync(application, requestId, ct);
+    }
+
     public async Task<BsonDocument> GetInvitationAsync(string id, CancellationToken ct)
     {
         if (ObjectId.TryParse(id, out var oid))
@@ -427,12 +520,12 @@ public sealed class ProjectInvitationService(
         return teamMember?.Text("base_tag") is "creator" or "admin" ? "admin" : null;
     }
 
-    /// <summary>Legacy ``User.invite`` for project groups (minus the pending
-    /// application branch, which lands in the application stage):
+    /// <summary>Legacy ``User.invite`` for project groups:
     /// is_full → INVITE_USER → self role level → already joined (5003) →
-    /// pending invitation (5004) → project-team member direct join →
-    /// create a pending Invitation. Returns the invitation document, or
-    /// null when the user was already a teammate (direct join).</summary>
+    /// pending invitation (5004) → pending application direct allow →
+    /// project-team member direct join → create a pending Invitation.
+    /// Returns the invitation document, or null when the user was already
+    /// a teammate or a pending application was approved.</summary>
     internal async Task<BsonDocument?> InviteProjectAsync(BsonDocument project, BsonDocument operatorUser,
         BsonDocument user, BsonValue roleRef, string message, CancellationToken ct)
     {
@@ -456,9 +549,14 @@ public sealed class ProjectInvitationService(
         if (await FindPendingInvitationAsync(project, userId, ct) is not null)
             throw IdentityErrors.InvitationAlreadyExist();
 
-        // TODO(application stage): a pending Application is allowed here
-        // (Python invite() branch); the application collection only exists
-        // once the application stage lands.
+        // Python invite() allows a pending Application with the invited role
+        // before falling back to the project-team direct join.
+        if (await FindPendingApplicationAsync("project", project, userId, ct) is { } application)
+        {
+            await AllowPendingApplicationAsync(project, application, operatorUser, roleCode, "", ct);
+            return null;
+        }
+
         var teamMember = await ActiveTeamMemberAsync(userId, project["t"].AsObjectId, ct);
         if (teamMember is not null)
         {

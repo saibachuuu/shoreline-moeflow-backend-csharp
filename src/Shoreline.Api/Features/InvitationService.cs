@@ -236,6 +236,26 @@ public sealed class InvitationService(
             scope == ProjectScope ? "ProjectRole" : "TeamRole",
             scope == ProjectScope ? "project_role" : "team_role", role["_id"].AsObjectId);
 
+        // Python User.invite: a pending application wins over the direct team
+        // join and is approved with the invited role.
+        if (await invitations.FindPendingApplicationAsync(scope, group, userId, ct) is { } application)
+        {
+            if (scope == ProjectScope)
+                await invitations.AllowPendingApplicationAsync(group, application, actor, roleCode, "", ct);
+            else
+            {
+                await JoinTeamAsync(group, user, roleCode, "", ct);
+                application["s"] = ProjectInvitationService.AllowStatus;
+                application["o"] = actor["_id"];
+                await store.Collection("application").UpdateOneAsync(new BsonDocument("_id", application["_id"]),
+                    new BsonDocument("$set", new BsonDocument
+                    {
+                        ["s"] = ProjectInvitationService.AllowStatus, ["o"] = actor["_id"]
+                    }), cancellationToken: ct);
+            }
+            return new BsonDocument { ["message"] = "此用户已有申请，已直接加入" };
+        }
+
         if (scope == ProjectScope)
         {
             if (await invitations.ActiveTeamMemberAsync(userId, group["t"].AsObjectId, ct) is not null)
@@ -391,34 +411,9 @@ public sealed class InvitationService(
         if ((int)invitation.Integer("s") != ProjectInvitationService.PendingStatus)
             throw IdentityErrors.InvitationFinished();
 
-        var group = await LoadGroupAsync(scope, invitation, ct);
-        var user = await FetchUserDocAsync(invitation["u"].AsObjectId, ct);
-
         if (allow)
         {
-            var role = await RoleOfInvitationAsync(scope, invitation, ct);
-            string[]? capturedTags = null;
-            string? capturedDisplay = null;
-            if (scope == ProjectScope)
-            {
-                var member = await invitations.MemberAsync(group, user["_id"].AsObjectId, ct);
-                if (member is not null)
-                {
-                    capturedTags = ProjectInvitationService.MemberTags(member);
-                    capturedDisplay = member.Text("display_name");
-                }
-            }
-            if (scope == ProjectScope)
-                await invitations.JoinProjectAsync(group, user, role.Text("m_o"), ct);
-            else
-                await JoinTeamAsync(group, user, role.Text("m_o"), requestId, ct);
-            await Invitations.UpdateOneAsync(new BsonDocument("_id", invitation["_id"]),
-                new BsonDocument("$set", new BsonDocument("s", ProjectInvitationService.AllowStatus)), cancellationToken: ct);
-            if (scope == ProjectScope)
-                // Python allow() calls project_active without an operator, so
-                // the projection change is attributed to the original inviter.
-                await invitations.ProjectActiveAsync(invitation,
-                    capturedTags?.Select(t => (Flag: "", Value: t)).ToArray(), capturedDisplay, null, requestId, ct);
+            var group = await AcceptInvitationCoreAsync(invitation, requestId, ct);
             return new BsonDocument
             {
                 ["message"] = "已接受",
@@ -431,8 +426,47 @@ public sealed class InvitationService(
         await Invitations.UpdateOneAsync(new BsonDocument("_id", invitation["_id"]),
             new BsonDocument("$set", new BsonDocument("s", ProjectInvitationService.DenyStatus)), cancellationToken: ct);
         if (scope == ProjectScope)
+        {
+            var group = await LoadGroupAsync(scope, invitation, ct);
             await invitations.ProjectRemovedAsync(invitation, requestId, ct);
+        }
         return new BsonDocument("message", "已拒绝");
+    }
+
+    /// <summary>Shared invitation accept kernel (Python Invitation.allow).
+    /// The caller must already hold the invitation mutation gate and must not
+    /// re-enter it.</summary>
+    internal async Task<BsonDocument> AcceptInvitationCoreAsync(BsonDocument invitation, string requestId,
+        CancellationToken ct)
+    {
+        var scope = InvitationGroupScope(invitation) ?? throw IdentityErrors.InvitationNotExist();
+        if ((int)invitation.Integer("s") != ProjectInvitationService.PendingStatus)
+            throw IdentityErrors.InvitationFinished();
+        var group = await LoadGroupAsync(scope, invitation, ct);
+        var user = await FetchUserDocAsync(invitation["u"].AsObjectId, ct);
+        var role = await RoleOfInvitationAsync(scope, invitation, ct);
+        string[]? capturedTags = null;
+        string? capturedDisplay = null;
+        if (scope == ProjectScope)
+        {
+            var member = await invitations.MemberAsync(group, user["_id"].AsObjectId, ct);
+            if (member is not null)
+            {
+                capturedTags = ProjectInvitationService.MemberTags(member);
+                capturedDisplay = member.Text("display_name");
+            }
+            await invitations.JoinProjectAsync(group, user, role.Text("m_o"), ct);
+        }
+        else
+            await JoinTeamAsync(group, user, role.Text("m_o"), requestId, ct);
+        await Invitations.UpdateOneAsync(new BsonDocument("_id", invitation["_id"]),
+            new BsonDocument("$set", new BsonDocument("s", ProjectInvitationService.AllowStatus)), cancellationToken: ct);
+        if (scope == ProjectScope)
+            // Python allow() calls project_active without an operator, so the
+            // projection change is attributed to the original inviter.
+            await invitations.ProjectActiveAsync(invitation,
+                capturedTags?.Select(t => (Flag: "", Value: t)).ToArray(), capturedDisplay, null, requestId, ct);
+        return group;
     }
 
     // ---- delete (DELETE /invitations/{id}) ----

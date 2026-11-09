@@ -90,17 +90,49 @@ the Python deployment yet.
   explicit operator so audits stay attributed to the original inviter, while accept
   and deny remain recipient-only. `InvitationMutationGate` serializes invitation
   POST/PUT/PATCH/DELETE and identity `AddUser` per group in one process, with member
-  saves still fenced by version CAS; team restoration maps 5107 → 5012. The
-  pending-application direct-allow branch is deferred to C2.
+  saves still fenced by version CAS; team restoration maps 5107 → 5012.
+- Project applications C2: `GET/POST /v1/{project|team}/{groupId}/applications`,
+  `PATCH/DELETE /v1/applications/{id}`, `GET /v1/user/related-applications` and
+  `GET /v1/{project|team}/{groupId}/public-info`. Application documents keep the
+  legacy shape `{_id,u,o,g,s,m,uc}` (no stored role or create-time field); list
+  totals/pagination/status filters reuse the invitation conventions and the group
+  list returns the complete public group view. `user_role` always describes the
+  applicant and only exists for approved applications whose applicant still has an
+  active relation; it no longer depends on the viewer, while `group.to_api(user=...)`
+  keeps the viewer context. The check-user snapshot follows Python
+  `Group.users_by_permission(CHECK_USER)`: roles holding permission 101 map through
+  the legacy role→tag map, active project members match on any intersecting tag
+  (not the first tag and not the persisted `m_o` mirror), team `beginner`/`senior`
+  normalize to `member`, external rows are skipped and dangling users are filtered
+  before writing `uc`. Apply order is capacity 5012 → existing relation 5003 →
+  inherited team creator/admin auto-joins project admin → pending application 5005
+  → pending invitation auto-accept → `allow_apply_type` (NONE 103, ALL, project
+  TEAM_USER requires an active team relation) → optional no-check auto-approval.
+  Approval/denial/deletion are pending-only (5011); project approval preserves an
+  existing projection's tags/display name, honors the position lock, and writes
+  status/operator plus the projection with the approving operator. Both legacy
+  invitation entry points and the tags/projection invitation path directly approve
+  a pending application; a later tags invitation still applies its requested tags
+  and display name to the resulting active projection. `ApplicationService` shares
+  `InvitationMutationGate` with invitations and identity `AddUser`, and application
+  `create_time` is the whole-second UTC ISO timestamp derived from the ObjectId.
+- Presence vertical slice: project heartbeat/leave/list and team active-presence
+  routes, 45-second heartbeat expiry, TTL/index compatibility, legacy avatar
+  fallback and the observed legacy no-membership guard documented explicitly.
+  `Program.cs` wires `AddPresenceServices()`, `MapPresence()` and the startup
+  `PresenceService.InitializeAsync` scope.
 
-Current verification: `dotnet test --no-restore --verbosity minimal` passes
-173 tests against disposable local MongoDB, S3Mock and Mailpit, including 23
+Current verification: an isolated joint snapshot built from baseline `710bbcb`
+with the C2 production/test files plus the Presence production/test files and the
+shared `Program.cs` passes 210/210 tests against disposable local MongoDB, S3Mock
+and Mailpit (`dotnet build` 0 warnings/0 errors): 173 C1-era tests including 23
 invitation lifecycle tests (nested public group views, pending reuse without
 version/audit writes, direct team joins and aliases, tag-only PUT, recipient-only
 accept/deny, projection removal and reinvite reuse, list filters/pagination and
 permissions, legacy hierarchy/errors/capacity, team restoration, stale cancellation,
 concurrent tags/accept-deny, identity-add serialization, owner/unknown-role join
-compatibility and PUT role-id schema checks), 6
+compatibility and PUT role-id schema checks), 20 application tests, 17 Presence
+tests, and the 6
 project-member tests (idempotent changes + duplicate 5106, update/remove/
 restore with 5108 version fences, external bind auto-merge + explicit merge +
 hard delete, manager/position-lock 103, complete/reopen/clear idempotency with
@@ -120,13 +152,11 @@ the running C# service requires neither Python nor the old repository.
 
 ## Next work
 
-1. Project applications: application lists/approvals/rejections, the invite
-   pending-application direct-allow branch, and team application pages.
-2. Team dissolution must be implemented together with complete project lifecycle
+1. Team dissolution must be implemented together with complete project lifecycle
    cleanup; do not expose a partial delete that leaves project/storage data behind.
-3. Files, targets, labels/translations/tips, complete snapshots and recovery,
+2. Files, targets, labels/translations/tips, complete snapshots and recovery,
    text parsing/OCR/import, exports, notifications, term banks and optional modules.
-4. Storage transfers, quota/capacity reconciliation and their progress/cancellation
+3. Storage transfers, quota/capacity reconciliation and their progress/cancellation
    endpoints; then full API/data compatibility and equivalent workload RAM testing.
 
 ## Remaining safety constraints
@@ -136,11 +166,12 @@ the running C# service requires neither Python nor the old repository.
 - Profile/team/member/invitation writes and their audit inserts remain separate
   documents, not multi-document transactions. Gates are local to one business
   process; do not run a second writer on the same database.
-- `InvitationMutationGate` covers invitation entry points and identity `AddUser`
-  only. `UpdateAsync`, external adds, restores and other team/member writes are not
-  fully serialized by it; there is no new unique index on legacy invitations. Do
-  not treat this as a full identity-lifecycle concurrency guarantee, and do not
-  describe the service as production-ready or fully compatible.
+- `InvitationMutationGate` covers invitation and application entry points and
+  identity `AddUser` only. `UpdateAsync`, external adds, restores and other
+  team/member writes are not fully serialized by it; there is no new unique index
+  on legacy invitations. Do not treat this as a full identity-lifecycle
+  concurrency guarantee, and do not describe the service as production-ready or
+  fully compatible.
 - `Archive:EncryptionKey` is the optional legacy Fernet key. Otherwise the key is
   derived from `Auth:Secret`, which must match the old signing secret to read old
   archive ciphertext. No deployment configuration has been read during tests.

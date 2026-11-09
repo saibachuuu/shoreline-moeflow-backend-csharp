@@ -30,10 +30,12 @@ builder.Services.AddSingleton<IdentityAuditWriter>();
 builder.Services.AddScoped<TeamMemberService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<ProjectService>();
+builder.Services.AddPresenceServices();
 builder.Services.AddScoped<ProjectMemberService>();
 builder.Services.AddScoped<ProjectLifecycleService>();
 builder.Services.AddScoped<ProjectInvitationService>();
 builder.Services.AddScoped<InvitationService>();
+builder.Services.AddScoped<ApplicationService>();
 builder.Services.AddScoped<IdentityTagPolicyService>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
@@ -95,8 +97,10 @@ app.MapTypes();
 app.MapTeams();
 app.MapTeamIdentity();
 app.MapProjects();
+app.MapPresence();
 app.MapProjectMembers();
 app.MapInvitations();
+app.MapApplications();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {
@@ -104,6 +108,10 @@ app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
     return Results.Ok(new { status = "ok" });
 });
 await app.Services.GetRequiredService<MongoStore>().InitializeAsync(CancellationToken.None);
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<PresenceService>().InitializeAsync(CancellationToken.None);
+}
 await app.Services.GetRequiredService<LanguageCatalog>().InitializeAsync(CancellationToken.None);
 await app.Services.GetRequiredService<LegacyTypes>().InitializeAsync(CancellationToken.None);
 app.Run();

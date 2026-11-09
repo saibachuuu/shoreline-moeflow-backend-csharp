@@ -29,9 +29,13 @@ public static class IdentityErrors
     public static ApiError GroupTypeNotSupport() => Error("GroupTypeNotSupportError", 5001, "GROUP_TYPE_NOT_SUPPORT", "不支持此团体类型");
     public static ApiError UserAlreadyJoined(string groupName) => Error("UserAlreadyJoinedError", 5003, "USER_ALREADY_JOINED", $"用户已经在 “{groupName}” 中");
     public static ApiError InvitationAlreadyExist() => Error("InvitationAlreadyExistError", 5004, "INVITATION_ALREADY_EXIST", "已邀请此用户，请等待用户确认");
+    public static ApiError ApplicationAlreadyExist() => Error("ApplicationAlreadyExistError", 5005, "APPLICATION_ALREADY_EXIST", "您已经申请，请等待管理员确认");
     public static ApiError InvitationNotExist() => Error("InvitationNotExistError", 5006, "INVITATION_NOT_EXIST", "邀请不存在");
+    public static ApiError ApplicationNotExist() => Error("ApplicationNotExistError", 5007, "APPLICATION_NOT_EXIST", "申请不存在");
     public static ApiError InvitationFinished() => Error("InvitationFinishedError", 5010, "INVITATION_FINISHED", "无法修改此邀请");
+    public static ApiError ApplicationFinished() => Error("ApplicationFinishedError", 5011, "APPLICATION_FINISHED", "无法修改此申请");
     public static ApiError TargetIsFull() => Error("TargetIsFullError", 5012, "TARGET_IS_FULL", "已满员，不可申请加入或邀请新成员");
+    public static ApiError GroupNotOpen() => Error("GroupNotOpenError", 5014, "GROUP_NOT_OPEN", "此团体不向公众开放");
 
     public static void RequireObject(JsonElement data)
     {

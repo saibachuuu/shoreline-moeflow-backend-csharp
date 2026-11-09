@@ -91,6 +91,13 @@ public sealed class TeamMemberService(MongoStore store, IdentityPermissions perm
         return await AddOrRestoreLockedAsync(team, user, user, member, baseTag, tags, qualifications, requestId, ct);
     }
 
+    /// <summary>Python User.join_team for application approval: any role code
+    /// collapses to one of the three team base tags.</summary>
+    internal Task<BsonDocument> JoinApplicationRoleAsync(BsonDocument team, BsonDocument user, string? roleCode,
+        string requestId, CancellationToken ct) =>
+        JoinTrustedAsync(team, user, roleCode is "creator" or "admin" or "member" ? roleCode : "member",
+            requestId, ct);
+
     private async Task<BsonDocument> AddOrRestoreLockedAsync(BsonDocument team, BsonDocument actor, BsonDocument user,
         BsonDocument? member, string baseTag, string[] tags, string[] qualifications, string requestId, CancellationToken ct)
     {
