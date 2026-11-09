@@ -81,7 +81,8 @@ public sealed partial class ProofreadFeedbackService(
                       ?? throw new ApiError("ProjectNotExistError", 4001, "项目不存在");
         var target = await Targets.Find(Builders<BsonDocument>.Filter.Eq("_id", targetKey)).FirstOrDefaultAsync(ct)
                      ?? throw new ApiError("TargetNotExistError", 4024, "项目目标语言不存在");
-        if (target.GetValue("p", BsonNull.Value) is not BsonObjectId targetProject ||
+        // Python Target.project uses db_field "t" (app/models/target.py), not "p".
+        if (target.GetValue("t", BsonNull.Value) is not BsonObjectId targetProject ||
             targetProject.Value != projectKey)
             throw new ApiError("TargetNotExistError", 4024, "项目目标语言不存在");
 

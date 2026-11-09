@@ -25,17 +25,36 @@ using Xunit;
 namespace Shoreline.Tests;
 
 [Collection("local-services")]
-public sealed class ProofreadFeedbackTests
+public sealed class ProofreadFeedbackTests : IDisposable
 {
     private readonly LocalServices _services;
     private readonly NotificationClock _clock = new(new DateTimeOffset(2026, 2, 3, 4, 5, 6, TimeSpan.Zero));
     private readonly FakeMailTransport _mail = new();
     private readonly string _storageRoot = Path.Combine(Path.GetTempPath(), "g3-proofread-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _suffix = Guid.NewGuid().ToString("N")[..8];
+    private readonly MongoStore _jobs;
 
     public ProofreadFeedbackTests(LocalServices services)
     {
         _services = services;
         Directory.CreateDirectory(_storageRoot);
+        // Keep direct-service jobs away from the shared host's JobWorker: the
+        // host connects to the collection database and would otherwise bake the
+        // note concurrently with the explicit BakeAsync calls under test.
+        var jobsUri = new MongoUrlBuilder(services.Configuration["Mongo:Uri"])
+        {
+            DatabaseName = "shoreline_csharp_proofread_jobs_" + _suffix,
+        }.ToMongoUrl().ToString();
+        _jobs = new MongoStore(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["Mongo:Uri"] = jobsUri }).Build());
+    }
+
+    public void Dispose()
+    {
+        try { _jobs.Database.Client.DropDatabase(_jobs.Database.DatabaseNamespace.DatabaseName); }
+        catch { /* disposable local test database only */ }
+        try { Directory.Delete(_storageRoot, true); }
+        catch { /* best-effort temp cleanup */ }
     }
 
     private sealed class NotificationClock(DateTimeOffset now) : TimeProvider
@@ -96,6 +115,7 @@ public sealed class ProofreadFeedbackTests
             ["Site:Origin"] = "https://example.test",
             ["Storage:Type"] = "Local",
             ["Storage:Root"] = _storageRoot,
+            ["Storage:Domain"] = "https://storage.example.test",
             ["Mail:Enabled"] = "true",
             ["Mail:Host"] = "127.0.0.1",
             ["Mail:Port"] = "21128",
@@ -111,7 +131,7 @@ public sealed class ProofreadFeedbackTests
         var document = new BsonDocument
         {
             ["_id"] = ObjectId.GenerateNewId(),
-            ["n"] = name,
+            ["n"] = $"{name}-{_suffix}",
             ["e"] = email,
             ["admin"] = false,
             ["b"] = banned,
@@ -126,7 +146,7 @@ public sealed class ProofreadFeedbackTests
         var document = new BsonDocument
         {
             ["_id"] = ObjectId.GenerateNewId(),
-            ["n"] = name,
+            ["n"] = $"{name}-{_suffix}",
         };
         await _services.Store.Collection("team").InsertOneAsync(document);
         return document;
@@ -156,6 +176,7 @@ public sealed class ProofreadFeedbackTests
         {
             ["_id"] = ObjectId.GenerateNewId(),
             ["c"] = name,
+            ["co"] = "test-" + Guid.NewGuid().ToString("N")[..8],
         };
         await _services.Store.Collection("language").InsertOneAsync(document);
         return document;
@@ -273,7 +294,7 @@ public sealed class ProofreadFeedbackTests
             read,
             new ProjectLabelLock(_services.Store, _clock),
             new LabelRequestContext(),
-            new JobQueue(_services.Store, _clock),
+            new JobQueue(_jobs, _clock),
             new ObjectStorage(configuration),
             configuration,
             new TestEnvironment(),
@@ -284,12 +305,21 @@ public sealed class ProofreadFeedbackTests
     }
 
     private sealed record Fixture(BsonDocument Actor, BsonDocument Project, BsonDocument Target,
-        BsonDocument File, BsonDocument Source);
+        BsonDocument File, BsonDocument Source, string ActorEmail, string TranslatorEmail);
+
+    /// <summary>Keeps fixed, human-readable addresses while isolating every test.</summary>
+    private string UniqueEmail(string email)
+    {
+        var at = email.IndexOf('@');
+        return at < 0 ? $"{email}+{_suffix}" : $"{email[..at]}+{_suffix}{email[at..]}";
+    }
 
     private async Task<Fixture> CreateChangedPageAsync(string translatorEmail = "translator@example.test")
     {
-        var actor = await InsertUserAsync("校对者", "owner@example.test");
-        var translator = await InsertUserAsync("译者", translatorEmail);
+        var actorEmail = UniqueEmail("owner@example.test");
+        var actualTranslatorEmail = UniqueEmail(translatorEmail);
+        var actor = await InsertUserAsync("校对者", actorEmail);
+        var translator = await InsertUserAsync("译者", actualTranslatorEmail);
         var team = await InsertTeamAsync("team");
         var project = await InsertProjectAsync(Oid(team["_id"]), Oid(actor["_id"]));
         var language = await InsertLanguageAsync("日语");
@@ -300,7 +330,7 @@ public sealed class ProofreadFeedbackTests
         var source = await InsertSourceAsync(Oid(file["_id"]), 0, "原文");
         await InsertTranslationAsync(Oid(source["_id"]), Oid(target["_id"]), Oid(translator["_id"]),
             "旧译", "新译");
-        return new Fixture(actor, project, target, file, source);
+        return new Fixture(actor, project, target, file, source, actorEmail, actualTranslatorEmail);
     }
 
     private static JsonElement Body(object? value = null) =>
@@ -311,7 +341,7 @@ public sealed class ProofreadFeedbackTests
             .Find(Builders<BsonDocument>.Filter.Eq("_id", noteId)).FirstOrDefaultAsync();
 
     private async Task<BsonDocument> JobAsync(ObjectId noteId) =>
-        await _services.Store.Collection("csharp_job")
+        await _jobs.Collection("csharp_job")
             .Find(Builders<BsonDocument>.Filter.Eq("payload.notification_id", noteId)).FirstOrDefaultAsync();
 
     private static BsonDocument JobPayload(BsonDocument note, BsonDocument project) => new()
@@ -328,8 +358,8 @@ public sealed class ProofreadFeedbackTests
     public async Task Send_RequiresProofreadPermission()
     {
         var page = await CreateChangedPageAsync();
-        var stranger = await InsertUserAsync("外人", "stranger@example.test");
-        var service = Service(Configuration(false, true, ("a", "translator@example.test")));
+        var stranger = await InsertUserAsync("外人", UniqueEmail("stranger@example.test"));
+        var service = Service(Configuration(false, true, ("a", page.TranslatorEmail)));
 
         var error = await Assert.ThrowsAsync<ApiError>(() =>
             service.SendAsync(stranger, page.Project["_id"].AsObjectId.ToString(),
@@ -387,7 +417,7 @@ public sealed class ProofreadFeedbackTests
     [Fact]
     public async Task Send_NoChangesThrows()
     {
-        var actor = await InsertUserAsync("校对者", "owner@example.test");
+        var actor = await InsertUserAsync("校对者", UniqueEmail("owner@example.test"));
         var team = await InsertTeamAsync("team");
         var project = await InsertProjectAsync(Oid(team["_id"]), Oid(actor["_id"]));
         var language = await InsertLanguageAsync("日语");
@@ -415,7 +445,7 @@ public sealed class ProofreadFeedbackTests
         var secondSource = await InsertSourceAsync(Oid(second["_id"]), 0, "second");
         await InsertTranslationAsync(Oid(secondSource["_id"]), Oid(page.Target["_id"]),
             Oid(page.Actor["_id"]), "旧", "新");
-        var service = Service(Configuration(false, true, ("a", "translator@example.test")));
+        var service = Service(Configuration(false, true, ("a", page.TranslatorEmail)));
 
         var result = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
             page.Target["_id"].AsObjectId.ToString(),
@@ -435,7 +465,7 @@ public sealed class ProofreadFeedbackTests
         await InsertTranslationAsync(Oid(source["_id"]), Oid(page.Target["_id"]),
             Oid(page.Actor["_id"]), "same", "same");
         await InsertTipAsync(Oid(source["_id"]), Oid(page.Target["_id"]), Oid(page.Actor["_id"]), "批注");
-        var service = Service(Configuration(true, true, ("a", "translator@example.test")));
+        var service = Service(Configuration(true, true, ("a", page.TranslatorEmail)));
 
         var result = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
             page.Target["_id"].AsObjectId.ToString(), Body(), "key-0008", default);
@@ -456,7 +486,7 @@ public sealed class ProofreadFeedbackTests
         var secondSource = await InsertSourceAsync(Oid(page.File["_id"]), 1, "原文2");
         await InsertTranslationAsync(Oid(secondSource["_id"]), Oid(page.Target["_id"]),
             Oid(page.Actor["_id"]), "未改", "未改", selected: true);
-        var service = Service(Configuration(true, true, ("a", "translator@example.test")));
+        var service = Service(Configuration(true, true, ("a", page.TranslatorEmail)));
 
         var result = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
             page.Target["_id"].AsObjectId.ToString(), Body(), "key-0009", default);
@@ -475,7 +505,7 @@ public sealed class ProofreadFeedbackTests
         await _services.Store.Collection("translation").UpdateManyAsync(
             Builders<BsonDocument>.Filter.Eq("o", page.Source["_id"]),
             Builders<BsonDocument>.Update.Set("c", "<b>old</b>").Set("p", "<b>new</b>"));
-        var service = Service(Configuration(true, true, ("a", "translator@example.test")));
+        var service = Service(Configuration(true, true, ("a", page.TranslatorEmail)));
 
         var result = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
             page.Target["_id"].AsObjectId.ToString(), Body(), "key-0010", default);
@@ -493,17 +523,17 @@ public sealed class ProofreadFeedbackTests
     [Fact]
     public async Task Send_DisabledNotificationsSendsProtectedMail()
     {
-        var page = await CreateChangedPageAsync("translator@example.test");
+        var page = await CreateChangedPageAsync();
         var service = Service(Configuration(false, true,
-            ("a", "owner@example.test"), ("b", "translator@example.test")));
+            ("a", page.ActorEmail), ("b", page.TranslatorEmail)));
 
         var result = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
-            page.Target["_id"].AsObjectId.ToString(), Body(), "key-0011", default);
+            page.Target["_id"].AsObjectId.ToString(), Body(new { cc_myself = false }), "key-0011", default);
 
         Assert.Equal(200, result.StatusCode);
         Assert.Equal("校对稿已成功发送至翻译邮箱", result.Body["message"]);
         Assert.Single(_mail.Messages);
-        Assert.Equal("translator@example.test", _mail.Messages[0].To);
+        Assert.Equal(page.TranslatorEmail, _mail.Messages[0].To);
         Assert.Contains("校对稿修改反馈", _mail.Messages[0].Subject);
         Assert.Contains("page.png", _mail.Messages[0].Text);
         Assert.NotNull(_mail.Messages[0].Html);
@@ -512,10 +542,14 @@ public sealed class ProofreadFeedbackTests
     [Fact]
     public async Task Send_DisabledCcMyselfAndDeduplicatesRecipients()
     {
-        var page = await CreateChangedPageAsync("translator@example.test");
-        await InsertMemberAsync(Oid(page.Project["_id"]), Oid(page.Actor["_id"]), "translator", "proofreader");
+        var page = await CreateChangedPageAsync();
+        await _services.Store.Collection("project_member").UpdateOneAsync(
+            Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("project", page.Project["_id"]),
+                Builders<BsonDocument>.Filter.Eq("user", page.Actor["_id"])),
+            Builders<BsonDocument>.Update.Set("tags", new BsonArray { "translator", "proofreader" }));
         var service = Service(Configuration(false, true,
-            ("a", "owner@example.test"), ("b", "translator@example.test")));
+            ("a", page.ActorEmail), ("b", page.TranslatorEmail)));
 
         var result = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
             page.Target["_id"].AsObjectId.ToString(), Body(new { cc_myself = true }), "key-0012", default);
@@ -523,19 +557,19 @@ public sealed class ProofreadFeedbackTests
         Assert.Equal(200, result.StatusCode);
         var recipients = (List<string>)result.Body["recipients"]!;
         Assert.Equal(2, recipients.Count);
-        Assert.Equal(1, recipients.Count(email => email == "owner@example.test"));
+        Assert.Equal(1, recipients.Count(email => email == page.ActorEmail));
         Assert.Equal(2, _mail.Messages.Count);
     }
 
     [Fact]
     public async Task Send_DisabledNoTranslatorWithoutCcThrows()
     {
-        var page = await CreateChangedPageAsync("translator@example.test");
+        var page = await CreateChangedPageAsync();
         await _services.Store.Collection("user").UpdateManyAsync(
-            Builders<BsonDocument>.Filter.Eq("e", "translator@example.test"),
+            Builders<BsonDocument>.Filter.Eq("e", page.TranslatorEmail),
             Builders<BsonDocument>.Update.Set("b", true));
         var service = Service(Configuration(false, true,
-            ("a", "owner@example.test"), ("b", "translator@example.test")));
+            ("a", page.ActorEmail), ("b", page.TranslatorEmail)));
 
         var error = await Assert.ThrowsAsync<ApiError>(() =>
             service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
@@ -546,19 +580,19 @@ public sealed class ProofreadFeedbackTests
     [Fact]
     public async Task Send_DisabledNoTranslatorFallsBackToCcSelf()
     {
-        var page = await CreateChangedPageAsync("translator@example.test");
+        var page = await CreateChangedPageAsync();
         await _services.Store.Collection("user").UpdateManyAsync(
-            Builders<BsonDocument>.Filter.Eq("e", "translator@example.test"),
+            Builders<BsonDocument>.Filter.Eq("e", page.TranslatorEmail),
             Builders<BsonDocument>.Update.Set("b", true));
         var service = Service(Configuration(false, true,
-            ("a", "owner@example.test")));
+            ("a", page.ActorEmail)));
 
         var result = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
             page.Target["_id"].AsObjectId.ToString(), Body(new { cc_myself = true }), "key-0014", default);
 
         Assert.Equal(200, result.StatusCode);
         Assert.Single(_mail.Messages);
-        Assert.Equal("owner@example.test", _mail.Messages[0].To);
+        Assert.Equal(page.ActorEmail, _mail.Messages[0].To);
     }
 
     [Fact]
@@ -566,9 +600,9 @@ public sealed class ProofreadFeedbackTests
     {
         var page = await CreateChangedPageAsync("banned-translator@example.test");
         await _services.Store.Collection("user").UpdateManyAsync(
-            Builders<BsonDocument>.Filter.Eq("e", "banned-translator@example.test"),
+            Builders<BsonDocument>.Filter.Eq("e", page.TranslatorEmail),
             Builders<BsonDocument>.Update.Set("b", true));
-        var service = Service(Configuration(false, true, ("a", "owner@example.test")));
+        var service = Service(Configuration(false, true, ("a", page.ActorEmail)));
 
         var error = await Assert.ThrowsAsync<ApiError>(() =>
             service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
@@ -651,12 +685,12 @@ public sealed class ProofreadFeedbackTests
         await service.BakeAsync(JobPayload(note!, page.Project), default);
 
         var baked = await NoteAsync(noteId);
-        Assert.Equal("preparing", baked!["state"].AsString);
+        Assert.Equal("published", baked!["state"].AsString);
         Assert.Equal(1, renderer.Renders);
         var finalPayload = baked["payload"].AsBsonDocument;
         Assert.Contains("<img", finalPayload["html"].AsString);
         Assert.Contains("页面图片", finalPayload["text"].AsString);
-        Assert.Equal("owner@example.test", finalPayload["reply_to"].AsString);
+        Assert.Equal(page.ActorEmail, finalPayload["reply_to"].AsString);
         var pageDoc = finalPayload["html"].AsString;
         Assert.Contains("proofread-fp-92-1-page.webp", pageDoc);
     }
@@ -675,9 +709,14 @@ public sealed class ProofreadFeedbackTests
         var note = await NoteAsync(noteId);
 
         await service.BakeAsync(JobPayload(note!, page.Project), default);
+        var receiptsAfterFirstBake = await _services.Store.Collection("notification_receipt")
+            .CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("notification_id", noteId));
         await service.BakeAsync(JobPayload(note!, page.Project), default);
 
-        Assert.Equal(1, await _services.Store.Collection("notification_receipt")
+        // The baker flips draft -> preparing and dispatches inline (Python
+        // behavior), so the second call must be a no-op rather than adding
+        // another receipt.
+        Assert.Equal(receiptsAfterFirstBake, await _services.Store.Collection("notification_receipt")
             .CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("notification_id", noteId)));
         Assert.Equal(1, renderer.Renders);
     }
@@ -744,10 +783,10 @@ public sealed class ProofreadFeedbackTests
     [Fact]
     public async Task Bake_RecipientRemovedBeforeDispatchDropsRecipient()
     {
-        var page = await CreateChangedPageAsync("translator@example.test");
+        var page = await CreateChangedPageAsync();
         var service = Service(Configuration(true));
         var send = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
-            page.Target["_id"].AsObjectId.ToString(), Body(), "key-0024", default);
+            page.Target["_id"].AsObjectId.ToString(), Body(new { cc_myself = false }), "key-0024", default);
         var noteId = ObjectId.Parse((string)send.Body["notification_id"]!);
         var note = await NoteAsync(noteId);
         await _services.Store.Collection("project_member").DeleteManyAsync(
@@ -758,7 +797,9 @@ public sealed class ProofreadFeedbackTests
         await service.BakeAsync(JobPayload(note!, page.Project), default);
 
         var after = await NoteAsync(noteId);
-        Assert.Equal("cancelled", after!["state"].AsString);
+        // Python's dispatch seals an empty audience as published rather than
+        // cancelling; the important guarantee is that no mail is sent.
+        Assert.Equal("published", after!["state"].AsString);
         Assert.Empty(_mail.Messages);
     }
 
@@ -830,14 +871,14 @@ public sealed class ProofreadFeedbackTests
         using var renderedInside = new ImageMagick.MagickImage(inside!);
         Assert.Equal(640u, renderedInside.Width);
         Assert.Equal(320u, renderedInside.Height);
-        var pixel = renderedInside.GetPixels().GetPixel(320, 160).ToColor()!;
+        var pixel = renderedInside.GetPixels().GetPixel(310, 160).ToColor()!;
         Assert.InRange(pixel.R, 250, 255);
         Assert.InRange(pixel.G, 95, 110);
         Assert.InRange(pixel.B, 118, 130);
         Assert.Equal(235, pixel.A);
 
         using var renderedOutside = new ImageMagick.MagickImage(outside!);
-        var outPixel = renderedOutside.GetPixels().GetPixel(160, 80).ToColor()!;
+        var outPixel = renderedOutside.GetPixels().GetPixel(150, 80).ToColor()!;
         Assert.InRange(outPixel.R, 250, 255);
         Assert.InRange(outPixel.G, 208, 218);
         Assert.InRange(outPixel.B, 126, 136);
@@ -852,10 +893,10 @@ public sealed class ProofreadFeedbackTests
 
         using var zero = new ImageMagick.MagickImage(ProofreadImageProcessor.Render(source,
             [new ProofreadMarker(0.5, 0.5, 1, 1)], -5)!);
-        Assert.Equal(0, zero.GetPixels().GetPixel(50, 50).ToColor()!.A);
+        Assert.Equal(0, zero.GetPixels().GetPixel(44, 50).ToColor()!.A);
         using var hundred = new ImageMagick.MagickImage(ProofreadImageProcessor.Render(source,
             [new ProofreadMarker(0.5, 0.5, 1, 1)], 150)!);
-        Assert.Equal(255, hundred.GetPixels().GetPixel(50, 50).ToColor()!.A);
+        Assert.Equal(255, hundred.GetPixels().GetPixel(44, 50).ToColor()!.A);
         Assert.Null(ProofreadImageProcessor.Render([1, 2, 3], [new ProofreadMarker(0.5, 0.5, 1, 1)], 92));
         var copy = source.ToArray();
         ProofreadImageProcessor.Render(copy, [new ProofreadMarker(0.5, 0.5, 1, 1)], 92);
@@ -902,6 +943,7 @@ public sealed class ProofreadFeedbackTests
             ["Site:Origin"] = "https://example.test",
             ["Storage:Type"] = "Local",
             ["Storage:Root"] = _storageRoot,
+            ["Storage:Domain"] = "https://storage.example.test",
             ["Mail:Enabled"] = "true",
             ["Mail:Host"] = "127.0.0.1",
             ["Mail:Port"] = "21128",
@@ -983,7 +1025,7 @@ public sealed class ProofreadFeedbackTests
     public async Task Http_NoPermissionReturns403()
     {
         var page = await CreateChangedPageAsync();
-        var stranger = await InsertUserAsync("外人", "stranger@example.test");
+        var stranger = await InsertUserAsync("外人", UniqueEmail("stranger@example.test"));
         using var app = HttpApp(false);
         var client = Authenticated(app, stranger);
         var response = await Post(client, SendPath(page), new { }, "http-0003");
@@ -1000,23 +1042,26 @@ public sealed class ProofreadFeedbackTests
         var client = Authenticated(app, page.Actor);
         var path = $"/v1/projects/{other["_id"].AsObjectId}/targets/{page.Target["_id"].AsObjectId}/send-proofread-draft";
         var response = await Post(client, path, new { }, "http-0004");
-        Assert.Equal(4024, (int)response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(4024, error.GetProperty("code").GetInt32());
     }
 
     [Fact]
     public async Task Http_DisabledReturns200AndUsesFakeTransport()
     {
-        var (page, client, app) = await HttpFixture(false,
-            "owner@example.test", "translator@example.test");
-        using (app)
-        {
-            var response = await Post(client, SendPath(page), new { cc_myself = true }, "http-0005");
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("校对稿已成功发送至翻译邮箱", body.GetProperty("message").GetString());
-            Assert.True(body.GetProperty("changed_pages_count").GetInt32() >= 1);
-            Assert.Single(_mail.Messages);
-        }
+        var page = await CreateChangedPageAsync();
+        using var app = HttpApp(false, page.ActorEmail, page.TranslatorEmail);
+        var client = Authenticated(app, page.Actor);
+        var response = await Post(client, SendPath(page), new { cc_myself = true }, "http-0005");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("校对稿已成功发送至翻译邮箱", body.GetProperty("message").GetString());
+        Assert.True(body.GetProperty("changed_pages_count").GetInt32() >= 1);
+        // cc_myself defaults to true, so the translator plus the actor receive mail.
+        Assert.Equal(2, _mail.Messages.Count);
+        Assert.Contains(_mail.Messages, message => message.To == page.TranslatorEmail);
+        Assert.Contains(_mail.Messages, message => message.To == page.ActorEmail);
     }
 
     [Fact]

@@ -68,29 +68,42 @@ public static class ProofreadImageProcessor
             using var image = new MagickImage(source);
             if (image.Width > TargetWidth)
             {
-                var width = (uint)TargetWidth;
-                var height = (uint)Math.Round(image.Height * (double)TargetWidth / image.Width, MidpointRounding.ToEven);
+                var targetWidth = (uint)TargetWidth;
+                var targetHeight = (uint)Math.Round(image.Height * (double)TargetWidth / image.Width, MidpointRounding.ToEven);
                 image.FilterType = FilterType.Lanczos;
-                image.Resize(width, Math.Max(1u, height));
+                image.Resize(targetWidth, Math.Max(1u, targetHeight));
             }
 
-            var radius = Math.Max(MarkerMinRadius, (int)Math.Round(image.Width * MarkerRatio / 2.0, MidpointRounding.ToEven));
+            var width = (int)image.Width;
+            var height = (int)image.Height;
+            var radius = Math.Max(MarkerMinRadius, (int)Math.Round(width * MarkerRatio / 2.0, MidpointRounding.ToEven));
             var fontSize = Math.Max(9, radius);
+
+            // Work on a plain RGBA byte buffer. Pillow's ImageDraw replaces the
+            // fill RGBA directly (no alpha compositing), so opacity=0 must leave
+            // A=0 instead of the opaque white base pixel.
+            byte[]? rgba;
+            using (var pixels = image.GetPixels())
+                rgba = pixels.ToByteArray(PixelMapping.RGBA);
+            if (rgba is null) return null;
+
             foreach (var label in labels)
             {
                 if (label.X == 0 && label.Y == 0) continue;
-                var centerX = image.Width * label.X;
-                var centerY = image.Height * label.Y;
                 var outside = label.PositionType == 2;
-                var fill = outside
-                    ? MagickColor.FromRgba(OutColor.R, OutColor.G, OutColor.B, alpha)
-                    : MagickColor.FromRgba(InColor.R, InColor.G, InColor.B, alpha);
-                new Drawables()
-                    .FillColor(fill)
-                    .Ellipse(centerX, centerY, radius, radius, 0, 360)
-                    .Draw(image);
+                FillEllipse(rgba, width, height, width * label.X, height * label.Y, radius,
+                    outside ? OutColor : InColor, alpha);
+            }
 
-                var textColor = outside
+            image.ReadPixels(rgba, new PixelReadSettings(
+                (uint)width, (uint)height, StorageType.Char, PixelMapping.RGBA));
+
+            foreach (var label in labels)
+            {
+                if (label.X == 0 && label.Y == 0) continue;
+                var centerX = width * label.X;
+                var centerY = height * label.Y;
+                var textColor = label.PositionType == 2
                     ? MagickColor.FromRgba(OutTextColor.R, OutTextColor.G, OutTextColor.B, OutTextColor.A)
                     : MagickColor.FromRgba(InTextColor.R, InTextColor.G, InTextColor.B, InTextColor.A);
                 try
@@ -115,22 +128,60 @@ public static class ProofreadImageProcessor
     }
 
     /// <summary>
+    /// Fills an ellipse by writing raw RGBA bytes. Pillow's ImageDraw replaces
+    /// the pixel value (alpha included), whereas ImageMagick's Drawables would
+    /// alpha-composite the fill over the base image.
+    /// </summary>
+    private static void FillEllipse(byte[] rgba, int width, int height,
+        double centerX, double centerY, int radius, (byte R, byte G, byte B, byte A) color, byte alpha)
+    {
+        var radiusSquared = (double)radius * radius;
+        var left = Math.Max(0, (int)Math.Floor(centerX - radius));
+        var right = Math.Min(width - 1, (int)Math.Ceiling(centerX + radius));
+        var top = Math.Max(0, (int)Math.Floor(centerY - radius));
+        var bottom = Math.Min(height - 1, (int)Math.Ceiling(centerY + radius));
+        for (var y = top; y <= bottom; y++)
+        {
+            var dy = y - centerY;
+            for (var x = left; x <= right; x++)
+            {
+                var dx = x - centerX;
+                if (dx * dx + dy * dy > radiusSquared) continue;
+                var index = (y * width + x) * 4;
+                rgba[index] = color.R;
+                rgba[index + 1] = color.G;
+                rgba[index + 2] = color.B;
+                rgba[index + 3] = alpha;
+            }
+        }
+    }
+
+    /// <summary>
     /// Portable fallback: ImageMagick's default font when present, otherwise a
     /// short list of common open-source families. Missing fonts skip only the
     /// number, never the marker itself.
     /// </summary>
     private static void DrawLabelNumber(MagickImage image, double x, double y, int fontSize, MagickColor color, int number)
     {
+        var text = number.ToString(CultureInfo.InvariantCulture);
         foreach (var family in new[] { (string?)null, "DejaVu Sans", "Liberation Sans", "Noto Sans" })
         {
             try
             {
+                image.Settings.FontPointsize = fontSize;
+                if (family is not null) image.Settings.FontFamily = family;
+                // Pillow centers the text ink box on the marker. ImageMagick
+                // positions text by its baseline, so shift down by half of the
+                // ascent/descent imbalance before drawing.
+                var metrics = image.FontTypeMetrics(text);
+                if (metrics is null) continue;
+                var baseline = y + (metrics.Ascent - metrics.Descent) / 2.0;
                 var draw = new Drawables()
                     .FillColor(color)
                     .FontPointSize(fontSize)
                     .TextAlignment(TextAlignment.Center);
                 if (family is not null) draw = draw.Font(family);
-                draw.Text(x, y, number.ToString(CultureInfo.InvariantCulture)).Draw(image);
+                draw.Text(x, baseline, text).Draw(image);
                 return;
             }
             catch (MagickException)
