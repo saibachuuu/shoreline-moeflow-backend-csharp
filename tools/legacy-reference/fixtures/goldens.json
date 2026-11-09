@@ -1,0 +1,1195 @@
+{
+  "schema": 1,
+  "generated_by": "tools/legacy-reference/generate_goldens.py",
+  "reference": {
+    "root": "shoreline-moeflow-backend (sibling of the C# repository)",
+    "extraction": "ast.parse + compile of selected definitions only; no import of the legacy app package, no conftest, no config, no dotenv, no database.",
+    "network_guard": "socket, DNS, urllib and http.client disabled; zero attempts"
+  },
+  "runtime": {
+    "python": "3.10.11",
+    "pymongo": "4.18.3",
+    "bson_module": "bson (pymongo distribution)"
+  },
+  "provenance": [
+    {
+      "path": "app/constants/file.py",
+      "source_sha256": "b046d9c19c3c5651773b012662969157e59d5f355751f027a69ff28076a7e33c",
+      "blocks": [
+        {
+          "name": "FileType",
+          "container": null,
+          "line": 5,
+          "end_line": 27,
+          "block_sha256": "1f09922b25f8a4e98ca81b040cfbb63fe1ce5be75dcb7abdfc5cdc102ee516fb"
+        }
+      ]
+    },
+    {
+      "path": "app/models/file.py",
+      "source_sha256": "0887106e4a0aa06dd5737c118a104fe9e70c0e6dac174e6360ef9627b349b38e",
+      "blocks": [
+        {
+          "name": "Filename",
+          "container": null,
+          "line": 115,
+          "end_line": 190,
+          "block_sha256": "dbf8c33c65de9868570444c18ea85ac3465da9f682d43b395c269cf68cd52ab5"
+        },
+        {
+          "name": "to_labelplus",
+          "container": "File",
+          "line": 1323,
+          "end_line": 1376,
+          "block_sha256": "7b098b76ff4877b3778ea446809deacd04cffcf46f349374a0a3a9f4f36e920b"
+        }
+      ]
+    },
+    {
+      "path": "app/services/file_order.py",
+      "source_sha256": "ec642f6cd504b2d4d16830b1167915185baab99abb0d87351a35d8fcc049e0e7",
+      "blocks": [
+        {
+          "name": "order_snapshot",
+          "container": null,
+          "line": 39,
+          "end_line": 47,
+          "block_sha256": "3b466e1f604aa915e94debbcde287bf4c89f987af45af0a6abc7e285d7c9fcc0"
+        },
+        {
+          "name": "export_file_names",
+          "container": null,
+          "line": 103,
+          "end_line": 115,
+          "block_sha256": "b13d6e756f832f33f26b3a36c86e9be160f2d1530c2d8a3fee9d8edcb0473847"
+        }
+      ]
+    },
+    {
+      "path": "app/services/label_snapshot.py",
+      "source_sha256": "bbee6ec3c9e07b18d0ceffce56f4dd03c803ec53ada3ae26a78d1d7b080dde6c",
+      "blocks": [
+        {
+          "name": "data_digest",
+          "container": null,
+          "line": 68,
+          "end_line": 74,
+          "block_sha256": "c403aacb2f0b3b8d17885e327ba760123e12fd2fe4a94ad6fc67360c3178b8d7"
+        },
+        {
+          "name": "create_snapshot",
+          "container": null,
+          "line": 77,
+          "end_line": 141,
+          "block_sha256": "251626e4583efa128946d2cb399a6b42e85cc5710224a40701110687258cfe76"
+        }
+      ]
+    },
+    {
+      "path": "app/services/notification_content.py",
+      "source_sha256": "abefeb7309ad708443c265fd514618327ed6b01e6dceb08744d8796b7225b08d",
+      "blocks": [
+        {
+          "name": "NotificationError",
+          "container": null,
+          "line": 12,
+          "end_line": 17,
+          "block_sha256": "1082f02ae067e319e831245365412d836fd7b383101d5ce9ac5a87676ea080a8"
+        },
+        {
+          "name": "fail",
+          "container": null,
+          "line": 20,
+          "end_line": 21,
+          "block_sha256": "66479e7d1fb643552d579d3e3d4083860dcadd2e02e4e65eb10315d3ed2a48b9"
+        },
+        {
+          "name": "safe_url",
+          "container": null,
+          "line": 24,
+          "end_line": 40,
+          "block_sha256": "e0b8269b8e86557beba74dc8203777f123ad12fa4fb015a5e89624ab5555500b"
+        },
+        {
+          "name": "parse_body",
+          "container": null,
+          "line": 43,
+          "end_line": 96,
+          "block_sha256": "fbb0f393d51cdf6074ffb4de42534d432959b50c57a486748c43c9604e1eb163"
+        },
+        {
+          "name": "normalize",
+          "container": null,
+          "line": 112,
+          "end_line": 113,
+          "block_sha256": "bca87e1d072750c69e874edc945974a676b76250c3bd849f811a798bfe1e4acd"
+        },
+        {
+          "name": "search_tokens",
+          "container": null,
+          "line": 116,
+          "end_line": 118,
+          "block_sha256": "c0854fdecc1776eeff9185a8fa923a619c67d6c917f8e7a1bcb5005b92b02a24"
+        },
+        {
+          "name": "project_accessible",
+          "container": null,
+          "line": 121,
+          "end_line": 127,
+          "block_sha256": "26e28ac7accf659710262cb0f7a00356f9a3cf460056ef830273f2f2ce470986"
+        }
+      ]
+    },
+    {
+      "path": "app/utils/labelplus.py",
+      "source_sha256": "225d606e37b16016adfbaa9fc65aebf6421586de64082d6d8e223791051624d0",
+      "blocks": [
+        {
+          "name": "LPLabel",
+          "container": null,
+          "line": 5,
+          "end_line": 9,
+          "block_sha256": "b50da955b0007320ea8084825f764ea8bf2ab9d040ad126dbd19c9b1f8621fe5"
+        },
+        {
+          "name": "LPFile",
+          "container": null,
+          "line": 12,
+          "end_line": 14,
+          "block_sha256": "60e94ca08034e4a576c4f8d3005e507bd7db71bfef147ec98705f15e8b043197"
+        },
+        {
+          "name": "load_from_labelplus",
+          "container": null,
+          "line": 17,
+          "end_line": 53,
+          "block_sha256": "0266368b49c86afb56af97f264f5681099ba9c666f6aa8053f3691c4faf20f92"
+        }
+      ]
+    },
+    {
+      "path": "app/utils/type.py",
+      "source_sha256": "685de92d37d1c840c6f2552bc96eeb9e35c254f963dbd1655859ba7df3a8dde8",
+      "blocks": [
+        {
+          "name": "is_number",
+          "container": null,
+          "line": 1,
+          "end_line": 8,
+          "block_sha256": "75cc3c57773bc51b94fb772e7db4a4f49161d9171d69bc8144ab26543ca36b34"
+        }
+      ]
+    }
+  ],
+  "fixtures": {
+    "filename": {
+      "cases": [
+        {
+          "input": "01 - 封面.png",
+          "folder": false,
+          "ok": true,
+          "prefix": "01 - 封面",
+          "suffix": "png",
+          "file_type": 2,
+          "sort_name": "000001 - 封面"
+        },
+        {
+          "input": "10 - page.JPG",
+          "folder": false,
+          "ok": true,
+          "prefix": "10 - page",
+          "suffix": "JPG",
+          "file_type": 2,
+          "sort_name": "000010 - page"
+        },
+        {
+          "input": "2.png",
+          "folder": false,
+          "ok": true,
+          "prefix": "2",
+          "suffix": "png",
+          "file_type": 2,
+          "sort_name": "000002"
+        },
+        {
+          "input": "book1-002.webp",
+          "folder": false,
+          "ok": true,
+          "prefix": "book1-002",
+          "suffix": "webp",
+          "file_type": 2,
+          "sort_name": "book000001-000002"
+        },
+        {
+          "input": "阅读笔记.txt",
+          "folder": false,
+          "ok": true,
+          "prefix": "阅读笔记",
+          "suffix": "txt",
+          "file_type": 3,
+          "sort_name": "阅读笔记"
+        },
+        {
+          "input": "noext",
+          "folder": false,
+          "ok": true,
+          "prefix": "noext",
+          "suffix": "",
+          "file_type": 0,
+          "sort_name": "noext"
+        },
+        {
+          "input": "ßσς 😀.png",
+          "folder": false,
+          "ok": true,
+          "prefix": "ßσς 😀",
+          "suffix": "png",
+          "file_type": 2,
+          "sort_name": "ßσς 😀"
+        },
+        {
+          "input": "章节 😀",
+          "folder": true,
+          "ok": true,
+          "prefix": "章节 😀",
+          "suffix": "",
+          "file_type": 1,
+          "sort_name": "章节 😀"
+        },
+        {
+          "input": "  ",
+          "folder": false,
+          "ok": false,
+          "error": {
+            "type": "_FilenameIllegalError",
+            "message": "文件名为空"
+          }
+        },
+        {
+          "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "folder": false,
+          "ok": false,
+          "error": {
+            "type": "_FilenameIllegalError",
+            "message": "文件名过长"
+          }
+        },
+        {
+          "input": "..",
+          "folder": false,
+          "ok": false,
+          "error": {
+            "type": "_FilenameIllegalError",
+            "message": "文件名不能是 . 或 .."
+          }
+        },
+        {
+          "input": "name.",
+          "folder": false,
+          "ok": false,
+          "error": {
+            "type": "_FilenameIllegalError",
+            "message": "文件名不能以 . 结尾"
+          }
+        },
+        {
+          "input": ".png",
+          "folder": false,
+          "ok": false,
+          "error": {
+            "type": "_FilenameIllegalError",
+            "message": "文件名前缀为空"
+          }
+        },
+        {
+          "input": "a/b.png",
+          "folder": false,
+          "ok": false,
+          "error": {
+            "type": "_FilenameIllegalError",
+            "message": "文件名不能包含下列任何字符: \\ / : * ? \" < > |"
+          }
+        },
+        {
+          "input": "a:b.png",
+          "folder": false,
+          "ok": false,
+          "error": {
+            "type": "_FilenameIllegalError",
+            "message": "文件名不能包含下列任何字符: \\ / : * ? \" < > |"
+          }
+        },
+        {
+          "input": "a<b>c|d?.png",
+          "folder": false,
+          "ok": false,
+          "error": {
+            "type": "_FilenameIllegalError",
+            "message": "文件名不能包含下列任何字符: \\ / : * ? \" < > |"
+          }
+        }
+      ],
+      "sort_width": 6
+    },
+    "labelplus_load": {
+      "input": "project header\n>>>>>>>>[第1话/封面 – ßσ 😀 <&>.png]<<<<<<<<\n----------------[1]----------------[12.5,34.5,0]\n你好，世界 😀 <b>&\n第二行\n----------------[2]----------------[0,0,1]\n\n>>>>>>>>[02-текст.txt]<<<<<<<<\n----------------[1]----------------[-1.25,2.5,2]\nÜnïcode ßσς",
+      "expected": [
+        {
+          "file_name": "第1话/封面 – ßσ 😀 <&>.png",
+          "labels": [
+            {
+              "x": 12.5,
+              "y": 34.5,
+              "position_type": 0,
+              "translation": "你好，世界 😀 <b>&\n第二行"
+            },
+            {
+              "x": 0.0,
+              "y": 0.0,
+              "position_type": 1,
+              "translation": ""
+            }
+          ]
+        },
+        {
+          "file_name": "02-текст.txt",
+          "labels": [
+            {
+              "x": -1.25,
+              "y": 2.5,
+              "position_type": 2,
+              "translation": "Ünïcode ßσς"
+            }
+          ]
+        }
+      ]
+    },
+    "labelplus_export": {
+      "file": {
+        "name": "封面 – ßσ 😀 <&>.png",
+        "ancestors": [
+          "第1章",
+          "scene"
+        ]
+      },
+      "plain": ">>>>>>>>[第1章/scene/封面 – ßσ 😀 <&>.png]<<<<<<<<\r\n----------------[1]----------------[12.5,34.25,0]\r\n校对 😀\r\n第二行 <&>\r\n----------------[2]----------------[0,0,1]\r\n普通\r\n换行\r\n----------------[3]----------------[-1.5,2,2]\r\n\r\n",
+      "staff_block": "[staff]\r\nname: 欶澜 😀\r\n",
+      "staff_first": ">>>>>>>>[第1章/scene/封面 – ßσ 😀 <&>.png]<<<<<<<<\r\n[staff]\r\nname: 欶澜 😀\r\n----------------[1]----------------[12.5,34.25,0]\r\n校对 😀\r\n第二行 <&>\r\n----------------[2]----------------[0,0,1]\r\n普通\r\n换行\r\n----------------[3]----------------[-1.5,2,2]\r\n\r\n",
+      "staff_last": ">>>>>>>>[第1章/scene/封面 – ßσ 😀 <&>.png]<<<<<<<<\r\n----------------[1]----------------[12.5,34.25,0]\r\n校对 😀\r\n第二行 <&>\r\n----------------[2]----------------[0,0,1]\r\n普通\r\n换行\r\n----------------[3]----------------[-1.5,2,2]\r\n\r\n[staff]\r\nname: 欶澜 😀\r\n",
+      "export_name": ">>>>>>>>[custom/名字 😀.png]<<<<<<<<\r\n----------------[1]----------------[12.5,34.25,0]\r\n校对 😀\r\n第二行 <&>\r\n----------------[2]----------------[0,0,1]\r\n普通\r\n换行\r\n----------------[3]----------------[-1.5,2,2]\r\n\r\n"
+    },
+    "notification": {
+      "valid": [
+        {
+          "input": "你好 [b]粗体 😀[/b] [url=https://example.com/a?x=1&y=2]链接[/url] [list][*]一[*]二[/list]",
+          "ok": true,
+          "nodes": [
+            {
+              "type": "text",
+              "text": "你好 "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "粗体 😀"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " "
+            },
+            {
+              "type": "url",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "链接"
+                }
+              ],
+              "url": "https://example.com/a?x=1&y=2"
+            },
+            {
+              "type": "text",
+              "text": " "
+            },
+            {
+              "type": "list",
+              "children": [
+                {
+                  "type": "li",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "一"
+                    }
+                  ]
+                },
+                {
+                  "type": "li",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "二"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "input": "[quote]外层 [i]斜体[/i] [u]下划线[/u][/quote]",
+          "ok": true,
+          "nodes": [
+            {
+              "type": "quote",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "外层 "
+                },
+                {
+                  "type": "i",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "斜体"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": " "
+                },
+                {
+                  "type": "u",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "下划线"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "input": "HTML <script>&\"' 特殊字符 😀 ßσς",
+          "ok": true,
+          "nodes": [
+            {
+              "type": "text",
+              "text": "HTML <script>&\"' 特殊字符 😀 ßσς"
+            }
+          ]
+        },
+        {
+          "input": "[project]64b000000000000000000001[/project]",
+          "ok": true,
+          "nodes": [
+            {
+              "type": "project",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "64b000000000000000000001"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "invalid": [
+        {
+          "input": "[b]未闭合",
+          "ok": false,
+          "error": {
+            "type": "NotificationError",
+            "message": "BBCode 标签未正确闭合",
+            "status_code": 400
+          }
+        },
+        {
+          "input": "[*]孤立",
+          "ok": false,
+          "error": {
+            "type": "NotificationError",
+            "message": "列表项必须位于 list 内",
+            "status_code": 400
+          }
+        },
+        {
+          "input": "[url=javascript:alert(1)]x[/url]",
+          "ok": false,
+          "error": {
+            "type": "NotificationError",
+            "message": "链接只支持安全的 HTTP/HTTPS 地址",
+            "status_code": 400
+          }
+        },
+        {
+          "input": "[url=https://user:pass@example.com]x[/url]",
+          "ok": false,
+          "error": {
+            "type": "NotificationError",
+            "message": "链接只支持安全的 HTTP/HTTPS 地址",
+            "status_code": 400
+          }
+        },
+        {
+          "input": "[b=red]x[/b]",
+          "ok": false,
+          "error": {
+            "type": "NotificationError",
+            "message": "不支持的标签参数",
+            "status_code": 400
+          }
+        }
+      ],
+      "safe_url": [
+        {
+          "input": "https://example.com/a?x=1&y=2",
+          "expected": true
+        },
+        {
+          "input": "http://example.com",
+          "expected": true
+        },
+        {
+          "input": "javascript:alert(1)",
+          "expected": false
+        },
+        {
+          "input": "https://user:pass@example.com",
+          "expected": false
+        },
+        {
+          "input": "https://example.com/\u0001",
+          "expected": false
+        },
+        {
+          "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "expected": false
+        }
+      ],
+      "normalize": {
+        "input": "  Ｆｕｌｌ　Width  ßΣς😀  ",
+        "expected": "full width ssσσ😀",
+        "tokens": [
+          " s",
+          " w",
+          "dt",
+          "fu",
+          "h ",
+          "id",
+          "l ",
+          "ll",
+          "ss",
+          "sσ",
+          "th",
+          "ul",
+          "wi",
+          "σσ",
+          "σ😀"
+        ]
+      },
+      "project_access": [
+        {
+          "case": "allowed",
+          "expected": true
+        },
+        {
+          "case": "denied",
+          "expected": false
+        },
+        {
+          "case": "banned",
+          "expected": false
+        },
+        {
+          "case": "missing-project",
+          "expected": false
+        },
+        {
+          "case": "missing-user",
+          "expected": false
+        },
+        {
+          "case": "does-not-exist",
+          "expected": false
+        }
+      ]
+    },
+    "file_order": {
+      "project_call": {
+        "parent": null,
+        "type_only": 2
+      },
+      "files": [
+        {
+          "id": "64b000000000000000000011",
+          "name": "封面 😀.png",
+          "manual_order": 1
+        },
+        {
+          "id": "64b000000000000000000012",
+          "name": "第2页 ßσ.png",
+          "manual_order": 2
+        },
+        {
+          "id": "64b000000000000000000013",
+          "name": "legacy <&>.png",
+          "manual_order": null
+        },
+        {
+          "id": "64b000000000000000000014",
+          "name": "zzz.png",
+          "manual_order": null
+        }
+      ],
+      "canonical_json": "[[\"64b000000000000000000011\", \"封面 😀.png\", 1], [\"64b000000000000000000012\", \"第2页 ßσ.png\", 2], [\"64b000000000000000000013\", \"legacy <&>.png\", null], [\"64b000000000000000000014\", \"zzz.png\", null]]",
+      "python_json_default_separators": true,
+      "version": "e1e0e518ca4a3d17b80450b394343cad8df0c59afcdf7d392b376d369a77f047",
+      "json_sha256": "e1e0e518ca4a3d17b80450b394343cad8df0c59afcdf7d392b376d369a77f047",
+      "export_with_manual": {
+        "64b000000000000000000011": "0001_封面 😀.png",
+        "64b000000000000000000012": "0002_第2页 ßσ.png",
+        "64b000000000000000000013": "0003_legacy <&>.png",
+        "64b000000000000000000014": "0004_zzz.png"
+      },
+      "export_without_manual": {}
+    },
+    "label_snapshot": {
+      "chunk_bytes_override": 200,
+      "metadata": {
+        "name": "金标快照 😀",
+        "version": 1,
+        "reason": "fixture",
+        "ready": true,
+        "digest": "2bb2374b63e1799e4f5ef8a023515a7281b96e93868b71c238c55e8bd9ac78ce",
+        "counts": {
+          "files": 3,
+          "targets": 2,
+          "sources": 3,
+          "translations": 2,
+          "tips": 2
+        },
+        "revision": 7
+      },
+      "chunk_count": 7,
+      "chunks": [
+        {
+          "index": 0,
+          "kind": "files",
+          "byte_length": 167,
+          "sha256": "b78b67f651a5a7c8346fbf828eab61b59af4e204a7b4d92024d7c1a81f9def8c",
+          "stored_hash": "b78b67f651a5a7c8346fbf828eab61b59af4e204a7b4d92024d7c1a81f9def8c",
+          "b64": "pwAAAARyb3dzAJwAAAADMABIAAAAB19pZABksAAAAAAAAAAAADECc2EAEAAAAOWwgemdoiDwn5iALnBuZwASbWQAe2jlz4sBAAAQdAACAAAAEHYAAwAAAAADMQBJAAAAB19pZABksAAAAAAAAAAAADcCc2EAEQAAAOesrDLpobUgw5/Pgy5wbmcAEm1kAHxo5c+LAQAAEHQAAgAAABB2AAMAAAAAAAA=",
+          "rows": [
+            {
+              "_id": {
+                "$oid": "64b000000000000000000031"
+              },
+              "sa": "封面 😀.png",
+              "md": {
+                "$int64": 1700000000123
+              },
+              "t": 2,
+              "v": 3
+            },
+            {
+              "_id": {
+                "$oid": "64b000000000000000000037"
+              },
+              "sa": "第2页 ßσ.png",
+              "md": {
+                "$int64": 1700000000124
+              },
+              "t": 2,
+              "v": 3
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "kind": "files",
+          "byte_length": 82,
+          "sha256": "18630c9a25da1accc2a62aa69b1e8fd6b80c55400f66309b852a5bac62bc1ac1",
+          "stored_hash": "18630c9a25da1accc2a62aa69b1e8fd6b80c55400f66309b852a5bac62bc1ac1",
+          "b64": "UgAAAARyb3dzAEcAAAADMAA/AAAAB19pZABksAAAAAAAAAAAADgCc2EADwAAAGxlZ2FjeSA8Jj4ucG5nAAptZAAQdAACAAAAEHYAAwAAAAAAAA==",
+          "rows": [
+            {
+              "_id": {
+                "$oid": "64b000000000000000000038"
+              },
+              "sa": "legacy <&>.png",
+              "md": null,
+              "t": 2,
+              "v": 3
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "kind": "targets",
+          "byte_length": 103,
+          "sha256": "58c4664b7159cd2496efd0421cf831778ccee498994fc2fc043ba21be08b8447",
+          "stored_hash": "58c4664b7159cd2496efd0421cf831778ccee498994fc2fc043ba21be08b8447",
+          "b64": "ZwAAAARyb3dzAFwAAAADMAAqAAAAB19pZABksAAAAAAAAAAAADICbAANAAAA566A5L2T5Lit5paHAAADMQAnAAAAB19pZABksAAAAAAAAAAAADkCbAAKAAAA5pel5pys6KqeAAAAAA==",
+          "rows": [
+            {
+              "_id": {
+                "$oid": "64b000000000000000000032"
+              },
+              "l": "简体中文"
+            },
+            {
+              "_id": {
+                "$oid": "64b000000000000000000039"
+              },
+              "l": "日本語"
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "kind": "sources",
+          "byte_length": 125,
+          "sha256": "582fe004c9475c290dbb0400fe7591b3ebd389c36a1b228e64df5c8169aef59f",
+          "stored_hash": "582fe004c9475c290dbb0400fe7591b3ebd389c36a1b228e64df5c8169aef59f",
+          "b64": "fQAAAARyb3dzAHIAAAADMABqAAAAB19pZABksAAAAAAAAAAAADMHZgBksAAAAAAAAAAAADEBeAAAAAAAAAApQBN5AMqFAAAAAAAAAAAAAAAAOjAKbgASYmlnAAAAAAAAAQAAAnUAEAAAAMOfz4PPgiDwn5iAIDwmPgAAAAA=",
+          "rows": [
+            {
+              "_id": {
+                "$oid": "64b000000000000000000033"
+              },
+              "f": {
+                "$oid": "64b000000000000000000031"
+              },
+              "x": 12.5,
+              "y": {
+                "$decimal128": "34.250"
+              },
+              "n": null,
+              "big": {
+                "$int64": 1099511627776
+              },
+              "u": "ßσς 😀 <&>"
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "kind": "sources",
+          "byte_length": 215,
+          "sha256": "af79d33345dff388a95c99bdb2a6e4e1ef72bd1c11ccba85b36d3e77e32fee3e",
+          "stored_hash": "af79d33345dff388a95c99bdb2a6e4e1ef72bd1c11ccba85b36d3e77e32fee3e",
+          "b64": "1wAAAARyb3dzAMwAAAADMABgAAAAB19pZABksAAAAAAAAAAAADoHZgBksAAAAAAAAAAAADcQeAAAAAAAE3kA3AUAAAAAAAAAAAAAAAA6sApuABJiaWcAAAAAAAACAAACdQAKAAAA56ys5LqM6aG1AAADMQBhAAAAB19pZABksAAAAAAAAAAAADsHZgBksAAAAAAAAAAAADgBeAAAAAAAAAD4vxN5ANAHAAAAAAAAAAAAAAAAOjAKbgASYmlnAAAAAAAABAAAAnUABwAAAGxlZ2FjeQAAAAA=",
+          "rows": [
+            {
+              "_id": {
+                "$oid": "64b00000000000000000003a"
+              },
+              "f": {
+                "$oid": "64b000000000000000000037"
+              },
+              "x": 0,
+              "y": {
+                "$decimal128": "-1.500"
+              },
+              "n": null,
+              "big": {
+                "$int64": 2199023255552
+              },
+              "u": "第二页"
+            },
+            {
+              "_id": {
+                "$oid": "64b00000000000000000003b"
+              },
+              "f": {
+                "$oid": "64b000000000000000000038"
+              },
+              "x": -1.5,
+              "y": {
+                "$decimal128": "2.000"
+              },
+              "n": null,
+              "big": {
+                "$int64": 4398046511104
+              },
+              "u": "legacy"
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "kind": "translations",
+          "byte_length": 149,
+          "sha256": "a362a736fa9bdd6bc4e0a9cdd9dc5a2c7164bfc6b2ca70bd7ae9a1d94fdf5f60",
+          "stored_hash": "a362a736fa9bdd6bc4e0a9cdd9dc5a2c7164bfc6b2ca70bd7ae9a1d94fdf5f60",
+          "b64": "lQAAAARyb3dzAIoAAAADMABCAAAAB19pZABksAAAAAAAAAAAADQHbwBksAAAAAAAAAAAADMCYwAWAAAA57+76K+RCuesrOS6jOihjCDwn5iAAAADMQA9AAAAB19pZABksAAAAAAAAAAAADwHbwBksAAAAAAAAAAAADoCYwARAAAA57+76KizCuS6jOihjOebrgAAAAA=",
+          "rows": [
+            {
+              "_id": {
+                "$oid": "64b000000000000000000034"
+              },
+              "o": {
+                "$oid": "64b000000000000000000033"
+              },
+              "c": "翻译\n第二行 😀"
+            },
+            {
+              "_id": {
+                "$oid": "64b00000000000000000003c"
+              },
+              "o": {
+                "$oid": "64b00000000000000000003a"
+              },
+              "c": "翻訳\n二行目"
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "kind": "tips",
+          "byte_length": 110,
+          "sha256": "6028f47f25179a0f53bc7575e9e5ad59f023adf74c2ebff9eec05b04fc19f489",
+          "stored_hash": "6028f47f25179a0f53bc7575e9e5ad59f023adf74c2ebff9eec05b04fc19f489",
+          "b64": "bgAAAARyb3dzAGMAAAADMAAoAAAAB19pZABksAAAAAAAAAAAADUHbwBksAAAAAAAAAAAADMKbgAAAzEAMAAAAAdfaWQAZLAAAAAAAAAAAAA9B28AZLAAAAAAAAAAAAA6Am4ABAAAAOazqAAAAAA=",
+          "rows": [
+            {
+              "_id": {
+                "$oid": "64b000000000000000000035"
+              },
+              "o": {
+                "$oid": "64b000000000000000000033"
+              },
+              "n": null
+            },
+            {
+              "_id": {
+                "$oid": "64b00000000000000000003d"
+              },
+              "o": {
+                "$oid": "64b00000000000000000003a"
+              },
+              "n": "注"
+            }
+          ]
+        }
+      ],
+      "row_bson": {
+        "files": [
+          {
+            "b64": "SAAAAAdfaWQAZLAAAAAAAAAAAAAxAnNhABAAAADlsIHpnaIg8J+YgC5wbmcAEm1kAHto5c+LAQAAEHQAAgAAABB2AAMAAAAA",
+            "sha256": "015520109600659d17813dc0cfd3a9afbdb8ed51c06d10ef91f52c36c5c8f380",
+            "byte_length": 72,
+            "field_order": [
+              "_id",
+              "sa",
+              "md",
+              "t",
+              "v"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "sa": "string",
+              "md": "int64",
+              "t": "int32",
+              "v": "int32"
+            }
+          },
+          {
+            "b64": "SQAAAAdfaWQAZLAAAAAAAAAAAAA3AnNhABEAAADnrKwy6aG1IMOfz4MucG5nABJtZAB8aOXPiwEAABB0AAIAAAAQdgADAAAAAA==",
+            "sha256": "7d2cf5d925dee77ffdd415b2a3d91e41116cbc9ca56f86f575db1205b0c812ed",
+            "byte_length": 73,
+            "field_order": [
+              "_id",
+              "sa",
+              "md",
+              "t",
+              "v"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "sa": "string",
+              "md": "int64",
+              "t": "int32",
+              "v": "int32"
+            }
+          },
+          {
+            "b64": "PwAAAAdfaWQAZLAAAAAAAAAAAAA4AnNhAA8AAABsZWdhY3kgPCY+LnBuZwAKbWQAEHQAAgAAABB2AAMAAAAA",
+            "sha256": "f1b9d26275fe236a31cc6bcea74232c56e5e49074d8262c45966bf88b61aeaf3",
+            "byte_length": 63,
+            "field_order": [
+              "_id",
+              "sa",
+              "md",
+              "t",
+              "v"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "sa": "string",
+              "md": "null",
+              "t": "int32",
+              "v": "int32"
+            }
+          }
+        ],
+        "targets": [
+          {
+            "b64": "KgAAAAdfaWQAZLAAAAAAAAAAAAAyAmwADQAAAOeugOS9k+S4reaWhwAA",
+            "sha256": "9db0ee0977af46615be4c64c1033daa42057876e7897226aec5b9443bad75a80",
+            "byte_length": 42,
+            "field_order": [
+              "_id",
+              "l"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "l": "string"
+            }
+          },
+          {
+            "b64": "JwAAAAdfaWQAZLAAAAAAAAAAAAA5AmwACgAAAOaXpeacrOiqngAA",
+            "sha256": "7517ba9ff3bdaca9222041ab4de464fdea8ebef53cccf2c60b6f18e54ba26a30",
+            "byte_length": 39,
+            "field_order": [
+              "_id",
+              "l"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "l": "string"
+            }
+          }
+        ],
+        "sources": [
+          {
+            "b64": "agAAAAdfaWQAZLAAAAAAAAAAAAAzB2YAZLAAAAAAAAAAAAAxAXgAAAAAAAAAKUATeQDKhQAAAAAAAAAAAAAAADowCm4AEmJpZwAAAAAAAAEAAAJ1ABAAAADDn8+Dz4Ig8J+YgCA8Jj4AAA==",
+            "sha256": "c8c9e515da91b7a44577bdc9186ebf29c7b515de959b0cc1544623c987fdef61",
+            "byte_length": 106,
+            "field_order": [
+              "_id",
+              "f",
+              "x",
+              "y",
+              "n",
+              "big",
+              "u"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "f": "objectId",
+              "x": "double",
+              "y": "decimal128",
+              "n": "null",
+              "big": "int64",
+              "u": "string"
+            }
+          },
+          {
+            "b64": "YAAAAAdfaWQAZLAAAAAAAAAAAAA6B2YAZLAAAAAAAAAAAAA3EHgAAAAAABN5ANwFAAAAAAAAAAAAAAAAOrAKbgASYmlnAAAAAAAAAgAAAnUACgAAAOesrOS6jOmhtQAA",
+            "sha256": "556c84b6b0e62dbfd7cc1940c48c88b07c3dca0112323e1bef992ab4a4f67a5c",
+            "byte_length": 96,
+            "field_order": [
+              "_id",
+              "f",
+              "x",
+              "y",
+              "n",
+              "big",
+              "u"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "f": "objectId",
+              "x": "int32",
+              "y": "decimal128",
+              "n": "null",
+              "big": "int64",
+              "u": "string"
+            }
+          },
+          {
+            "b64": "YQAAAAdfaWQAZLAAAAAAAAAAAAA7B2YAZLAAAAAAAAAAAAA4AXgAAAAAAAAA+L8TeQDQBwAAAAAAAAAAAAAAADowCm4AEmJpZwAAAAAAAAQAAAJ1AAcAAABsZWdhY3kAAA==",
+            "sha256": "8697b72eeecbbe813001a2fba7d89c09c4abb8738dc1cc73cafb0bdcedc172f8",
+            "byte_length": 97,
+            "field_order": [
+              "_id",
+              "f",
+              "x",
+              "y",
+              "n",
+              "big",
+              "u"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "f": "objectId",
+              "x": "double",
+              "y": "decimal128",
+              "n": "null",
+              "big": "int64",
+              "u": "string"
+            }
+          }
+        ],
+        "translations": [
+          {
+            "b64": "QgAAAAdfaWQAZLAAAAAAAAAAAAA0B28AZLAAAAAAAAAAAAAzAmMAFgAAAOe/u+ivkQrnrKzkuozooYwg8J+YgAAA",
+            "sha256": "8f58890cec63cc0afbd97d5ed8f8d1d5e8218615c52b438144e45f3713221385",
+            "byte_length": 66,
+            "field_order": [
+              "_id",
+              "o",
+              "c"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "o": "objectId",
+              "c": "string"
+            }
+          },
+          {
+            "b64": "PQAAAAdfaWQAZLAAAAAAAAAAAAA8B28AZLAAAAAAAAAAAAA6AmMAEQAAAOe/u+ioswrkuozooYznm64AAA==",
+            "sha256": "9a44dfb039456d4cd12703cea389d43397d51ca8ef9c6257e528db80cc8abc1b",
+            "byte_length": 61,
+            "field_order": [
+              "_id",
+              "o",
+              "c"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "o": "objectId",
+              "c": "string"
+            }
+          }
+        ],
+        "tips": [
+          {
+            "b64": "KAAAAAdfaWQAZLAAAAAAAAAAAAA1B28AZLAAAAAAAAAAAAAzCm4AAA==",
+            "sha256": "5392079f8ee1f5c35e06212ddfd7c06f58953f6600399095995aa129fa98335c",
+            "byte_length": 40,
+            "field_order": [
+              "_id",
+              "o",
+              "n"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "o": "objectId",
+              "n": "null"
+            }
+          },
+          {
+            "b64": "MAAAAAdfaWQAZLAAAAAAAAAAAAA9B28AZLAAAAAAAAAAAAA6Am4ABAAAAOazqAAA",
+            "sha256": "7cd18ea75d0a777d0adcf0e5b90a0afcce96c578ba95fa5918fd4c5fe64a08b9",
+            "byte_length": 48,
+            "field_order": [
+              "_id",
+              "o",
+              "n"
+            ],
+            "field_types": {
+              "_id": "objectId",
+              "o": "objectId",
+              "n": "string"
+            }
+          }
+        ]
+      }
+    },
+    "bson_typed": {
+      "cases": [
+        {
+          "name": "ordered_mixed",
+          "field_order": [
+            "z",
+            "a",
+            "m",
+            "n",
+            "o",
+            "u",
+            "arr"
+          ],
+          "field_types": {
+            "z": "int32",
+            "a": "int64",
+            "m": "decimal128",
+            "n": "null",
+            "o": "objectId",
+            "u": "string",
+            "arr": "array"
+          },
+          "b64": "bQAAABB6AAEAAAASYQAAAAAAAAEAABNtAEDiAQAAAAAAAAAAAAAAOjAKbgAHbwBksAAAAAAAAAAAAEECdQAQAAAAw5/Pg8+CIPCfmIAgPCY+AARhcnIAFQAAABAwAAEAAAACMQACAAAAeAAAAA==",
+          "hex": "6d000000107a00010000001261000000000000010000136d0040e20100000000000000000000003a300a6e00076f0064b00000000000000000004102750010000000c39fcf83cf8220f09f9880203c263e00046172720015000000103000010000000231000200000078000000",
+          "sha256": "8f46394fb0f40b7fb2a82c4e2a1511b901fb2275e338d89d5caef5551575f3ce",
+          "decoded": {
+            "z": 1,
+            "a": {
+              "$int64": 1099511627776
+            },
+            "m": {
+              "$decimal128": "123.456"
+            },
+            "n": null,
+            "o": {
+              "$oid": "64b000000000000000000041"
+            },
+            "u": "ßσς 😀 <&>",
+            "arr": [
+              1,
+              "x"
+            ]
+          }
+        },
+        {
+          "name": "scalar_types",
+          "field_order": [
+            "int32",
+            "int64",
+            "double",
+            "bool",
+            "date",
+            "nested"
+          ],
+          "field_types": {
+            "int32": "int32",
+            "int64": "int64",
+            "double": "double",
+            "bool": "bool",
+            "date": "date",
+            "nested": "object"
+          },
+          "b64": "XwAAABBpbnQzMgAqAAAAEmludDY0ACoAAAAAAAAAAWRvdWJsZQAAAAAAAAD4Pwhib29sAAEJZGF0ZQAuzzVkbwEAAANuZXN0ZWQAEwAAABBiAAIAAAAQYQABAAAAAAA=",
+          "hex": "5f00000010696e743332002a00000012696e743634002a0000000000000001646f75626c6500000000000000f83f08626f6f6c00010964617465002ecf35646f010000036e6573746564001300000010620002000000106100010000000000",
+          "sha256": "aff165fafc29f6b6ad9d4f0a80a316d351f51f4152410f40e1f378ecb6da331f",
+          "decoded": {
+            "int32": 42,
+            "int64": {
+              "$int64": 42
+            },
+            "double": 1.5,
+            "bool": true,
+            "date": {
+              "$date": "2020-01-02T03:04:05.678000"
+            },
+            "nested": {
+              "b": 2,
+              "a": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}
