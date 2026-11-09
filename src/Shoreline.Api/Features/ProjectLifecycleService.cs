@@ -1,18 +1,24 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Security;
+using Shoreline.Api.Storage;
 
 namespace Shoreline.Api.Features;
 
 // Item 34, next stage. Project lifecycle transitions and owner transfer,
 // ported 1:1 from Python app/services/project_lifecycle.py. The storage
 // backend's pluggable state guards (`_run_state_guards`) are a no-op in core
-// and stay one. Clear contents deletes file/output records and zeroes
-// counters; deleting files from disk belongs to the file stage (TODO).
+// and stay one. Clear contents physically deletes file/output objects and
+// cascaded rows through ProjectContentCleanup, then zeroes counters.
 public sealed class ProjectLifecycleService(MongoStore store, TimeProvider clock, IdentityPermissions permissions,
-    IdentityAuditWriter audit, ProjectMemberService members)
+    IdentityAuditWriter audit, ProjectMemberService members, ObjectStorage? storage = null,
+    IConfiguration? configuration = null, ILogger<ProjectLifecycleService>? logger = null,
+    Func<string, CancellationToken, Task>? deleteObject = null)
 {
+    private static readonly TimeSpan ClaimReleaseTimeout = TimeSpan.FromSeconds(5);
     private IMongoCollection<BsonDocument> Projects => store.Collection("project");
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
@@ -52,14 +58,43 @@ public sealed class ProjectLifecycleService(MongoStore store, TimeProvider clock
     private static long ExpectedVersion(BsonDocument project, JsonElementLite? payload, params string[] allowed)
     {
         var expectedStatus = payload?.Get("expected_status")?.AsString;
-        if (expectedStatus is not null && !allowed.Contains(expectedStatus))
-            throw IdentityErrors.InvalidRequest("expected_status is not allowed for this operation");
+        if (expectedStatus is not null)
+        {
+            if (!allowed.Contains(expectedStatus))
+                throw IdentityErrors.InvalidRequest("expected_status is not allowed for this operation");
+            // Python _expected checks the allowed set AND that the supplied
+            // status is the current one; the allowed set alone is ambiguous
+            // between NORMAL/COMPLETED for clear.
+            if (expectedStatus != StatusName((int)project.Integer("st")))
+                throw IdentityErrors.StateConflict();
+        }
         var raw = payload?.Get("expected_version");
         if (raw is not null && !raw.IsInt32) throw IdentityErrors.InvalidRequest();
         var expected = raw?.AsInt32;
         if (expected is not null && expected.Value != project.Integer("stv"))
             throw IdentityErrors.StateConflict();
         return expected ?? project.Integer("stv");
+    }
+
+    /// <summary>
+    /// Legacy project documents may predate status_version. Python treats the
+    /// default 0 as matching both a literal 0 and a missing field, so every CAS
+    /// filter must use the same condition.
+    /// </summary>
+    private static void AddStatusVersionFilter(BsonDocument filter, long expected)
+    {
+        if (expected == 0)
+        {
+            filter["$or"] = new BsonArray
+            {
+                new BsonDocument("stv", 0),
+                new BsonDocument("stv", new BsonDocument("$exists", false))
+            };
+        }
+        else
+        {
+            filter["stv"] = expected;
+        }
     }
 
     public async Task<(BsonDocument Project, bool Changed)> CompleteAsync(BsonDocument actor, BsonDocument project,
@@ -76,11 +111,19 @@ public sealed class ProjectLifecycleService(MongoStore store, TimeProvider clock
         if (status != 0) throw IdentityErrors.StateConflict();
         var expected = ExpectedVersion(project, payload, "NORMAL");
         var before = ProjectStateDoc(project);
+        var filter = new BsonDocument
+        {
+            ["_id"] = project["_id"],
+            ["st"] = 0,
+            ["cip"] = new BsonDocument("$ne", true)
+        };
+        AddStatusVersionFilter(filter, expected);
         var updated = await Projects.FindOneAndUpdateAsync(
-            new BsonDocument { ["_id"] = project["_id"], ["st"] = 0, ["stv"] = expected, ["cip"] = new BsonDocument("$ne", true) },
+            filter,
             new BsonDocument
             {
-                ["$set"] = new BsonDocument { ["st"] = 5, ["completed_time"] = Now() },
+                // Python project.completed_time db_field is "ctm".
+                ["$set"] = new BsonDocument { ["st"] = 5, ["ctm"] = Now() },
                 ["$inc"] = new BsonDocument("stv", 1)
             },
             new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken: ct)
@@ -105,12 +148,19 @@ public sealed class ProjectLifecycleService(MongoStore store, TimeProvider clock
         if (status != 5) throw IdentityErrors.StateConflict();
         var expected = ExpectedVersion(project, payload, "COMPLETED");
         var before = ProjectStateDoc(project);
+        var filter = new BsonDocument
+        {
+            ["_id"] = project["_id"],
+            ["st"] = 5,
+            ["cip"] = new BsonDocument("$ne", true)
+        };
+        AddStatusVersionFilter(filter, expected);
         var updated = await Projects.FindOneAndUpdateAsync(
-            new BsonDocument { ["_id"] = project["_id"], ["st"] = 5, ["stv"] = expected, ["cip"] = new BsonDocument("$ne", true) },
+            filter,
             new BsonDocument
             {
-                ["$set"] = new BsonDocument { ["st"] = 0 },
-                ["$unset"] = new BsonDocument("completed_time", ""),
+                ["$set"] = new BsonDocument("st", 0),
+                ["$unset"] = new BsonDocument("ctm", ""),
                 ["$inc"] = new BsonDocument("stv", 1)
             },
             new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken: ct)
@@ -135,32 +185,103 @@ public sealed class ProjectLifecycleService(MongoStore store, TimeProvider clock
         if (status is not (0 or 5)) throw IdentityErrors.StateConflict();
         var expected = ExpectedVersion(project, payload, "NORMAL", "COMPLETED");
         var before = ProjectStateDoc(project);
-        var locked = await Projects.FindOneAndUpdateAsync(
-            new BsonDocument { ["_id"] = project["_id"], ["st"] = project.Integer("st") },
-            new BsonDocument("$set", new BsonDocument("cip", true)),
-            new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken: ct)
-            ?? throw IdentityErrors.StateConflict();
+
+        // Atomic claim: the expected version and status are part of the filter.
+        // A stale expected_version must fail here, before any DB row or object
+        // is touched (Python clear claim: status in (NORMAL, COMPLETED),
+        // status_version=expected, clear_in_progress__ne=True). The owner token
+        // is private to this invocation; final/release CAS filters include it so
+        // an older invocation can never unlock or commit a newer claim.
+        var owner = ObjectId.GenerateNewId();
+        var projectId = project["_id"].AsObjectId;
+        var claimFilter = new BsonDocument
+        {
+            ["_id"] = project["_id"],
+            ["st"] = new BsonDocument("$in", new BsonArray { new BsonInt32(0), new BsonInt32(5) }),
+            ["cip"] = new BsonDocument("$ne", true)
+        };
+        AddStatusVersionFilter(claimFilter, expected);
+        BsonDocument locked;
         try
         {
-            await ClearContentsAsync(project, ct);
+            locked = await Projects.FindOneAndUpdateAsync(
+                claimFilter,
+                new BsonDocument("$set", new BsonDocument { ["cip"] = true, ["clear_owner"] = owner }),
+                new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After },
+                cancellationToken: ct)
+                ?? throw IdentityErrors.StateConflict();
+        }
+        catch (OperationCanceledException)
+        {
+            // A cancellation can be observed after the server applied the claim.
+            // Release by owner before propagating the original cancellation.
+            if (!await TryReleaseClaimAsync(projectId, owner))
+                await TryAuditRecoveryRequiredAsync(actor, project, before, requestId);
+            throw;
+        }
+        try
+        {
+            await ClearContentsAsync(locked, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // The request token may already be cancelled. Release must use its
+            // own bounded token, and the original cancellation must propagate so
+            // callers do not receive a fake retryable 503.
+            if (!await TryReleaseClaimAsync(projectId, owner))
+                await TryAuditRecoveryRequiredAsync(actor, project, before, requestId);
+            throw;
         }
         catch (Exception)
         {
-            await Projects.UpdateOneAsync(new BsonDocument("_id", project["_id"]),
-                new BsonDocument("$set", new BsonDocument("cip", false)), cancellationToken: ct);
-            await audit.RecordProjectAsync(actor, "project_clear_retryable_failure", project, null, before,
-                ProjectStateDoc(project), requestId, ct);
+            // Release the owned claim before any best-effort audit. A failed
+            // audit must never leave cip=true behind.
+            if (await TryReleaseClaimAsync(projectId, owner))
+                await TryAuditRetryableFailureAsync(actor, project, before, requestId);
+            else
+                await TryAuditRecoveryRequiredAsync(actor, project, before, requestId);
             throw IdentityErrors.ClearRetryable();
         }
-        var updated = await Projects.FindOneAndUpdateAsync(
-            new BsonDocument { ["_id"] = project["_id"], ["cip"] = true, ["st"] = status, ["stv"] = expected },
-            new BsonDocument
-            {
-                ["$set"] = new BsonDocument { ["st"] = 1, ["cip"] = false },
-                ["$inc"] = new BsonDocument("stv", 1)
-            },
-            new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken: ct)
-            ?? throw IdentityErrors.StateConflict();
+
+        var finalFilter = new BsonDocument
+        {
+            ["_id"] = project["_id"],
+            ["cip"] = true,
+            ["clear_owner"] = owner,
+            ["st"] = new BsonDocument("$in", new BsonArray { new BsonInt32(0), new BsonInt32(5) })
+        };
+        AddStatusVersionFilter(finalFilter, expected);
+        BsonDocument? updated;
+        try
+        {
+            updated = await Projects.FindOneAndUpdateAsync(
+                finalFilter,
+                new BsonDocument
+                {
+                    ["$set"] = new BsonDocument { ["st"] = 1, ["cip"] = false },
+                    ["$unset"] = new BsonDocument("clear_owner", ""),
+                    ["$inc"] = new BsonDocument("stv", 1)
+                },
+                new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After },
+                cancellationToken: ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Do not leave a claim behind when the request token is cancelled
+            // around the final status transition.
+            if (!await TryReleaseClaimAsync(projectId, owner))
+                await TryAuditRecoveryRequiredAsync(actor, project, before, requestId);
+            throw;
+        }
+        if (updated is null)
+        {
+            // Python recovers the claim before raising the state conflict; the
+            // project must not stay permanently locked, and it is not CLEARED.
+            // Only the owner that still holds the claim may release it.
+            if (!await TryReleaseClaimAsync(projectId, owner))
+                await TryAuditRecoveryRequiredAsync(actor, project, before, requestId);
+            throw IdentityErrors.StateConflict();
+        }
         var snapshot = await permissions.ProjectSnapshotAsync(actor, updated, ct);
         await audit.RecordProjectAsync(actor, "project_clear", updated, null, before, ProjectStateDoc(updated),
             requestId, ct, snapshot.PermissionSources.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<string>)kvp.Value));
@@ -169,23 +290,87 @@ public sealed class ProjectLifecycleService(MongoStore store, TimeProvider clock
 
     private async Task ClearContentsAsync(BsonDocument project, CancellationToken ct)
     {
-        var projectId = project["_id"].AsObjectId;
-        // TODO(file stage): also delete real files from storage.
-        await store.Collection("file").DeleteManyAsync(new BsonDocument("project", projectId), cancellationToken: ct);
-        await store.Collection("output").DeleteManyAsync(new BsonDocument("project", projectId), cancellationToken: ct);
-        await Projects.UpdateOneAsync(new BsonDocument("_id", projectId),
-            new BsonDocument("$set", new BsonDocument
-            {
-                ["fs"] = 0,
-                ["cover_bytes"] = 0,
-                ["resample_bytes"] = 0,
-                ["ob"] = 0,
-                ["fo"] = 0,
-                ["fc"] = 0,
-                ["sc"] = 0,
-                ["tsc"] = 0,
-                ["csc"] = 0
-            }), cancellationToken: ct);
+        if (deleteObject is not null)
+        {
+            await ProjectContentCleanup.ClearProjectContentsAsync(
+                store, ProjectCleanupOptions.FromConfiguration(configuration), deleteObject, project, ct);
+            return;
+        }
+        if (storage is null)
+            throw new InvalidOperationException("Object storage is required to clear project contents.");
+        await ProjectContentCleanup.ClearProjectContentsAsync(store, storage, configuration, project, ct);
+    }
+
+    /// <summary>
+    /// Best-effort release of a claim owned by this invocation. Uses a fresh
+    /// bounded token because the request token may already be cancelled. The
+    /// owner token is never logged. If release cannot be proven, the project
+    /// remains locked for an explicit recovery retry; we do not claim it was
+    /// unlocked.
+    /// </summary>
+    private async Task<bool> TryReleaseClaimAsync(ObjectId projectId, ObjectId owner)
+    {
+        using var releaseCts = new CancellationTokenSource(ClaimReleaseTimeout);
+        try
+        {
+            var result = await Projects.UpdateOneAsync(
+                new BsonDocument { ["_id"] = projectId, ["cip"] = true, ["clear_owner"] = owner },
+                new BsonDocument
+                {
+                    ["$set"] = new BsonDocument("cip", false),
+                    ["$unset"] = new BsonDocument("clear_owner", "")
+                },
+                cancellationToken: releaseCts.Token);
+            if (result.ModifiedCount == 1) return true;
+            logger?.LogWarning(
+                "Project clear claim release did not match the owned claim; project {ProjectId} may have been superseded.",
+                projectId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            // Sanitized: no owner token, request input, or exception message.
+            logger?.LogWarning(
+                "Project clear claim release failed; project {ProjectId} remains retryable. ErrorType={ErrorType}",
+                projectId, ex.GetType().Name);
+            return false;
+        }
+    }
+
+    private async Task TryAuditRetryableFailureAsync(BsonDocument actor, BsonDocument project,
+        BsonDocument before, string requestId)
+    {
+        using var auditCts = new CancellationTokenSource(ClaimReleaseTimeout);
+        try
+        {
+            await audit.RecordProjectAsync(actor, "project_clear_retryable_failure", project, null, before,
+                ProjectStateDoc(project), requestId, auditCts.Token);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(
+                "Project clear retryable-failure audit failed; project {ProjectId}. ErrorType={ErrorType}",
+                project["_id"], ex.GetType().Name);
+        }
+    }
+
+    private async Task TryAuditRecoveryRequiredAsync(BsonDocument actor, BsonDocument project,
+        BsonDocument before, string requestId)
+    {
+        using var auditCts = new CancellationTokenSource(ClaimReleaseTimeout);
+        try
+        {
+            await audit.RecordProjectAsync(actor, "project_clear_recovery_required", project, null, before,
+                ProjectStateDoc(project), requestId, auditCts.Token);
+        }
+        catch (Exception ex)
+        {
+            // The claim row itself is the durable recovery marker; this audit is
+            // best-effort and must never hide a failed release.
+            logger?.LogWarning(
+                "Project clear recovery-required audit failed; project {ProjectId}. ErrorType={ErrorType}",
+                project["_id"], ex.GetType().Name);
+        }
     }
 
     public async Task<(BsonDocument Project, BsonDocument Member, bool Changed)> TransferOwnerAsync(

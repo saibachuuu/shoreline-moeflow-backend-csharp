@@ -292,17 +292,34 @@ public sealed class ProjectMemberTests(LocalServices services)
         Assert.Equal("NORMAL", reopened.GetProperty("status").GetString());
         Assert.True(reopened.GetProperty("changed").GetBoolean());
 
-        // Seed file/output docs and counts; clear must remove docs and zero counts.
-        await services.Store.Collection("file").InsertOneAsync(new BsonDocument { ["project"] = ObjectId.Parse(projectId), ["size"] = 10 });
-        await services.Store.Collection("output").InsertOneAsync(new BsonDocument { ["project"] = ObjectId.Parse(projectId), ["size"] = 5 });
-        await services.Store.Collection("project").UpdateOneAsync(new BsonDocument("_id", ObjectId.Parse(projectId)),
+        // Seed canonical legacy file/output docs and counts; clear must remove both
+        // rows and zero the project counters. File is an image with an empty
+        // save_name, so there is no object to delete in this HTTP fixture.
+        var projectObjectId = ObjectId.Parse(projectId);
+        await services.Store.Collection("file").InsertOneAsync(new BsonDocument
+        {
+            ["p"] = projectObjectId,
+            ["t"] = 2,
+            ["sa"] = "",
+            ["n"] = "seed.png",
+            ["fs"] = 10
+        });
+        await services.Store.Collection("output").InsertOneAsync(new BsonDocument
+        {
+            ["p"] = projectObjectId,
+            ["t"] = ObjectId.GenerateNewId(),
+            ["file_name"] = "",
+            ["sb"] = 5L,
+            ["s"] = 0
+        });
+        await services.Store.Collection("project").UpdateOneAsync(new BsonDocument("_id", projectObjectId),
             new BsonDocument("$set", new BsonDocument { ["fo"] = 1, ["fc"] = 1, ["fs"] = 10, ["ob"] = 5 }));
 
         var cleared = await BodyAsync(await owner.PostAsJsonAsync($"/v1/projects/{projectId}/clear", new { }));
         Assert.Equal("CLEARED", cleared.GetProperty("status").GetString());
         Assert.True(cleared.GetProperty("changed").GetBoolean());
-        Assert.Empty(await services.Store.Collection("file").Find(new BsonDocument("project", ObjectId.Parse(projectId))).ToListAsync());
-        Assert.Empty(await services.Store.Collection("output").Find(new BsonDocument("project", ObjectId.Parse(projectId))).ToListAsync());
+        Assert.Empty(await services.Store.Collection("file").Find(new BsonDocument("p", projectObjectId)).ToListAsync());
+        Assert.Empty(await services.Store.Collection("output").Find(new BsonDocument("p", projectObjectId)).ToListAsync());
         var stored = await ProjectAsync(ObjectId.Parse(projectId));
         Assert.Equal(1, stored.Integer("st"));
         Assert.False(stored.Flag("cip"));

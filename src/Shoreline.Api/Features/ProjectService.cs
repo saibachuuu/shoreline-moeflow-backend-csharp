@@ -1,7 +1,9 @@
+using Microsoft.Extensions.Configuration;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Security;
+using Shoreline.Api.Storage;
 
 namespace Shoreline.Api.Features;
 
@@ -9,7 +11,8 @@ namespace Shoreline.Api.Features;
 // Python mongoengine documents 1:1 (project/project_set/target), so both
 // backends can read the same database while the port is in progress.
 public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyTypes types,
-    IdentityPermissions permissions, TeamService teams, TeamMemberService members)
+    IdentityPermissions permissions, TeamService teams, TeamMemberService members,
+    ObjectStorage? storage = null, IConfiguration? configuration = null)
 {
     private IMongoCollection<BsonDocument> Projects => store.Collection("project");
     private IMongoCollection<BsonDocument> Sets => store.Collection("project_set");
@@ -234,7 +237,13 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         catch
         {
             // Roll back the project on target failure (Python saves the project
-            // first too, but leaving a half-created project is worse).
+            // first too, but leaving a half-created project is worse). Target
+            // creation may already have installed FileTargetCache rows.
+            if (created.Count > 0)
+            {
+                await store.Collection("file_target_cache").DeleteManyAsync(new BsonDocument(
+                    "t", new BsonDocument("$in", new BsonArray(created.Select(target => target["_id"])))), ct);
+            }
             await Targets.DeleteManyAsync(new BsonDocument("t", document["_id"]), ct);
             await Projects.DeleteOneAsync(new BsonDocument("_id", document["_id"]), ct);
             throw;
@@ -264,6 +273,19 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
             ["i"] = ""
         };
         await Targets.InsertOneAsync(document, cancellationToken: ct);
+        try
+        {
+            // Python Target.create installs a FileTargetCache for every file of
+            // the project, including folders and inactive/deactivated revisions.
+            await ProjectContentCleanup.CreateTargetCachesAsync(store, project, document, now, ct);
+        }
+        catch
+        {
+            await store.Collection("file_target_cache").DeleteManyAsync(
+                new BsonDocument("t", document["_id"]), ct);
+            await Targets.DeleteOneAsync(new BsonDocument("_id", document["_id"]), ct);
+            throw;
+        }
         return document;
     }
 
@@ -396,9 +418,23 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
     {
         var project = await GetProjectAsync(target["t"].ToString()!, ct);
         await RequireProjectAsync(actor, project, "project:DELETE_TARGET", ct);
-        await Targets.DeleteOneAsync(new BsonDocument("_id", target["_id"]), ct);
-        await Projects.UpdateOneAsync(new BsonDocument("_id", project["_id"]),
-            new BsonDocument("$inc", new BsonDocument("tc", -1)), cancellationToken: ct);
+        if (storage is null)
+            throw IdentityErrors.ClearRetryable();
+        try
+        {
+            // Python Target.clear: output objects best-effort, then ORM CASCADE
+            // for output/translation/tip/file_target_cache, target delete, and
+            // target_count decrement only when that delete actually matched.
+            await ProjectContentCleanup.DeleteTargetCascadesAsync(
+                store, storage, configuration, project, target, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            // Includes an unsupported project storage_source_id: fail closed
+            // without deleting any row or object, and let the caller retry after
+            // the storage-pool router is wired.
+            throw IdentityErrors.ClearRetryable();
+        }
     }
 
     // ---- views ----
