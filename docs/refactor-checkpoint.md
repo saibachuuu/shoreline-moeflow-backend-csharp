@@ -30,6 +30,10 @@ the Python deployment yet.
 - Public legacy type options and team/project system-role catalogs, with numeric
   permission descriptions and existing-role-ID preservation. Public constants
   are converted offline; the runtime never loads the Python app or configuration.
+- Shared archive Fernet encryption compatible with independent Python fixtures,
+  legacy plaintext handling and tail-only formatting; external API URL allowlisting.
+- Bounded, casefolded name gates; concurrent profile renames cannot create two
+  differently cased copies of the same name in the single business process.
 - Team membership add/restore, soft removal, aliases and display names, worker
   qualifications, database-side joined pagination, capacity recounts and version
   fencing. Display-name synchronization uses bounded project-id batches.
@@ -38,7 +42,7 @@ the Python deployment yet.
   the original identity audit schema.
 
 Current verification: `dotnet test --no-restore --verbosity minimal` passes
-97 tests against disposable local MongoDB, S3Mock and Mailpit, including concurrent
+122 tests against disposable local MongoDB, S3Mock and Mailpit, including concurrent
 admission/edit tests and cross-team/hierarchy checks. The service builds with zero
 warnings. Its Docker image has not been
 rebuilt; the existing API container still runs the earlier foundation image.
@@ -61,10 +65,17 @@ the running C# service requires neither Python nor the old repository.
 5. Storage transfers, quota/capacity reconciliation and their progress/cancellation
    endpoints; then full API/data compatibility and equivalent workload RAM testing.
 
-Known issues to revisit: concurrent case-insensitive username uniqueness is not
-fully enforced by the current case-sensitive Mongo name index; profile/team writes
-and their audit inserts are separate documents. Team gates are local to the single
-business process, not distributed locks; do not run a second writer on the same DB.
-Durable jobs need real business
-handlers beyond security email. Do not describe the current service as ready for
-production or infer full compatibility from the existing tests.
+## Remaining safety constraints
+
+- Future registration/team name writers must share the name gates; existing
+  duplicate legacy names are not silently rewritten or deleted.
+- Profile/team writes and audit inserts remain separate documents, not a
+  multi-document transaction guarantee. Gates are local to one business process;
+  do not run a second writer on the same database.
+- `Archive:EncryptionKey` is the optional legacy Fernet key. Otherwise the key is
+  derived from `Auth:Secret`, which must match the old signing secret to read old
+  archive ciphertext. No deployment configuration has been read during tests.
+- Stored URL checks are not a DNS-rebinding defense by themselves: archive HTTP
+  clients still need connection-time DNS checks and safe redirect handling.
+- Durable jobs need business handlers beyond security email. Do not describe the
+  current service as production-ready or infer full compatibility from its tests.

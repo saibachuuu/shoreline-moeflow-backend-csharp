@@ -22,6 +22,8 @@ builder.Services.AddSingleton<LanguageCatalog>();
 builder.Services.AddSingleton<LegacyTypes>();
 builder.Services.AddScoped<IdentityPermissions>();
 builder.Services.AddSingleton<TeamMutationGate>();
+builder.Services.AddSingleton<IdentityNameGate>();
+builder.Services.AddSingleton<ArchiveSecrets>();
 builder.Services.AddSingleton<IdentityAuditWriter>();
 builder.Services.AddScoped<TeamMemberService>();
 builder.Services.AddScoped<IdentityTagPolicyService>();

@@ -7,16 +7,18 @@ using Shoreline.Api.Security;
 
 namespace Shoreline.Api.Features;
 
-public sealed class UserProfileService(MongoStore store, IConfiguration configuration, TimeProvider clock)
+public sealed class UserProfileService(MongoStore store, IConfiguration configuration, TimeProvider clock, IdentityNameGate names)
 {
     public async Task<(BsonDocument User, ObjectId? AuditId)> UpdateAsync(BsonDocument user, BsonDocument actor,
         JsonElement data, bool aliasesOnly, string requestId, CancellationToken ct)
     {
+        var requestedName = aliasesOnly ? user.Text("n") : data.RequiredText("name", 1024);
+        using var named = await names.EnterAsync("user", requestedName, ct);
         var next = user.DeepClone().AsBsonDocument;
         var aliasesProvided = data.TryGetProperty("aliases", out var aliasData);
         if (!aliasesOnly)
         {
-            var name = data.RequiredText("name", 1024);
+            var name = requestedName;
             if (name != user.Text("n"))
             {
                 if (name.Length is < 2 or > 18 || !Regex.IsMatch(name, @"\A[\u2E80-\u2FDF\u3040-\u318F\u31A0-\u31BF\u31F0-\u31FF\u3400-\u4DB5\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7FFa-zA-Z0-9_]+\z"))

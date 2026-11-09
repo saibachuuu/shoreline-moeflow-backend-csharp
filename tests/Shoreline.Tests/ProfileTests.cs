@@ -87,11 +87,42 @@ public sealed class ProfileTests(LocalServices services)
         }
     }
 
+    [Fact]
+    public async Task ConcurrentRenamesCannotCreateCaseInsensitiveDuplicates()
+    {
+        var (first, firstClient) = await UserAsync();
+        var (second, secondClient) = await UserAsync();
+        using (firstClient)
+        using (secondClient)
+        {
+            var target = "u" + ObjectId.GenerateNewId().ToString()[12..];
+            var responses = await Task.WhenAll(
+                firstClient.PutAsJsonAsync("/v1/user/info", new { name = target, signature = "", locale = "en" }),
+                secondClient.PutAsJsonAsync("/v1/user/info", new { name = target.ToUpperInvariant(), signature = "", locale = "en" }));
+            try
+            {
+                Assert.Single(responses, response => response.IsSuccessStatusCode);
+                var failed = Assert.Single(responses, response => !response.IsSuccessStatusCode);
+                Assert.Equal(2, (await failed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetInt32());
+                Assert.Equal(1, await services.Store.Collection("user").CountDocumentsAsync(new BsonDocument("n", new BsonRegularExpression("^" + target + "$", "i"))));
+            }
+            finally { foreach (var response in responses) response.Dispose(); }
+        }
+    }
+
     private async Task<(BsonDocument User, HttpClient Client)> UserAsync()
     {
         var id = ObjectId.GenerateNewId();
-        var user = new BsonDocument { ["_id"] = id, ["n"] = "u" + id.ToString()[12..], ["e"] = id + "@example.test",
-            ["p"] = PasswordHash.Create("test-password"), ["l"] = "en", ["s"] = "", ["as"] = new BsonArray() };
+        var user = new BsonDocument
+        {
+            ["_id"] = id,
+            ["n"] = "u" + id.ToString()[12..],
+            ["e"] = id + "@example.test",
+            ["p"] = PasswordHash.Create("test-password"),
+            ["l"] = "en",
+            ["s"] = "",
+            ["as"] = new BsonArray()
+        };
         await services.Store.Collection("user").InsertOneAsync(user);
         var token = services.App.Services.GetRequiredService<LegacyToken>().Issue(id.ToString(), user["p"].AsString);
         var client = services.App.CreateClient();

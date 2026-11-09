@@ -18,11 +18,15 @@ Legacy `/v1/types/*` configuration options and team/project system roles are
 available too. Existing role collections remain untouched; empty-database role
 initialization is resumable and preserves IDs already written by a partial seed.
 
+Shared safety primitives include Python-compatible Fernet archive-key encryption,
+allowlisted external API URL validation, and bounded name-write serialization to
+prevent case-insensitive duplicate profile names in the single business process.
+
 Project/team business endpoints, translation workflows, files, snapshots, exports,
 storage transfers and other business modules still need to be ported and tested.
 No memory-saving claim applies to the complete backend yet.
 
-At the current checkpoint, 97 tests pass. The completed stages and remaining
+At the current checkpoint, 122 tests pass. The completed stages and remaining
 work are in [docs/refactor-checkpoint.md](docs/refactor-checkpoint.md).
 
 ## Local verification
