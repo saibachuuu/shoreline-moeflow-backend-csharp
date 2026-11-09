@@ -26,6 +26,12 @@ public static class IdentityErrors
     public static ApiError ProtectedTag() => Error("ProtectedIdentityTagError", 5116, "PROTECTED_IDENTITY_TAG", "系统身份标签受保护", 422);
     public static ApiError PolicyInUse() => Error("IdentityPolicyInUseError", 5117, "IDENTITY_POLICY_IN_USE", "仍有成员使用该标签，不能删除", 409);
     public static ApiError InProgress() => Error("IdentityOperationInProgressError", 5118, "IDENTITY_OPERATION_IN_PROGRESS", "同一成员操作正在处理中，请稍后重试", 409);
+    public static ApiError GroupTypeNotSupport() => Error("GroupTypeNotSupportError", 5001, "GROUP_TYPE_NOT_SUPPORT", "不支持此团体类型");
+    public static ApiError UserAlreadyJoined(string groupName) => Error("UserAlreadyJoinedError", 5003, "USER_ALREADY_JOINED", $"用户已经在 “{groupName}” 中");
+    public static ApiError InvitationAlreadyExist() => Error("InvitationAlreadyExistError", 5004, "INVITATION_ALREADY_EXIST", "已邀请此用户，请等待用户确认");
+    public static ApiError InvitationNotExist() => Error("InvitationNotExistError", 5006, "INVITATION_NOT_EXIST", "邀请不存在");
+    public static ApiError InvitationFinished() => Error("InvitationFinishedError", 5010, "INVITATION_FINISHED", "无法修改此邀请");
+    public static ApiError TargetIsFull() => Error("TargetIsFullError", 5012, "TARGET_IS_FULL", "已满员，不可申请加入或邀请新成员");
 
     public static void RequireObject(JsonElement data)
     {

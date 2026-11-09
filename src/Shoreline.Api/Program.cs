@@ -23,6 +23,7 @@ builder.Services.AddSingleton<LanguageCatalog>();
 builder.Services.AddSingleton<LegacyTypes>();
 builder.Services.AddScoped<IdentityPermissions>();
 builder.Services.AddSingleton<TeamMutationGate>();
+builder.Services.AddSingleton<InvitationMutationGate>();
 builder.Services.AddSingleton<IdentityNameGate>();
 builder.Services.AddSingleton<ArchiveSecrets>();
 builder.Services.AddSingleton<IdentityAuditWriter>();
@@ -31,6 +32,8 @@ builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<ProjectMemberService>();
 builder.Services.AddScoped<ProjectLifecycleService>();
+builder.Services.AddScoped<ProjectInvitationService>();
+builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<IdentityTagPolicyService>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
@@ -93,6 +96,7 @@ app.MapTeams();
 app.MapTeamIdentity();
 app.MapProjects();
 app.MapProjectMembers();
+app.MapInvitations();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {

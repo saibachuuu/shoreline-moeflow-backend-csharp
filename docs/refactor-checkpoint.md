@@ -73,13 +73,34 @@ the Python deployment yet.
   to the file-storage stage). Member audits now carry scope `project` and return
   their event IDs. New IdentityErrors codes 5103/5106/5108/5109/5110/5111/
   5112/5113. Non-manager external adds are tagless-only (tags ⇒ 103), and
-  locked-tag assignment is team-creator-only, both matching Python. Note: an
-  `invited` projection stand-in is persisted when a non-creator manager invites
-  an existing team member — the invitation lifecycle stage replaces it with the
-  real invitation adapter activation path.
+  locked-tag assignment is team-creator-only, both matching Python.
+- Invitation lifecycle C1: project/team invitation lists with status filters and
+  pagination, tag-position invites through the projection adapter, legacy role
+  invites, recipient-only accept/deny, manager delete, and `/v1/user/invitations`.
+  Nested invitation groups are complete public project/team views with `actor=null`
+  (role/base_tag/effective_permissions empty), so caller-specific roles and
+  permissions are not leaked into the public nested group.
+  Legacy project role derivation reads only active project relations, otherwise
+  active team creator/admin maps to project admin; persisted tag order selects
+  creator/admin/proofreader/translator/typesetter (typesetter → picture_editor),
+  otherwise translator. Team-member direct joins restore removed rows while keeping
+  identity data, and only the team `default_display_name` is used (an extra
+  `display_name` in POST bodies is ignored). Reusing a pending invitation does not
+  bump projection version or write another audit. Projection activation omits an
+  explicit operator so audits stay attributed to the original inviter, while accept
+  and deny remain recipient-only. `InvitationMutationGate` serializes invitation
+  POST/PUT/PATCH/DELETE and identity `AddUser` per group in one process, with member
+  saves still fenced by version CAS; team restoration maps 5107 → 5012. The
+  pending-application direct-allow branch is deferred to C2.
 
 Current verification: `dotnet test --no-restore --verbosity minimal` passes
-150 tests against disposable local MongoDB, S3Mock and Mailpit, including 6
+173 tests against disposable local MongoDB, S3Mock and Mailpit, including 23
+invitation lifecycle tests (nested public group views, pending reuse without
+version/audit writes, direct team joins and aliases, tag-only PUT, recipient-only
+accept/deny, projection removal and reinvite reuse, list filters/pagination and
+permissions, legacy hierarchy/errors/capacity, team restoration, stale cancellation,
+concurrent tags/accept-deny, identity-add serialization, owner/unknown-role join
+compatibility and PUT role-id schema checks), 6
 project-member tests (idempotent changes + duplicate 5106, update/remove/
 restore with 5108 version fences, external bind auto-merge + explicit merge +
 hard delete, manager/position-lock 103, complete/reopen/clear idempotency with
@@ -99,9 +120,8 @@ the running C# service requires neither Python nor the old repository.
 
 ## Next work
 
-1. Invitation lifecycle (replace the `invited` projection stand-in with the real
-   adapter activation path) and project application approve/reject; team
-   application pages.
+1. Project applications: application lists/approvals/rejections, the invite
+   pending-application direct-allow branch, and team application pages.
 2. Team dissolution must be implemented together with complete project lifecycle
    cleanup; do not expose a partial delete that leaves project/storage data behind.
 3. Files, targets, labels/translations/tips, complete snapshots and recovery,
@@ -113,9 +133,14 @@ the running C# service requires neither Python nor the old repository.
 
 - Registration and other future name writers must share the name gates; existing
   duplicate legacy names are not silently rewritten or deleted.
-- Profile/team writes and audit inserts remain separate documents, not a
-  multi-document transaction guarantee. Gates are local to one business process;
-  do not run a second writer on the same database.
+- Profile/team/member/invitation writes and their audit inserts remain separate
+  documents, not multi-document transactions. Gates are local to one business
+  process; do not run a second writer on the same database.
+- `InvitationMutationGate` covers invitation entry points and identity `AddUser`
+  only. `UpdateAsync`, external adds, restores and other team/member writes are not
+  fully serialized by it; there is no new unique index on legacy invitations. Do
+  not treat this as a full identity-lifecycle concurrency guarantee, and do not
+  describe the service as production-ready or fully compatible.
 - `Archive:EncryptionKey` is the optional legacy Fernet key. Otherwise the key is
   derived from `Auth:Secret`, which must match the old signing secret to read old
   archive ciphertext. No deployment configuration has been read during tests.

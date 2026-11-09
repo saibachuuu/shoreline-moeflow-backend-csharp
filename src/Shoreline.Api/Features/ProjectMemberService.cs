@@ -10,11 +10,11 @@ namespace Shoreline.Api.Features;
 
 // Item 34, next stage. Project-member lifecycle (add/update/bind/merge/
 // list/apply_changes) and the durable operation-claim boundary, ported 1:1
-// from Python app/services/project_member.py. The invitation adapter call in
-// _add_user is stubbed with a bare "invited" projection record until the
-// invitation stage lands (see docs/refactor-checkpoint.md).
+// from Python app/services/project_member.py. Non-creator member additions
+// route through the invitation adapter (ProjectInvitationAdapter).
 public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, IdentityPermissions permissions,
-    IdentityAuditWriter audit, ProjectService projects)
+    IdentityAuditWriter audit, ProjectService projects, ProjectInvitationService invitations,
+    InvitationMutationGate invitationGate)
 {
     private IMongoCollection<BsonDocument> Members => store.Collection("project_member");
     private IMongoCollection<BsonDocument> Operations => store.Collection("identity_operation");
@@ -127,7 +127,7 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
             throw new ApiError("NoPermissionError", 103, "该成员持有已被锁定的职位，仅团队创建者可以移除");
     }
 
-    private async Task<string[]> ValidateTagsAsync(BsonDocument actor, BsonDocument project, BsonDocument? target,
+    internal async Task<string[]> ValidateTagsAsync(BsonDocument actor, BsonDocument project, BsonDocument? target,
         JsonElement tags, bool external, bool allowCreator, CancellationToken ct)
     {
         var normalized = IdentityPermissions.NormalizeTags(tags);
@@ -215,44 +215,16 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
         await Members.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
 
-    // ---- invited projection stub (invitation stage) ----
+    /// <summary>Adapter entry point: ProjectInvitationAdapter.create_or_reuse.
+    /// Persists the pending projection after the legacy Invitation call.</summary>
+    private async Task<BsonDocument> AdapterInvitedAsync(BsonDocument project, BsonDocument actor, BsonDocument user, string[] tags,
+        string displayName, string requestId, CancellationToken ct) =>
+        await invitations.CreateOrReuseAsync(project, actor, user, tags.Select(t => (Flag: "", Value: t)).ToArray(), displayName, "", requestId, ct);
 
-    private async Task<BsonDocument> AdapterInvitedAsync(BsonDocument project, BsonDocument user, string[] tags,
-        string displayName, string requestId, CancellationToken ct)
-    {
-        // ProjectInvitationAdapter.create_or_reuse persists the pending
-        // projection after the legacy Invitation call; until the invitation
-        // stage lands, only the projection is written.
-        var existing = await ForUserAsync(project, user["_id"].AsObjectId, ct);
-        if (existing is not null) return existing;
-        var now = Now();
-        var member = new BsonDocument
-        {
-            ["_id"] = ObjectId.GenerateNewId(),
-            ["project"] = project["_id"],
-            ["user"] = user["_id"],
-            ["ik"] = $"{project["_id"]}:u:{user["_id"]}",
-            ["display_name"] = displayName,
-            ["dns"] = SearchText.Normalize(displayName),
-            ["tags"] = new BsonArray(tags.Select(t => (BsonValue)t).ToArray()),
-            ["status"] = "invited",
-            ["create_time"] = now,
-            ["edit_time"] = now,
-            ["version"] = 0
-        };
-        try
-        {
-            await Members.InsertOneAsync(member, cancellationToken: ct);
-        }
-        catch (MongoWriteException error) when (DuplicateKey(error))
-        {
-            return await ForUserAsync(project, user["_id"].AsObjectId, ct)
-                ?? throw IdentityErrors.AlreadyExists();
-        }
-        await audit.RecordProjectAsync(user, "project_member_add", project, member,
-            new BsonDocument(), BsonMemberState(member, project), requestId, ct);
-        return member;
-    }
+    /// <summary>Python ``_add_user`` self path: when the operator adds
+    /// themselves, flips their pending invitations to ALLOW.</summary>
+    private async Task AcceptPendingInvitationsAsync(BsonDocument project, BsonDocument user, CancellationToken ct) =>
+        await invitations.AcceptPendingInvitationsAsync(project, user["_id"].AsObjectId, ct);
 
     // ---- add ----
 
@@ -396,6 +368,12 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
     private async Task<BsonDocument> AddUserAsync(BsonDocument project, BsonDocument actor, BsonDocument user,
         JsonElement? displayName, JsonElement tags, string requestId, string? operationId, CancellationToken ct)
     {
+        // Share the invitation gate per project so adapter create/reuse and
+        // identity adds cannot race into duplicate pending invitations or
+        // conflicting terminal projections. The operation claim stays outside.
+        using var lease = await invitationGate.EnterAsync(project["_id"].AsObjectId, ct);
+        project = await store.Collection("project").Find(new BsonDocument("_id", project["_id"]))
+            .FirstOrDefaultAsync(ct) ?? project;
         var existing = await ForUserAsync(project, user["_id"].AsObjectId, ct);
         var teamRelation = await ActiveTeamMemberAsync(actor["_id"].AsObjectId, project["t"].AsObjectId, ct);
         var teamCreator = teamRelation is not null && teamRelation.Text("base_tag") == "creator";
@@ -429,11 +407,12 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
                     await SyncCountAsync(project, ct);
                     await audit.RecordProjectAsync(actor, "project_member_add", project, saved, activateBefore,
                         BsonMemberState(saved, project), requestId, ct);
-                    // TODO(invitation stage): the self-accept path also flips
-                    // PENDING invitations of this project to ALLOW.
+                    // Python _add_user self path: also flips PENDING invitations
+                    // of this project to ALLOW.
+                    if (actor["_id"] == user["_id"]) await invitations.AcceptPendingInvitationsAsync(project, user["_id"].AsObjectId, ct);
                     return saved;
                 }
-                return await AdapterInvitedAsync(project, user, normalized, resolvedName, requestId, ct);
+                return await AdapterInvitedAsync(project, actor, user, normalized, resolvedName, requestId, ct);
             }
             throw IdentityErrors.AlreadyExists();
         }
@@ -469,9 +448,10 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
                 await SyncCountAsync(project, ct);
                 await audit.RecordProjectAsync(actor, "project_member_add", project, fresh,
                     new BsonDocument(), BsonMemberState(fresh, project), requestId, ct);
+                if (actor["_id"] == user["_id"]) await invitations.AcceptPendingInvitationsAsync(project, user["_id"].AsObjectId, ct);
                 return fresh;
             }
-            return await AdapterInvitedAsync(project, user, validatedTags, resolved, requestId, ct);
+            return await AdapterInvitedAsync(project, actor, user, validatedTags, resolved, requestId, ct);
         }
 
         var before = BsonMemberState(existing, project);
@@ -493,9 +473,10 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
             await SyncCountAsync(project, ct);
             await audit.RecordProjectAsync(actor, "project_member_add", project, saved, before,
                 BsonMemberState(saved, project), requestId, ct);
+            if (actor["_id"] == user["_id"]) await invitations.AcceptPendingInvitationsAsync(project, user["_id"].AsObjectId, ct);
             return saved;
         }
-        return await AdapterInvitedAsync(project, user, validatedTags, resolved, requestId, ct);
+        return await AdapterInvitedAsync(project, actor, user, validatedTags, resolved, requestId, ct);
     }
 
     // ---- update ----
