@@ -33,6 +33,7 @@ builder.Services.AddScoped<ProjectService>();
 builder.Services.AddAdditionalListServices();
 builder.Services.AddTermServices();
 builder.Services.AddPresenceServices();
+builder.Services.AddLabelServices();
 builder.Services.AddAvatarServices();
 builder.Services.AddAdminStorageOverviewServices();
 builder.Services.AddNotificationServices();
@@ -93,6 +94,8 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(new { error = "InternalServerError", code = 1, message = "Internal server error" });
     }
 });
+app.UseRouting();
+app.UseLabelRequestGuard();
 app.MapGet("/ping", () => Results.Text("pong"));
 app.MapUsers();
 app.MapEmail();
@@ -104,6 +107,7 @@ app.MapTypes();
 app.MapTeams();
 app.MapTeamIdentity();
 app.MapProjects();
+app.MapLabels();
 app.MapTerms();
 app.MapPresence();
 app.MapAvatarEndpoints();
@@ -120,6 +124,7 @@ app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
     return Results.Ok(new { status = "ok" });
 });
 await app.Services.GetRequiredService<MongoStore>().InitializeAsync(CancellationToken.None);
+await app.Services.InitializeLabelIndexesAsync();
 await NotificationRegistration.InitializeAsync(
     app.Services.GetRequiredService<MongoStore>(), CancellationToken.None);
 await NotificationPublishRegistration.InitializeAsync(
