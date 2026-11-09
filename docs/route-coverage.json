@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-09T12:59:05.576169+00:00",
+  "generated_at": "2026-11-09T22:24:54.753934+00:00",
   "tool": {
     "name": "Audit-LegacyRoutes.py",
     "mode": "offline static analysis",
@@ -8,8 +8,8 @@
     "guarantee": "not 100% automated; see unresolved sections"
   },
   "inputs": {
-    "legacy_directory": "C:\\Users\\88888888\\shoreline-moeflow\\shoreline-moeflow-backend",
-    "csharp_directory": "C:\\Users\\88888888\\shoreline-moeflow\\shoreline-moeflow-backend-csharp"
+    "legacy_directory": "/tmp/opencode/legacy-dev",
+    "csharp_directory": "/tmp/opencode/csharp-head"
   },
   "normalization": {
     "placeholder": "{}",
@@ -22,8 +22,8 @@
     "legacy_blueprints": 27,
     "core_business_registrations": 162,
     "core_effective_methods": 160,
-    "core_matched_in_csharp": 73,
-    "core_missing_in_csharp": 87,
+    "core_matched_in_csharp": 156,
+    "core_missing_in_csharp": 4,
     "core_registered_only_405": 2,
     "core_handler_unknown": 0,
     "conditional_business_registrations": 5,
@@ -32,11 +32,11 @@
     "conditional_missing_in_csharp": 5,
     "optional_business_registrations": 27,
     "optional_effective_methods": 27,
-    "optional_matched_in_csharp": 0,
-    "optional_missing_in_csharp": 27,
+    "optional_matched_in_csharp": 27,
+    "optional_missing_in_csharp": 0,
     "disabled_comment_method_entries": 6,
-    "csharp_route_method_entries": 76,
-    "csharp_extra_route_entries_not_in_legacy": 3,
+    "csharp_route_method_entries": 189,
+    "csharp_extra_route_entries_not_in_legacy": 4,
     "legacy_unresolved_count": 0,
     "csharp_unresolved_count": 0
   },
@@ -52,8 +52,8 @@
         "docstring_first_line": "模块实例一：画廊归档导入（自核心平移，见 docs/optional-modules.md §5）。",
         "business_registrations": 3,
         "effective": 3,
-        "matched_in_csharp": 0,
-        "missing": 3
+        "matched_in_csharp": 3,
+        "missing": 0
       },
       {
         "name": "partner_search",
@@ -62,8 +62,8 @@
         "docstring_first_line": "Optional public project lookup. The directory itself enables route registration.",
         "business_registrations": 3,
         "effective": 3,
-        "matched_in_csharp": 0,
-        "missing": 3
+        "matched_in_csharp": 3,
+        "missing": 0
       },
       {
         "name": "storage_pool",
@@ -72,8 +72,8 @@
         "docstring_first_line": "存储池：把久未使用的项目搬到另一个桶里，腾出默认存储的空间。",
         "business_registrations": 18,
         "effective": 18,
-        "matched_in_csharp": 0,
-        "missing": 18
+        "matched_in_csharp": 18,
+        "missing": 0
       },
       {
         "name": "ziteng_partner",
@@ -82,8 +82,8 @@
         "docstring_first_line": "紫藤（ziteng）合作方作品检索模块。",
         "business_registrations": 3,
         "effective": 3,
-        "matched_in_csharp": 0,
-        "missing": 3
+        "matched_in_csharp": 3,
+        "missing": 0
       }
     ]
   },
@@ -107,103 +107,6 @@
   ],
   "missing_by_module": {
     "core": {
-      "admin": [
-        {
-          "method": "GET",
-          "path": "/v1/admin/files",
-          "normalized_path": "/v1/admin/files",
-          "handler": "AdminFileListAPI",
-          "source": "app/apis/urls.py:596"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/storage/default",
-          "normalized_path": "/v1/admin/storage/default",
-          "handler": "AdminStorageDefaultAPI",
-          "source": "app/apis/urls.py:626"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/users",
-          "normalized_path": "/v1/admin/users",
-          "handler": "AdminUserListAPI",
-          "source": "app/apis/urls.py:606"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/v-codes",
-          "normalized_path": "/v1/admin/v-codes",
-          "handler": "AdminVCodeListAPI",
-          "source": "app/apis/urls.py:621"
-        }
-      ],
-      "avatar": [
-        {
-          "method": "PUT",
-          "path": "/v1/avatar",
-          "normalized_path": "/v1/avatar",
-          "handler": "AvatarAPI",
-          "source": "app/apis/urls.py:588"
-        }
-      ],
-      "file": [
-        {
-          "method": "DELETE",
-          "path": "/v1/files/<file_id>",
-          "normalized_path": "/v1/files/{}",
-          "handler": "FileAPI",
-          "source": "app/apis/urls.py:480"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/files/<file_id>",
-          "normalized_path": "/v1/files/{}",
-          "handler": "FileAPI",
-          "source": "app/apis/urls.py:480"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/files/<file_id>",
-          "normalized_path": "/v1/files/{}",
-          "handler": "FileAPI",
-          "source": "app/apis/urls.py:480"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/files/<file_id>/ocr",
-          "normalized_path": "/v1/files/{}/ocr",
-          "handler": "FileOCRAPI",
-          "source": "app/apis/urls.py:490"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/files/<file_id>/sources",
-          "normalized_path": "/v1/files/{}/sources",
-          "handler": "FileSourceListAPI",
-          "source": "app/apis/urls.py:485"
-        },
-        {
-          "method": "PATCH",
-          "path": "/v1/files/<file_id>/sources",
-          "normalized_path": "/v1/files/{}/sources",
-          "handler": "FileSourceListAPI",
-          "source": "app/apis/urls.py:485"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/files/<file_id>/sources",
-          "normalized_path": "/v1/files/{}/sources",
-          "handler": "FileSourceListAPI",
-          "source": "app/apis/urls.py:485"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/files/<file_id>/thumbnail",
-          "normalized_path": "/v1/files/{}/thumbnail",
-          "handler": "FileThumbnailAPI",
-          "source": "app/apis/urls.py:495"
-        }
-      ],
       "index": [
         {
           "method": "GET",
@@ -233,717 +136,9 @@
           "handler": "WarningAPI",
           "source": "app/apis/urls.py:129"
         }
-      ],
-      "me": [
-        {
-          "method": "GET",
-          "path": "/v1/user/projects",
-          "normalized_path": "/v1/user/projects",
-          "handler": "MeProjectListAPI",
-          "source": "app/apis/urls.py:197"
-        }
-      ],
-      "notification": [
-        {
-          "method": "GET",
-          "path": "/v1/admin/notification-recipients",
-          "normalized_path": "/v1/admin/notification-recipients",
-          "handler": "CandidatesAPI",
-          "source": "app/apis/notification.py:716"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/notifications",
-          "normalized_path": "/v1/admin/notifications",
-          "handler": "ManageListAPI",
-          "source": "app/apis/notification.py:707"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/notifications",
-          "normalized_path": "/v1/admin/notifications",
-          "handler": "PublishAPI",
-          "source": "app/apis/notification.py:708"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/notifications/preview",
-          "normalized_path": "/v1/admin/notifications/preview",
-          "handler": "PreviewAPI",
-          "source": "app/apis/notification.py:709"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/notifications/<notification_id>",
-          "normalized_path": "/v1/admin/notifications/{}",
-          "handler": "ManageDetailAPI",
-          "source": "app/apis/notification.py:723"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/notifications/<notification_id>/revoke",
-          "normalized_path": "/v1/admin/notifications/{}/revoke",
-          "handler": "RevokeAPI",
-          "source": "app/apis/notification.py:730"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/me/notification-capabilities",
-          "normalized_path": "/v1/me/notification-capabilities",
-          "handler": "NotificationCapabilitiesAPI",
-          "source": "app/apis/notification.py:663"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/me/notification-preferences",
-          "normalized_path": "/v1/me/notification-preferences",
-          "handler": "PreferenceAPI",
-          "source": "app/apis/notification.py:678"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/me/notification-preferences",
-          "normalized_path": "/v1/me/notification-preferences",
-          "handler": "PreferenceAPI",
-          "source": "app/apis/notification.py:678"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/me/notification-sync",
-          "normalized_path": "/v1/me/notification-sync",
-          "handler": "NotificationSyncAPI",
-          "source": "app/apis/notification.py:740"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/me/notifications",
-          "normalized_path": "/v1/me/notifications",
-          "handler": "InboxAPI",
-          "source": "app/apis/notification.py:669"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/me/notifications/mark-read",
-          "normalized_path": "/v1/me/notifications/mark-read",
-          "handler": "MarkReadAPI",
-          "source": "app/apis/notification.py:671"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/me/notifications/unread-counts",
-          "normalized_path": "/v1/me/notifications/unread-counts",
-          "handler": "UnreadAPI",
-          "source": "app/apis/notification.py:670"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/me/notifications/<notification_id>",
-          "normalized_path": "/v1/me/notifications/{}",
-          "handler": "ReceiptAPI",
-          "source": "app/apis/notification.py:672"
-        },
-        {
-          "method": "PATCH",
-          "path": "/v1/me/notifications/<notification_id>",
-          "normalized_path": "/v1/me/notifications/{}",
-          "handler": "ReceiptAPI",
-          "source": "app/apis/notification.py:672"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/notification-project-cards",
-          "normalized_path": "/v1/notification-project-cards",
-          "handler": "CardSearchAPI",
-          "source": "app/apis/notification.py:738"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/notification-project-cards/resolve",
-          "normalized_path": "/v1/notification-project-cards/resolve",
-          "handler": "CardAPI",
-          "source": "app/apis/notification.py:706"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/notification-recipients",
-          "normalized_path": "/v1/notification-recipients",
-          "handler": "CandidatesAPI",
-          "source": "app/apis/notification.py:692"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/notifications",
-          "normalized_path": "/v1/notifications",
-          "handler": "PublishAPI",
-          "source": "app/apis/notification.py:690"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/notifications/preview",
-          "normalized_path": "/v1/notifications/preview",
-          "handler": "PreviewAPI",
-          "source": "app/apis/notification.py:691"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/notifications/sent",
-          "normalized_path": "/v1/notifications/sent",
-          "handler": "ManageListAPI",
-          "source": "app/apis/notification.py:693"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/notifications/<notification_id>",
-          "normalized_path": "/v1/notifications/{}",
-          "handler": "ManageDetailAPI",
-          "source": "app/apis/notification.py:694"
-        },
-        {
-          "method": "PATCH",
-          "path": "/v1/notifications/<notification_id>",
-          "normalized_path": "/v1/notifications/{}",
-          "handler": "ManageDetailAPI",
-          "source": "app/apis/notification.py:694"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/notifications/<notification_id>/revoke",
-          "normalized_path": "/v1/notifications/{}/revoke",
-          "handler": "RevokeAPI",
-          "source": "app/apis/notification.py:700"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/teams/<team_id>/notification-policy",
-          "normalized_path": "/v1/teams/{}/notification-policy",
-          "handler": "PolicyAPI",
-          "source": "app/apis/notification.py:684"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/teams/<team_id>/notification-policy",
-          "normalized_path": "/v1/teams/{}/notification-policy",
-          "handler": "PolicyAPI",
-          "source": "app/apis/notification.py:684"
-        }
-      ],
-      "project": [
-        {
-          "method": "GET",
-          "path": "/v1/projects/<project_id>/files",
-          "normalized_path": "/v1/projects/{}/files",
-          "handler": "ProjectFileListAPI",
-          "source": "app/apis/urls.py:433"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/files",
-          "normalized_path": "/v1/projects/{}/files",
-          "handler": "ProjectFileListAPI",
-          "source": "app/apis/urls.py:433"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/projects/<project_id>/files/order",
-          "normalized_path": "/v1/projects/{}/files/order",
-          "handler": "ProjectFileOrderAPI",
-          "source": "app/apis/urls.py:428"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/projects/<project_id>/files/order",
-          "normalized_path": "/v1/projects/{}/files/order",
-          "handler": "ProjectFileOrderAPI",
-          "source": "app/apis/urls.py:428"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/label-clear",
-          "normalized_path": "/v1/projects/{}/label-clear",
-          "handler": "ProjectLabelClearAPI",
-          "source": "app/apis/urls.py:412"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/projects/<project_id>/label-merge",
-          "normalized_path": "/v1/projects/{}/label-merge",
-          "handler": "ProjectLabelMergeAPI",
-          "source": "app/apis/urls.py:412"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/label-merge",
-          "normalized_path": "/v1/projects/{}/label-merge",
-          "handler": "ProjectLabelMergeAPI",
-          "source": "app/apis/urls.py:412"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/label-recover",
-          "normalized_path": "/v1/projects/{}/label-recover",
-          "handler": "ProjectLabelRecoverAPI",
-          "source": "app/apis/urls.py:412"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/projects/<project_id>/label-state",
-          "normalized_path": "/v1/projects/{}/label-state",
-          "handler": "ProjectLabelStateAPI",
-          "source": "app/apis/urls.py:412"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/ocr",
-          "normalized_path": "/v1/projects/{}/ocr",
-          "handler": "ProjectOCRAPI",
-          "source": "app/apis/urls.py:458"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/outputs",
-          "normalized_path": "/v1/projects/{}/outputs",
-          "handler": "ProjectOutputListAPI",
-          "source": "app/apis/urls.py:443"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/projects/<project_id>/snapshots",
-          "normalized_path": "/v1/projects/{}/snapshots",
-          "handler": "ProjectSnapshotListAPI",
-          "source": "app/apis/urls.py:412"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/snapshots",
-          "normalized_path": "/v1/projects/{}/snapshots",
-          "handler": "ProjectSnapshotListAPI",
-          "source": "app/apis/urls.py:412"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/snapshots/<snapshot_id>/restore",
-          "normalized_path": "/v1/projects/{}/snapshots/{}/restore",
-          "handler": "ProjectSnapshotRestoreAPI",
-          "source": "app/apis/urls.py:412"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/projects/<project_id>/targets/<target_id>/outputs",
-          "normalized_path": "/v1/projects/{}/targets/{}/outputs",
-          "handler": "ProjectTargetOutputListAPI",
-          "source": "app/apis/urls.py:448"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/targets/<target_id>/outputs",
-          "normalized_path": "/v1/projects/{}/targets/{}/outputs",
-          "handler": "ProjectTargetOutputListAPI",
-          "source": "app/apis/urls.py:448"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/targets/<target_id>/send-proofread-draft",
-          "normalized_path": "/v1/projects/{}/targets/{}/send-proofread-draft",
-          "handler": "ProjectSendProofreadDraftAPI",
-          "source": "app/apis/urls.py:453"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/thumbnails",
-          "normalized_path": "/v1/projects/{}/thumbnails",
-          "handler": "ProjectThumbnailAPI",
-          "source": "app/apis/urls.py:423"
-        }
-      ],
-      "site": [
-        {
-          "method": "GET",
-          "path": "/v1/site/homepage",
-          "normalized_path": "/v1/site/homepage",
-          "handler": "HomepageAPI",
-          "source": "app/apis/urls.py:139"
-        }
-      ],
-      "source": [
-        {
-          "method": "DELETE",
-          "path": "/v1/sources/<source_id>",
-          "normalized_path": "/v1/sources/{}",
-          "handler": "SourceAPI",
-          "source": "app/apis/urls.py:502"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/sources/<source_id>",
-          "normalized_path": "/v1/sources/{}",
-          "handler": "SourceAPI",
-          "source": "app/apis/urls.py:502"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/sources/<source_id>/rank",
-          "normalized_path": "/v1/sources/{}/rank",
-          "handler": "SourceRankAPI",
-          "source": "app/apis/urls.py:507"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/sources/<source_id>/tips",
-          "normalized_path": "/v1/sources/{}/tips",
-          "handler": "SourceTipListAPI",
-          "source": "app/apis/urls.py:517"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/sources/<source_id>/translations",
-          "normalized_path": "/v1/sources/{}/translations",
-          "handler": "SourceTranslationListAPI",
-          "source": "app/apis/urls.py:512"
-        }
-      ],
-      "team": [
-        {
-          "method": "DELETE",
-          "path": "/v1/teams/<team_id>",
-          "normalized_path": "/v1/teams/{}",
-          "handler": "TeamAPI",
-          "source": "app/apis/urls.py:321"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/teams/<team_id>/insight/projects",
-          "normalized_path": "/v1/teams/{}/insight/projects",
-          "handler": "TeamInsightProjectListAPI",
-          "source": "app/apis/urls.py:357"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/teams/<team_id>/insight/projects/<project_id>/users",
-          "normalized_path": "/v1/teams/{}/insight/projects/{}/users",
-          "handler": "TeamInsightProjectUserListAPI",
-          "source": "app/apis/urls.py:372"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/teams/<team_id>/insight/users",
-          "normalized_path": "/v1/teams/{}/insight/users",
-          "handler": "TeamInsightUserListAPI",
-          "source": "app/apis/urls.py:352"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/teams/<team_id>/insight/users/<user_id>/projects",
-          "normalized_path": "/v1/teams/{}/insight/users/{}/projects",
-          "handler": "TeamInsightUserProjectListAPI",
-          "source": "app/apis/urls.py:367"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/teams/<team_id>/outputs",
-          "normalized_path": "/v1/teams/{}/outputs",
-          "handler": "TeamProjectOutputListAPI",
-          "source": "app/apis/urls.py:332"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/teams/<team_id>/project-sets/<project_set_id>/project-zips",
-          "normalized_path": "/v1/teams/{}/project-sets/{}/project-zips",
-          "handler": "TeamProjectImportAPI",
-          "source": "app/apis/urls.py:337"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/teams/<team_id>/term-banks",
-          "normalized_path": "/v1/teams/{}/term-banks",
-          "handler": "TermBankAPI",
-          "source": "app/apis/urls.py:347"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/teams/<team_id>/term-banks",
-          "normalized_path": "/v1/teams/{}/term-banks",
-          "handler": "TermBankAPI",
-          "source": "app/apis/urls.py:347"
-        }
-      ],
-      "term": [
-        {
-          "method": "DELETE",
-          "path": "/v1/terms/<term_id>",
-          "normalized_path": "/v1/terms/{}",
-          "handler": "TermAPI",
-          "source": "app/apis/urls.py:397"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/terms/<term_id>",
-          "normalized_path": "/v1/terms/{}",
-          "handler": "TermAPI",
-          "source": "app/apis/urls.py:397"
-        }
-      ],
-      "term_bank": [
-        {
-          "method": "DELETE",
-          "path": "/v1/term-banks/<term_bank_id>",
-          "normalized_path": "/v1/term-banks/{}",
-          "handler": "TermBankAPI",
-          "source": "app/apis/urls.py:386"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/term-banks/<term_bank_id>",
-          "normalized_path": "/v1/term-banks/{}",
-          "handler": "TermBankAPI",
-          "source": "app/apis/urls.py:386"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/term-banks/<term_bank_id>/terms",
-          "normalized_path": "/v1/term-banks/{}/terms",
-          "handler": "TermListAPI",
-          "source": "app/apis/urls.py:391"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/term-banks/<term_bank_id>/terms",
-          "normalized_path": "/v1/term-banks/{}/terms",
-          "handler": "TermListAPI",
-          "source": "app/apis/urls.py:391"
-        }
-      ],
-      "tip": [
-        {
-          "method": "DELETE",
-          "path": "/v1/tips/<tip_id>",
-          "normalized_path": "/v1/tips/{}",
-          "handler": "TipAPI",
-          "source": "app/apis/urls.py:531"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/tips/<tip_id>",
-          "normalized_path": "/v1/tips/{}",
-          "handler": "TipAPI",
-          "source": "app/apis/urls.py:531"
-        }
-      ],
-      "translation": [
-        {
-          "method": "DELETE",
-          "path": "/v1/translations/<translation_id>",
-          "normalized_path": "/v1/translations/{}",
-          "handler": "TranslationAPI",
-          "source": "app/apis/urls.py:524"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/translations/<translation_id>",
-          "normalized_path": "/v1/translations/{}",
-          "handler": "TranslationAPI",
-          "source": "app/apis/urls.py:524"
-        }
       ]
     },
-    "optional": {
-      "archive_import": [
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/import-from-archive",
-          "normalized_path": "/v1/projects/{}/import-from-archive",
-          "handler": "ArchiveImportAPI",
-          "source": "app/modules/archive_import/__init__.py:51"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/projects/<project_id>/import-task",
-          "normalized_path": "/v1/projects/{}/import-task",
-          "handler": "ArchiveImportTaskAPI",
-          "source": "app/modules/archive_import/__init__.py:56"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/import-task/dismiss",
-          "normalized_path": "/v1/projects/{}/import-task/dismiss",
-          "handler": "ArchiveImportTaskAPI",
-          "source": "app/modules/archive_import/__init__.py:61"
-        }
-      ],
-      "partner_search": [
-        {
-          "method": "POST",
-          "path": "/v1/partner-search-query-entry",
-          "normalized_path": "/v1/partner-search-query-entry",
-          "handler": "PartnerSearchEntryAPI",
-          "source": "app/modules/partner_search/api.py:214"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/partner-search-query-entry/settings",
-          "normalized_path": "/v1/partner-search-query-entry/settings",
-          "handler": "PartnerSearchSettingsAPI",
-          "source": "app/modules/partner_search/api.py:219"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/partner-search-query-entry/settings",
-          "normalized_path": "/v1/partner-search-query-entry/settings",
-          "handler": "PartnerSearchSettingsAPI",
-          "source": "app/modules/partner_search/api.py:219"
-        }
-      ],
-      "storage_pool": [
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/projects/<project_id>/lock",
-          "normalized_path": "/v1/admin/storage-pool/projects/{}/lock",
-          "handler": "ProjectLockAPI",
-          "source": "app/modules/storage_pool/api.py:865"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/projects/<project_id>/migrate",
-          "normalized_path": "/v1/admin/storage-pool/projects/{}/migrate",
-          "handler": "ProjectMigrateAPI",
-          "source": "app/modules/storage_pool/api.py:850"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/projects/<project_id>/move",
-          "normalized_path": "/v1/admin/storage-pool/projects/{}/move",
-          "handler": "ProjectMoveAPI",
-          "source": "app/modules/storage_pool/api.py:860"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/projects/<project_id>/restore",
-          "normalized_path": "/v1/admin/storage-pool/projects/{}/restore",
-          "handler": "ProjectRestoreAPI",
-          "source": "app/modules/storage_pool/api.py:855"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/scan",
-          "normalized_path": "/v1/admin/storage-pool/scan",
-          "handler": "ScanAPI",
-          "source": "app/modules/storage_pool/api.py:885"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/storage-pool/settings",
-          "normalized_path": "/v1/admin/storage-pool/settings",
-          "handler": "SettingsAPI",
-          "source": "app/modules/storage_pool/api.py:880"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/admin/storage-pool/settings",
-          "normalized_path": "/v1/admin/storage-pool/settings",
-          "handler": "SettingsAPI",
-          "source": "app/modules/storage_pool/api.py:880"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/storage-pool/sources",
-          "normalized_path": "/v1/admin/storage-pool/sources",
-          "handler": "SourceListAPI",
-          "source": "app/modules/storage_pool/api.py:815"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/sources",
-          "normalized_path": "/v1/admin/storage-pool/sources",
-          "handler": "SourceListAPI",
-          "source": "app/modules/storage_pool/api.py:815"
-        },
-        {
-          "method": "DELETE",
-          "path": "/v1/admin/storage-pool/sources/<source_id>",
-          "normalized_path": "/v1/admin/storage-pool/sources/{}",
-          "handler": "SourceAPI",
-          "source": "app/modules/storage_pool/api.py:820"
-        },
-        {
-          "method": "PUT",
-          "path": "/v1/admin/storage-pool/sources/<source_id>",
-          "normalized_path": "/v1/admin/storage-pool/sources/{}",
-          "handler": "SourceAPI",
-          "source": "app/modules/storage_pool/api.py:820"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/sources/<source_id>/test",
-          "normalized_path": "/v1/admin/storage-pool/sources/{}/test",
-          "handler": "SourceTestAPI",
-          "source": "app/modules/storage_pool/api.py:825"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/storage-pool/stats",
-          "normalized_path": "/v1/admin/storage-pool/stats",
-          "handler": "StatsAPI",
-          "source": "app/modules/storage_pool/api.py:870"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/storage-pool/transfers",
-          "normalized_path": "/v1/admin/storage-pool/transfers",
-          "handler": "TransferListAPI",
-          "source": "app/modules/storage_pool/api.py:830"
-        },
-        {
-          "method": "DELETE",
-          "path": "/v1/admin/storage-pool/transfers/<transfer_id>",
-          "normalized_path": "/v1/admin/storage-pool/transfers/{}",
-          "handler": "TransferDeleteAPI",
-          "source": "app/modules/storage_pool/api.py:845"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/transfers/<transfer_id>/cancel",
-          "normalized_path": "/v1/admin/storage-pool/transfers/{}/cancel",
-          "handler": "TransferCancelAPI",
-          "source": "app/modules/storage_pool/api.py:840"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/admin/storage-pool/transfers/<transfer_id>/retry",
-          "normalized_path": "/v1/admin/storage-pool/transfers/{}/retry",
-          "handler": "TransferRetryAPI",
-          "source": "app/modules/storage_pool/api.py:835"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/admin/storage-pool/usage",
-          "normalized_path": "/v1/admin/storage-pool/usage",
-          "handler": "UsageAPI",
-          "source": "app/modules/storage_pool/api.py:875"
-        }
-      ],
-      "ziteng_partner": [
-        {
-          "method": "GET",
-          "path": "/v1/projects/<project_id>/ziteng-check",
-          "normalized_path": "/v1/projects/{}/ziteng-check",
-          "handler": "ZitengCheckAPI",
-          "source": "app/modules/ziteng_partner/api.py:96"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/projects/<project_id>/ziteng-check",
-          "normalized_path": "/v1/projects/{}/ziteng-check",
-          "handler": "ZitengCheckAPI",
-          "source": "app/modules/ziteng_partner/api.py:96"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/ziteng-partner/config",
-          "normalized_path": "/v1/ziteng-partner/config",
-          "handler": "ZitengConfigAPI",
-          "source": "app/modules/ziteng_partner/api.py:101"
-        }
-      ]
-    }
+    "optional": {}
   },
   "module_summary": [
     {
@@ -954,8 +149,8 @@
       "effective": 9,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 5,
-      "missing": 4
+      "matched_in_csharp": 9,
+      "missing": 0
     },
     {
       "module": "archive_import",
@@ -965,8 +160,8 @@
       "effective": 3,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 3
+      "matched_in_csharp": 3,
+      "missing": 0
     },
     {
       "module": "avatar",
@@ -976,8 +171,8 @@
       "effective": 1,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 1
+      "matched_in_csharp": 1,
+      "missing": 0
     },
     {
       "module": "file",
@@ -987,8 +182,8 @@
       "effective": 8,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 8
+      "matched_in_csharp": 8,
+      "missing": 0
     },
     {
       "module": "group",
@@ -1053,8 +248,8 @@
       "effective": 10,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 9,
-      "missing": 1
+      "matched_in_csharp": 10,
+      "missing": 0
     },
     {
       "module": "notification",
@@ -1064,8 +259,8 @@
       "effective": 26,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 26
+      "matched_in_csharp": 26,
+      "missing": 0
     },
     {
       "module": "partner_search",
@@ -1075,8 +270,8 @@
       "effective": 3,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 3
+      "matched_in_csharp": 3,
+      "missing": 0
     },
     {
       "module": "project",
@@ -1086,8 +281,8 @@
       "effective": 25,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 7,
-      "missing": 18
+      "matched_in_csharp": 25,
+      "missing": 0
     },
     {
       "module": "project_set",
@@ -1108,8 +303,8 @@
       "effective": 1,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 1
+      "matched_in_csharp": 1,
+      "missing": 0
     },
     {
       "module": "source",
@@ -1119,8 +314,8 @@
       "effective": 5,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 5
+      "matched_in_csharp": 5,
+      "missing": 0
     },
     {
       "module": "storage_pool",
@@ -1130,8 +325,8 @@
       "effective": 18,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 18
+      "matched_in_csharp": 18,
+      "missing": 0
     },
     {
       "module": "target",
@@ -1152,8 +347,8 @@
       "effective": 18,
       "registered_only_405": 1,
       "handler_unknown": 0,
-      "matched_in_csharp": 9,
-      "missing": 9
+      "matched_in_csharp": 18,
+      "missing": 0
     },
     {
       "module": "term",
@@ -1163,8 +358,8 @@
       "effective": 2,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 2
+      "matched_in_csharp": 2,
+      "missing": 0
     },
     {
       "module": "term_bank",
@@ -1174,8 +369,8 @@
       "effective": 4,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 4
+      "matched_in_csharp": 4,
+      "missing": 0
     },
     {
       "module": "tip",
@@ -1185,8 +380,8 @@
       "effective": 2,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 2
+      "matched_in_csharp": 2,
+      "missing": 0
     },
     {
       "module": "translation",
@@ -1196,8 +391,8 @@
       "effective": 2,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 2
+      "matched_in_csharp": 2,
+      "missing": 0
     },
     {
       "module": "type",
@@ -1240,8 +435,8 @@
       "effective": 3,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 3
+      "matched_in_csharp": 3,
+      "missing": 0
     }
   ],
   "routes": [
@@ -1447,7 +642,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs:42"
+      "csharp_source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs:55"
     },
     {
       "method": "GET",
@@ -1463,8 +658,8 @@
       "blueprint": "admin",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/FileEndpoints.cs:20"
     },
     {
       "method": "OPTIONS",
@@ -1498,7 +693,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:69"
+      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:71"
     },
     {
       "method": "OPTIONS",
@@ -1532,7 +727,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:74"
+      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:76"
     },
     {
       "method": "GET",
@@ -1548,8 +743,8 @@
       "blueprint": "admin",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/AdminStorageOverviewEndpoints.cs:9"
     },
     {
       "method": "OPTIONS",
@@ -1616,8 +811,8 @@
       "blueprint": "admin",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs:34"
     },
     {
       "method": "OPTIONS",
@@ -1651,7 +846,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs:30"
+      "csharp_source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs:43"
     },
     {
       "method": "GET",
@@ -1667,8 +862,8 @@
       "blueprint": "admin",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/AdminListEndpoints.cs:12"
     },
     {
       "method": "OPTIONS",
@@ -1718,8 +913,8 @@
       "blueprint": "avatar",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/AvatarEndpoints.cs:11"
     },
     {
       "method": "DELETE",
@@ -1735,8 +930,8 @@
       "blueprint": "file",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/FileEndpoints.cs:17"
     },
     {
       "method": "GET",
@@ -1752,8 +947,8 @@
       "blueprint": "file",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/FileEndpoints.cs:15"
     },
     {
       "method": "OPTIONS",
@@ -1786,8 +981,8 @@
       "blueprint": "file",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/FileEndpoints.cs:16"
     },
     {
       "method": "OPTIONS",
@@ -1820,8 +1015,8 @@
       "blueprint": "file",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/OcrEndpoints.cs:21"
     },
     {
       "method": "GET",
@@ -1837,8 +1032,8 @@
       "blueprint": "file",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:19"
     },
     {
       "method": "OPTIONS",
@@ -1871,8 +1066,8 @@
       "blueprint": "file",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:20"
     },
     {
       "method": "POST",
@@ -1888,8 +1083,8 @@
       "blueprint": "file",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:21"
     },
     {
       "method": "OPTIONS",
@@ -1922,8 +1117,8 @@
       "blueprint": "file",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/ThumbnailEndpoints.cs:18"
     },
     {
       "method": "DELETE",
@@ -2875,7 +2070,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Program.cs:89"
+      "csharp_source": "src/Shoreline.Api/Program.cs:121"
     },
     {
       "method": "OPTIONS",
@@ -3197,8 +2392,8 @@
       "blueprint": "me",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/UserProjectListEndpoints.cs:10"
     },
     {
       "method": "OPTIONS",
@@ -3333,8 +2528,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:83"
     },
     {
       "method": "GET",
@@ -3350,8 +2545,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs:27"
     },
     {
       "method": "POST",
@@ -3367,8 +2562,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:60"
     },
     {
       "method": "POST",
@@ -3384,8 +2579,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:72"
     },
     {
       "method": "GET",
@@ -3401,8 +2596,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs:35"
     },
     {
       "method": "POST",
@@ -3418,8 +2613,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:96"
     },
     {
       "method": "GET",
@@ -3435,8 +2630,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:14"
     },
     {
       "method": "GET",
@@ -3452,8 +2647,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:68"
     },
     {
       "method": "PUT",
@@ -3469,8 +2664,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:75"
     },
     {
       "method": "GET",
@@ -3486,8 +2681,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs:43"
     },
     {
       "method": "GET",
@@ -3503,8 +2698,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:40"
     },
     {
       "method": "POST",
@@ -3520,8 +2715,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:30"
     },
     {
       "method": "GET",
@@ -3537,8 +2732,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:23"
     },
     {
       "method": "GET",
@@ -3554,8 +2749,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:51"
     },
     {
       "method": "PATCH",
@@ -3571,8 +2766,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:60"
     },
     {
       "method": "GET",
@@ -3588,8 +2783,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:97"
     },
     {
       "method": "POST",
@@ -3605,8 +2800,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:106"
     },
     {
       "method": "GET",
@@ -3622,8 +2817,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:30"
     },
     {
       "method": "POST",
@@ -3639,8 +2834,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:13"
     },
     {
       "method": "POST",
@@ -3656,8 +2851,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:22"
     },
     {
       "method": "GET",
@@ -3673,8 +2868,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs:11"
     },
     {
       "method": "GET",
@@ -3690,8 +2885,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs:19"
     },
     {
       "method": "PATCH",
@@ -3707,8 +2902,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:40"
     },
     {
       "method": "POST",
@@ -3724,8 +2919,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs:50"
     },
     {
       "method": "GET",
@@ -3741,8 +2936,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:82"
     },
     {
       "method": "PUT",
@@ -3758,8 +2953,8 @@
       "blueprint": "notification",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/NotificationEndpoints.cs:89"
     },
     {
       "method": "GET",
@@ -3826,8 +3021,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/FileEndpoints.cs:13"
     },
     {
       "method": "OPTIONS",
@@ -3860,8 +3055,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/FileEndpoints.cs:14"
     },
     {
       "method": "GET",
@@ -3877,8 +3072,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/FileEndpoints.cs:18"
     },
     {
       "method": "OPTIONS",
@@ -3911,8 +3106,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/FileEndpoints.cs:19"
     },
     {
       "method": "OPTIONS",
@@ -3945,8 +3140,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs:81"
     },
     {
       "method": "GET",
@@ -3962,8 +3157,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs:102"
     },
     {
       "method": "OPTIONS",
@@ -3996,8 +3191,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs:119"
     },
     {
       "method": "OPTIONS",
@@ -4030,8 +3225,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs:139"
     },
     {
       "method": "GET",
@@ -4047,8 +3242,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs:19"
     },
     {
       "method": "OPTIONS",
@@ -4098,8 +3293,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/OcrEndpoints.cs:33"
     },
     {
       "method": "OPTIONS",
@@ -4132,8 +3327,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/OutputEndpoints.cs:14"
     },
     {
       "method": "GET",
@@ -4251,8 +3446,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs:31"
     },
     {
       "method": "OPTIONS",
@@ -4285,8 +3480,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs:46"
     },
     {
       "method": "OPTIONS",
@@ -4319,8 +3514,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs:66"
     },
     {
       "method": "GET",
@@ -4387,8 +3582,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/OutputEndpoints.cs:38"
     },
     {
       "method": "OPTIONS",
@@ -4421,8 +3616,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/OutputEndpoints.cs:58"
     },
     {
       "method": "OPTIONS",
@@ -4455,8 +3650,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/ProofreadFeedbackEndpoints.cs:15"
     },
     {
       "method": "OPTIONS",
@@ -4489,8 +3684,8 @@
       "blueprint": "project",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/ThumbnailEndpoints.cs:19"
     },
     {
       "method": "DELETE",
@@ -4574,8 +3769,8 @@
       "blueprint": "site",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:69"
     },
     {
       "method": "OPTIONS",
@@ -4608,8 +3803,8 @@
       "blueprint": "source",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:24"
     },
     {
       "method": "OPTIONS",
@@ -4642,8 +3837,8 @@
       "blueprint": "source",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:23"
     },
     {
       "method": "OPTIONS",
@@ -4676,8 +3871,8 @@
       "blueprint": "source",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:25"
     },
     {
       "method": "OPTIONS",
@@ -4710,8 +3905,8 @@
       "blueprint": "source",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:27"
     },
     {
       "method": "OPTIONS",
@@ -4744,8 +3939,8 @@
       "blueprint": "source",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:26"
     },
     {
       "method": "DELETE",
@@ -4846,8 +4041,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TeamDissolutionEndpoints.cs:14"
     },
     {
       "method": "GET",
@@ -4914,8 +4109,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TeamInsightEndpoints.cs:36"
     },
     {
       "method": "OPTIONS",
@@ -4948,8 +4143,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TeamInsightEndpoints.cs:48"
     },
     {
       "method": "OPTIONS",
@@ -4982,8 +4177,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TeamInsightEndpoints.cs:10"
     },
     {
       "method": "OPTIONS",
@@ -5016,8 +4211,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TeamInsightEndpoints.cs:22"
     },
     {
       "method": "OPTIONS",
@@ -5067,8 +4262,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/OutputEndpoints.cs:84"
     },
     {
       "method": "GET",
@@ -5169,8 +4364,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/ProjectImportEndpoints.cs:24"
     },
     {
       "method": "GET",
@@ -5271,8 +4466,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TermEndpoints.cs:13"
     },
     {
       "method": "OPTIONS",
@@ -5305,8 +4500,8 @@
       "blueprint": "team",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TermEndpoints.cs:22"
     },
     {
       "method": "DELETE",
@@ -5322,8 +4517,8 @@
       "blueprint": "term",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TermEndpoints.cs:71"
     },
     {
       "method": "OPTIONS",
@@ -5356,8 +4551,8 @@
       "blueprint": "term",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TermEndpoints.cs:64"
     },
     {
       "method": "DELETE",
@@ -5373,8 +4568,8 @@
       "blueprint": "term_bank",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TermEndpoints.cs:38"
     },
     {
       "method": "OPTIONS",
@@ -5407,8 +4602,8 @@
       "blueprint": "term_bank",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TermEndpoints.cs:31"
     },
     {
       "method": "GET",
@@ -5424,8 +4619,8 @@
       "blueprint": "term_bank",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TermEndpoints.cs:45"
     },
     {
       "method": "OPTIONS",
@@ -5458,8 +4653,8 @@
       "blueprint": "term_bank",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/TermEndpoints.cs:55"
     },
     {
       "method": "DELETE",
@@ -5475,8 +4670,8 @@
       "blueprint": "tip",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:33"
     },
     {
       "method": "OPTIONS",
@@ -5509,8 +4704,8 @@
       "blueprint": "tip",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:32"
     },
     {
       "method": "DELETE",
@@ -5526,8 +4721,8 @@
       "blueprint": "translation",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:30"
     },
     {
       "method": "OPTIONS",
@@ -5560,8 +4755,8 @@
       "blueprint": "translation",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/LabelEndpoints.cs:29"
     },
     {
       "method": "GET",
@@ -5968,8 +5163,8 @@
       "blueprint": "archive_import",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/ArchiveImport/ArchiveImportEndpoints.cs:17"
     },
     {
       "method": "GET",
@@ -5985,8 +5180,8 @@
       "blueprint": "archive_import",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/ArchiveImport/ArchiveImportEndpoints.cs:18"
     },
     {
       "method": "OPTIONS",
@@ -6036,8 +5231,8 @@
       "blueprint": "archive_import",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/ArchiveImport/ArchiveImportEndpoints.cs:19"
     },
     {
       "method": "OPTIONS",
@@ -6070,8 +5265,8 @@
       "blueprint": "partner_search",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs:19"
     },
     {
       "method": "GET",
@@ -6087,8 +5282,8 @@
       "blueprint": "partner_search",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs:30"
     },
     {
       "method": "OPTIONS",
@@ -6121,8 +5316,8 @@
       "blueprint": "partner_search",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs:36"
     },
     {
       "method": "OPTIONS",
@@ -6155,8 +5350,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:120"
     },
     {
       "method": "OPTIONS",
@@ -6189,8 +5384,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:97"
     },
     {
       "method": "OPTIONS",
@@ -6223,8 +5418,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:112"
     },
     {
       "method": "OPTIONS",
@@ -6257,8 +5452,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:105"
     },
     {
       "method": "OPTIONS",
@@ -6291,8 +5486,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:157"
     },
     {
       "method": "GET",
@@ -6308,8 +5503,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:142"
     },
     {
       "method": "OPTIONS",
@@ -6342,8 +5537,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:149"
     },
     {
       "method": "GET",
@@ -6359,8 +5554,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:17"
     },
     {
       "method": "OPTIONS",
@@ -6393,8 +5588,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:28"
     },
     {
       "method": "DELETE",
@@ -6410,8 +5605,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:46"
     },
     {
       "method": "OPTIONS",
@@ -6444,8 +5639,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:37"
     },
     {
       "method": "OPTIONS",
@@ -6478,8 +5673,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:54"
     },
     {
       "method": "GET",
@@ -6495,8 +5690,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:128"
     },
     {
       "method": "OPTIONS",
@@ -6529,8 +5724,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:62"
     },
     {
       "method": "OPTIONS",
@@ -6563,8 +5758,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:89"
     },
     {
       "method": "OPTIONS",
@@ -6614,8 +5809,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:81"
     },
     {
       "method": "OPTIONS",
@@ -6648,8 +5843,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:73"
     },
     {
       "method": "GET",
@@ -6665,8 +5860,8 @@
       "blueprint": "storage_pool",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs:135"
     },
     {
       "method": "OPTIONS",
@@ -6699,8 +5894,8 @@
       "blueprint": "ziteng_partner",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs:20"
     },
     {
       "method": "OPTIONS",
@@ -6733,8 +5928,8 @@
       "blueprint": "ziteng_partner",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs:21"
     },
     {
       "method": "GET",
@@ -6750,8 +5945,8 @@
       "blueprint": "ziteng_partner",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs:26"
     },
     {
       "method": "OPTIONS",
@@ -6774,6 +5969,22 @@
   "csharp_routes": [
     {
       "method": "GET",
+      "path": "/v1/admin/v-codes",
+      "normalized_path": "/v1/admin/v-codes",
+      "source": "src/Shoreline.Api/Features/AdminListEndpoints.cs",
+      "line": 12,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/storage/default",
+      "normalized_path": "/v1/admin/storage/default",
+      "source": "src/Shoreline.Api/Features/AdminStorageOverviewEndpoints.cs",
+      "line": 9,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
       "path": "/v1/admin/users",
       "normalized_path": "/v1/admin/users",
       "source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs",
@@ -6781,11 +5992,19 @@
       "receiver": "app"
     },
     {
+      "method": "POST",
+      "path": "/v1/admin/users",
+      "normalized_path": "/v1/admin/users",
+      "source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs",
+      "line": 34,
+      "receiver": "app"
+    },
+    {
       "method": "PUT",
       "path": "/v1/admin/users/{id}",
       "normalized_path": "/v1/admin/users/{}",
       "source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs",
-      "line": 30,
+      "line": 43,
       "receiver": "app"
     },
     {
@@ -6793,7 +6012,7 @@
       "path": "/v1/admin/admin-status",
       "normalized_path": "/v1/admin/admin-status",
       "source": "src/Shoreline.Api/Features/AdminUserEndpoints.cs",
-      "line": 42,
+      "line": 55,
       "receiver": "app"
     },
     {
@@ -6845,6 +6064,14 @@
       "receiver": "app"
     },
     {
+      "method": "PUT",
+      "path": "/v1/avatar",
+      "normalized_path": "/v1/avatar",
+      "source": "src/Shoreline.Api/Features/AvatarEndpoints.cs",
+      "line": 11,
+      "receiver": "app"
+    },
+    {
       "method": "POST",
       "path": "/v1/confirm-email-codes",
       "normalized_path": "/v1/confirm-email-codes",
@@ -6882,6 +6109,70 @@
       "normalized_path": "/v1/user/email",
       "source": "src/Shoreline.Api/Features/EmailEndpoints.cs",
       "line": 48,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/files",
+      "normalized_path": "/v1/projects/{}/files",
+      "source": "src/Shoreline.Api/Features/FileEndpoints.cs",
+      "line": 13,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/files",
+      "normalized_path": "/v1/projects/{}/files",
+      "source": "src/Shoreline.Api/Features/FileEndpoints.cs",
+      "line": 14,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/files/{fileId}",
+      "normalized_path": "/v1/files/{}",
+      "source": "src/Shoreline.Api/Features/FileEndpoints.cs",
+      "line": 15,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/files/{fileId}",
+      "normalized_path": "/v1/files/{}",
+      "source": "src/Shoreline.Api/Features/FileEndpoints.cs",
+      "line": 16,
+      "receiver": "app"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/files/{fileId}",
+      "normalized_path": "/v1/files/{}",
+      "source": "src/Shoreline.Api/Features/FileEndpoints.cs",
+      "line": 17,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/files/order",
+      "normalized_path": "/v1/projects/{}/files/order",
+      "source": "src/Shoreline.Api/Features/FileEndpoints.cs",
+      "line": 18,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/projects/{projectId}/files/order",
+      "normalized_path": "/v1/projects/{}/files/order",
+      "source": "src/Shoreline.Api/Features/FileEndpoints.cs",
+      "line": 19,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/files",
+      "normalized_path": "/v1/admin/files",
+      "source": "src/Shoreline.Api/Features/FileEndpoints.cs",
+      "line": 20,
       "receiver": "app"
     },
     {
@@ -6934,6 +6225,166 @@
     },
     {
       "method": "GET",
+      "path": "/v1/files/{fileId}/sources",
+      "normalized_path": "/v1/files/{}/sources",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 19,
+      "receiver": "app"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/files/{fileId}/sources",
+      "normalized_path": "/v1/files/{}/sources",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 20,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/files/{fileId}/sources",
+      "normalized_path": "/v1/files/{}/sources",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 21,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/sources/{sourceId}",
+      "normalized_path": "/v1/sources/{}",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 23,
+      "receiver": "app"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/sources/{sourceId}",
+      "normalized_path": "/v1/sources/{}",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 24,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/sources/{sourceId}/rank",
+      "normalized_path": "/v1/sources/{}/rank",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 25,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sources/{sourceId}/translations",
+      "normalized_path": "/v1/sources/{}/translations",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 26,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sources/{sourceId}/tips",
+      "normalized_path": "/v1/sources/{}/tips",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 27,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/translations/{translationId}",
+      "normalized_path": "/v1/translations/{}",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 29,
+      "receiver": "app"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/translations/{translationId}",
+      "normalized_path": "/v1/translations/{}",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 30,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/tips/{tipId}",
+      "normalized_path": "/v1/tips/{}",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 32,
+      "receiver": "app"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/tips/{tipId}",
+      "normalized_path": "/v1/tips/{}",
+      "source": "src/Shoreline.Api/Features/LabelEndpoints.cs",
+      "line": 33,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/label-state",
+      "normalized_path": "/v1/projects/{}/label-state",
+      "source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs",
+      "line": 19,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/snapshots",
+      "normalized_path": "/v1/projects/{}/snapshots",
+      "source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs",
+      "line": 31,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/snapshots",
+      "normalized_path": "/v1/projects/{}/snapshots",
+      "source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs",
+      "line": 46,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/snapshots/{snapshotId}/restore",
+      "normalized_path": "/v1/projects/{}/snapshots/{}/restore",
+      "source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs",
+      "line": 66,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/label-clear",
+      "normalized_path": "/v1/projects/{}/label-clear",
+      "source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs",
+      "line": 81,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/label-merge",
+      "normalized_path": "/v1/projects/{}/label-merge",
+      "source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs",
+      "line": 102,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/label-merge",
+      "normalized_path": "/v1/projects/{}/label-merge",
+      "source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs",
+      "line": 119,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/label-recover",
+      "normalized_path": "/v1/projects/{}/label-recover",
+      "source": "src/Shoreline.Api/Features/LabelSnapshotEndpoints.cs",
+      "line": 139,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
       "path": "/v1/languages",
       "normalized_path": "/v1/languages",
       "source": "src/Shoreline.Api/Features/LanguageCatalog.cs",
@@ -6946,6 +6397,262 @@
       "normalized_path": "/v1/types/{}",
       "source": "src/Shoreline.Api/Features/LegacyTypes.cs",
       "line": 141,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/notification-capabilities",
+      "normalized_path": "/v1/me/notification-capabilities",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 14,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/notifications/unread-counts",
+      "normalized_path": "/v1/me/notifications/unread-counts",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 23,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/me/notifications/mark-read",
+      "normalized_path": "/v1/me/notifications/mark-read",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 30,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/notifications",
+      "normalized_path": "/v1/me/notifications",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 40,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/notifications/{notificationId}",
+      "normalized_path": "/v1/me/notifications/{}",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 51,
+      "receiver": "app"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/me/notifications/{notificationId}",
+      "normalized_path": "/v1/me/notifications/{}",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 60,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/notification-preferences",
+      "normalized_path": "/v1/me/notification-preferences",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 68,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/me/notification-preferences",
+      "normalized_path": "/v1/me/notification-preferences",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 75,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/teams/{teamId}/notification-policy",
+      "normalized_path": "/v1/teams/{}/notification-policy",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 82,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/teams/{teamId}/notification-policy",
+      "normalized_path": "/v1/teams/{}/notification-policy",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 89,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notification-project-cards",
+      "normalized_path": "/v1/notification-project-cards",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 97,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/notification-project-cards/resolve",
+      "normalized_path": "/v1/notification-project-cards/resolve",
+      "source": "src/Shoreline.Api/Features/NotificationEndpoints.cs",
+      "line": 106,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notifications/sent",
+      "normalized_path": "/v1/notifications/sent",
+      "source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs",
+      "line": 11,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notifications/{notificationId}",
+      "normalized_path": "/v1/notifications/{}",
+      "source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs",
+      "line": 19,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/notifications",
+      "normalized_path": "/v1/admin/notifications",
+      "source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs",
+      "line": 27,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/notifications/{notificationId}",
+      "normalized_path": "/v1/admin/notifications/{}",
+      "source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs",
+      "line": 35,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/notification-sync",
+      "normalized_path": "/v1/me/notification-sync",
+      "source": "src/Shoreline.Api/Features/NotificationManagementEndpoints.cs",
+      "line": 43,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/notifications",
+      "normalized_path": "/v1/notifications",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 13,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/notifications/preview",
+      "normalized_path": "/v1/notifications/preview",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 22,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notification-recipients",
+      "normalized_path": "/v1/notification-recipients",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 30,
+      "receiver": "app"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/notifications/{notificationId}",
+      "normalized_path": "/v1/notifications/{}",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 40,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/notifications/{notificationId}/revoke",
+      "normalized_path": "/v1/notifications/{}/revoke",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 50,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/notifications",
+      "normalized_path": "/v1/admin/notifications",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 60,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/notifications/preview",
+      "normalized_path": "/v1/admin/notifications/preview",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 72,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/notification-recipients",
+      "normalized_path": "/v1/admin/notification-recipients",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 83,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/notifications/{notificationId}/revoke",
+      "normalized_path": "/v1/admin/notifications/{}/revoke",
+      "source": "src/Shoreline.Api/Features/NotificationPublishEndpoints.cs",
+      "line": 96,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/files/{fileId}/ocr",
+      "normalized_path": "/v1/files/{}/ocr",
+      "source": "src/Shoreline.Api/Features/OcrEndpoints.cs",
+      "line": 21,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/ocr",
+      "normalized_path": "/v1/projects/{}/ocr",
+      "source": "src/Shoreline.Api/Features/OcrEndpoints.cs",
+      "line": 33,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/outputs",
+      "normalized_path": "/v1/projects/{}/outputs",
+      "source": "src/Shoreline.Api/Features/OutputEndpoints.cs",
+      "line": 14,
+      "receiver": "project"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/targets/{targetId}/outputs",
+      "normalized_path": "/v1/projects/{}/targets/{}/outputs",
+      "source": "src/Shoreline.Api/Features/OutputEndpoints.cs",
+      "line": 38,
+      "receiver": "target"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/targets/{targetId}/outputs",
+      "normalized_path": "/v1/projects/{}/targets/{}/outputs",
+      "source": "src/Shoreline.Api/Features/OutputEndpoints.cs",
+      "line": 58,
+      "receiver": "target"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/teams/{teamId}/outputs",
+      "normalized_path": "/v1/teams/{}/outputs",
+      "source": "src/Shoreline.Api/Features/OutputEndpoints.cs",
+      "line": 84,
       "receiver": "app"
     },
     {
@@ -7077,6 +6784,14 @@
       "receiver": "target"
     },
     {
+      "method": "POST",
+      "path": "/v1/teams/{teamId}/project-sets/{projectSetId}/project-zips",
+      "normalized_path": "/v1/teams/{}/project-sets/{}/project-zips",
+      "source": "src/Shoreline.Api/Features/ProjectImportEndpoints.cs",
+      "line": 24,
+      "receiver": "app"
+    },
+    {
       "method": "GET",
       "path": "/v1/projects/{projectId}/members",
       "normalized_path": "/v1/projects/{}/members",
@@ -7149,6 +6864,14 @@
       "receiver": "lifecycleGroup"
     },
     {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/targets/{targetId}/send-proofread-draft",
+      "normalized_path": "/v1/projects/{}/targets/{}/send-proofread-draft",
+      "source": "src/Shoreline.Api/Features/ProofreadFeedbackEndpoints.cs",
+      "line": 15,
+      "receiver": "app"
+    },
+    {
       "method": "GET",
       "path": "/v1/homepage",
       "normalized_path": "/v1/homepage",
@@ -7158,10 +6881,18 @@
     },
     {
       "method": "GET",
+      "path": "/v1/site/homepage",
+      "normalized_path": "/v1/site/homepage",
+      "source": "src/Shoreline.Api/Features/SiteSettings.cs",
+      "line": 69,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
       "path": "/v1/admin/site-setting",
       "normalized_path": "/v1/admin/site-setting",
       "source": "src/Shoreline.Api/Features/SiteSettings.cs",
-      "line": 69,
+      "line": 71,
       "receiver": "app"
     },
     {
@@ -7169,7 +6900,15 @@
       "path": "/v1/admin/site-setting",
       "normalized_path": "/v1/admin/site-setting",
       "source": "src/Shoreline.Api/Features/SiteSettings.cs",
-      "line": 74,
+      "line": 76,
+      "receiver": "app"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/teams/{teamId}",
+      "normalized_path": "/v1/teams/{}",
+      "source": "src/Shoreline.Api/Features/TeamDissolutionEndpoints.cs",
+      "line": 14,
       "receiver": "app"
     },
     {
@@ -7277,6 +7016,118 @@
       "receiver": "team"
     },
     {
+      "method": "GET",
+      "path": "/v1/teams/{teamId}/insight/users",
+      "normalized_path": "/v1/teams/{}/insight/users",
+      "source": "src/Shoreline.Api/Features/TeamInsightEndpoints.cs",
+      "line": 10,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/teams/{teamId}/insight/users/{userId}/projects",
+      "normalized_path": "/v1/teams/{}/insight/users/{}/projects",
+      "source": "src/Shoreline.Api/Features/TeamInsightEndpoints.cs",
+      "line": 22,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/teams/{teamId}/insight/projects",
+      "normalized_path": "/v1/teams/{}/insight/projects",
+      "source": "src/Shoreline.Api/Features/TeamInsightEndpoints.cs",
+      "line": 36,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/teams/{teamId}/insight/projects/{projectId}/users",
+      "normalized_path": "/v1/teams/{}/insight/projects/{}/users",
+      "source": "src/Shoreline.Api/Features/TeamInsightEndpoints.cs",
+      "line": 48,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/teams/{teamId}/term-banks",
+      "normalized_path": "/v1/teams/{}/term-banks",
+      "source": "src/Shoreline.Api/Features/TermEndpoints.cs",
+      "line": 13,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/teams/{teamId}/term-banks",
+      "normalized_path": "/v1/teams/{}/term-banks",
+      "source": "src/Shoreline.Api/Features/TermEndpoints.cs",
+      "line": 22,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/term-banks/{termBankId}",
+      "normalized_path": "/v1/term-banks/{}",
+      "source": "src/Shoreline.Api/Features/TermEndpoints.cs",
+      "line": 31,
+      "receiver": "app"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/term-banks/{termBankId}",
+      "normalized_path": "/v1/term-banks/{}",
+      "source": "src/Shoreline.Api/Features/TermEndpoints.cs",
+      "line": 38,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/term-banks/{termBankId}/terms",
+      "normalized_path": "/v1/term-banks/{}/terms",
+      "source": "src/Shoreline.Api/Features/TermEndpoints.cs",
+      "line": 45,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/term-banks/{termBankId}/terms",
+      "normalized_path": "/v1/term-banks/{}/terms",
+      "source": "src/Shoreline.Api/Features/TermEndpoints.cs",
+      "line": 55,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/terms/{termId}",
+      "normalized_path": "/v1/terms/{}",
+      "source": "src/Shoreline.Api/Features/TermEndpoints.cs",
+      "line": 64,
+      "receiver": "app"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/terms/{termId}",
+      "normalized_path": "/v1/terms/{}",
+      "source": "src/Shoreline.Api/Features/TermEndpoints.cs",
+      "line": 71,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/files/{fileId}/thumbnail",
+      "normalized_path": "/v1/files/{}/thumbnail",
+      "source": "src/Shoreline.Api/Features/ThumbnailEndpoints.cs",
+      "line": 18,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/thumbnails",
+      "normalized_path": "/v1/projects/{}/thumbnails",
+      "source": "src/Shoreline.Api/Features/ThumbnailEndpoints.cs",
+      "line": 19,
+      "receiver": "app"
+    },
+    {
       "method": "POST",
       "path": "/v1/captchas",
       "normalized_path": "/v1/captchas",
@@ -7358,10 +7209,258 @@
     },
     {
       "method": "GET",
+      "path": "/v1/user/projects",
+      "normalized_path": "/v1/user/projects",
+      "source": "src/Shoreline.Api/Features/UserProjectListEndpoints.cs",
+      "line": 10,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/import-from-archive",
+      "normalized_path": "/v1/projects/{}/import-from-archive",
+      "source": "src/Shoreline.Api/Modules/ArchiveImport/ArchiveImportEndpoints.cs",
+      "line": 17,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/import-task",
+      "normalized_path": "/v1/projects/{}/import-task",
+      "source": "src/Shoreline.Api/Modules/ArchiveImport/ArchiveImportEndpoints.cs",
+      "line": 18,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/import-task/dismiss",
+      "normalized_path": "/v1/projects/{}/import-task/dismiss",
+      "source": "src/Shoreline.Api/Modules/ArchiveImport/ArchiveImportEndpoints.cs",
+      "line": 19,
+      "receiver": "app"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/v1/partner-search-query-entry",
+      "normalized_path": "/v1/partner-search-query-entry",
+      "source": "src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs",
+      "line": 18,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/partner-search-query-entry",
+      "normalized_path": "/v1/partner-search-query-entry",
+      "source": "src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs",
+      "line": 19,
+      "receiver": "app"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/v1/partner-search-query-entry/settings",
+      "normalized_path": "/v1/partner-search-query-entry/settings",
+      "source": "src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs",
+      "line": 29,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/partner-search-query-entry/settings",
+      "normalized_path": "/v1/partner-search-query-entry/settings",
+      "source": "src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs",
+      "line": 30,
+      "receiver": "app"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/partner-search-query-entry/settings",
+      "normalized_path": "/v1/partner-search-query-entry/settings",
+      "source": "src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs",
+      "line": 36,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/storage-pool/sources",
+      "normalized_path": "/v1/admin/storage-pool/sources",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 17,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/sources",
+      "normalized_path": "/v1/admin/storage-pool/sources",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 28,
+      "receiver": "group"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/admin/storage-pool/sources/{sourceId}",
+      "normalized_path": "/v1/admin/storage-pool/sources/{}",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 37,
+      "receiver": "group"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/admin/storage-pool/sources/{sourceId}",
+      "normalized_path": "/v1/admin/storage-pool/sources/{}",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 46,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/sources/{sourceId}/test",
+      "normalized_path": "/v1/admin/storage-pool/sources/{}/test",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 54,
+      "receiver": "group"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/storage-pool/transfers",
+      "normalized_path": "/v1/admin/storage-pool/transfers",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 62,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/transfers/{transferId}/retry",
+      "normalized_path": "/v1/admin/storage-pool/transfers/{}/retry",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 73,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/transfers/{transferId}/cancel",
+      "normalized_path": "/v1/admin/storage-pool/transfers/{}/cancel",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 81,
+      "receiver": "group"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/admin/storage-pool/transfers/{transferId}",
+      "normalized_path": "/v1/admin/storage-pool/transfers/{}",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 89,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/projects/{projectId}/migrate",
+      "normalized_path": "/v1/admin/storage-pool/projects/{}/migrate",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 97,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/projects/{projectId}/restore",
+      "normalized_path": "/v1/admin/storage-pool/projects/{}/restore",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 105,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/projects/{projectId}/move",
+      "normalized_path": "/v1/admin/storage-pool/projects/{}/move",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 112,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/projects/{projectId}/lock",
+      "normalized_path": "/v1/admin/storage-pool/projects/{}/lock",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 120,
+      "receiver": "group"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/storage-pool/stats",
+      "normalized_path": "/v1/admin/storage-pool/stats",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 128,
+      "receiver": "group"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/storage-pool/usage",
+      "normalized_path": "/v1/admin/storage-pool/usage",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 135,
+      "receiver": "group"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/storage-pool/settings",
+      "normalized_path": "/v1/admin/storage-pool/settings",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 142,
+      "receiver": "group"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/admin/storage-pool/settings",
+      "normalized_path": "/v1/admin/storage-pool/settings",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 149,
+      "receiver": "group"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/storage-pool/scan",
+      "normalized_path": "/v1/admin/storage-pool/scan",
+      "source": "src/Shoreline.Api/Modules/StoragePool/StoragePoolEndpoints.cs",
+      "line": 157,
+      "receiver": "group"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/ziteng-check",
+      "normalized_path": "/v1/projects/{}/ziteng-check",
+      "source": "src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs",
+      "line": 20,
+      "receiver": "checks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/ziteng-check",
+      "normalized_path": "/v1/projects/{}/ziteng-check",
+      "source": "src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs",
+      "line": 21,
+      "receiver": "checks"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ziteng-partner/config",
+      "normalized_path": "/v1/ziteng-partner/config",
+      "source": "src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs",
+      "line": 26,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/config/ziteng-partner",
+      "normalized_path": "/v1/config/ziteng-partner",
+      "source": "src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs",
+      "line": 27,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
       "path": "/ping",
       "normalized_path": "/ping",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 89,
+      "line": 121,
       "receiver": "app"
     },
     {
@@ -7369,7 +7468,7 @@
       "path": "/health/live",
       "normalized_path": "/health/live",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 102,
+      "line": 156,
       "receiver": "app"
     },
     {
@@ -7377,7 +7476,7 @@
       "path": "/health/ready",
       "normalized_path": "/health/ready",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 103,
+      "line": 157,
       "receiver": "app"
     }
   ],
@@ -7387,7 +7486,7 @@
       "path": "/health/live",
       "normalized_path": "/health/live",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 102,
+      "line": 156,
       "receiver": "app"
     },
     {
@@ -7395,7 +7494,15 @@
       "path": "/health/ready",
       "normalized_path": "/health/ready",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 103,
+      "line": 157,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/config/ziteng-partner",
+      "normalized_path": "/v1/config/ziteng-partner",
+      "source": "src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs",
+      "line": 27,
       "receiver": "app"
     },
     {
