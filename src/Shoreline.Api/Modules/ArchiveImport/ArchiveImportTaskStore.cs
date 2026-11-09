@@ -78,6 +78,24 @@ public sealed class ArchiveImportTaskStore(MongoStore store, TimeProvider clock)
         return result.MatchedCount == 1;
     }
 
+    /// <summary>
+    /// Bind a newly acquired claim to the task row. This is the resume path: after a worker loses its claim (crash,
+    /// expired lease or a released retry), the next worker owns the project-level claim and must fence out the old
+    /// token before touching the checkpoint.
+    /// </summary>
+    public async Task<bool> TryBindOwnerAsync(ObjectId taskId, ArchiveClaimOwner owner, CancellationToken ct)
+    {
+        var result = await _tasks.UpdateOneAsync(Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("_id", taskId),
+                Builders<BsonDocument>.Filter.In("s", ArchiveImportStatus.Running)),
+            new BsonDocument("$set", new BsonDocument
+            {
+                ["lo"] = owner.Token,
+                ["lu"] = owner.LeaseUntil,
+            }), cancellationToken: ct);
+        return result.MatchedCount == 1;
+    }
+
     public async Task<bool> TouchOwnerAsync(ObjectId taskId, ArchiveClaimOwner owner, CancellationToken ct)
     {
         var update = new BsonDocument("$set", new BsonDocument { ["lu"] = owner.LeaseUntil });

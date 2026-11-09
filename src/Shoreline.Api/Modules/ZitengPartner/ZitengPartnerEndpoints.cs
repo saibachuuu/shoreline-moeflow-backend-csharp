@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using MongoDB.Bson;
 using Shoreline.Api.Features;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Security;
@@ -31,7 +32,7 @@ public static class ZitengPartnerEndpoints
     {
         var actor = await current.RequireAsync(context, ct);
         var project = await projects.GetProjectAsync(projectId, ct);
-        await permissions.RequireProjectAsync(actor, project, "project:ACCESS", ct);
+        await RequireProjectAccessAsync(actor, project, permissions, ct);
         var check = await store.GetCheckAsync(projectId, ct);
         Dictionary<string, object?>? view = check?.ToApi();
         return new { check = view };
@@ -42,10 +43,23 @@ public static class ZitengPartnerEndpoints
     {
         var actor = await current.RequireAsync(context, ct);
         var project = await projects.GetProjectAsync(projectId, ct);
-        await permissions.RequireProjectAsync(actor, project, "project:ACCESS", ct);
+        await RequireProjectAccessAsync(actor, project, permissions, ct);
         var check = await service.RequestCheckAsync(projectId, project.Text("n"), ct);
         Dictionary<string, object?>? view = check?.ToApi();
         return new { check = view };
+    }
+
+    /// <summary>
+    /// Every module route maps a missing project permission to 403 (the Python
+    /// message is kept). The shared <c>ApiError.Forbidden()</c> carries the same
+    /// code but its legacy default status is 400, so state the status here.
+    /// </summary>
+    private static async Task RequireProjectAccessAsync(BsonDocument actor, BsonDocument project,
+        IdentityPermissions permissions, CancellationToken ct)
+    {
+        if (!IdentityPermissions.CanProject(await permissions.ProjectSnapshotAsync(actor, project, ct), project,
+                "project:ACCESS"))
+            throw new ApiError("NoPermissionError", 103, "您没有此项目的访问权限", 403);
     }
 
     private static async Task<object> GetConfigAsync(HttpContext context, CurrentUser current,

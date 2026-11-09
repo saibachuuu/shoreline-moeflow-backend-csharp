@@ -256,7 +256,8 @@ public sealed class ArchiveImportTests(LocalServices services)
         var task = await harness.LatestAsync();
         Assert.Equal(5, (int)task.Integer("s"));
         Assert.Equal("导入完成（1 张）", task.Text("st"));
-        Assert.Equal(2, (int)task.Integer("c"));
+        // Python reports completed_pages=imported on success (tasks.py:418-423), not the number of entries visited.
+        Assert.Equal(1, (int)task.Integer("c"));
         Assert.Equal(["b.jpg"], harness.Uploader.Names);
     }
 
@@ -474,7 +475,9 @@ public sealed class ArchiveImportTests(LocalServices services)
         Assert.True((await store.Find(new BsonDocument("_id", done)).FirstAsync()).Flag("d"));
         Assert.False((await store.Find(new BsonDocument("_id", running)).FirstAsync()).Flag("d"));
         Assert.True((await store.Find(new BsonDocument("_id", failed)).FirstAsync()).Flag("d"));
-        Assert.Equal(running, (await harness.LatestAsync())["_id"].AsObjectId);
+        // Python `ArchiveImportTask.latest` orders by -_id (models.py:63-65); dismiss never changes the id, so the
+        // newest row (failed) remains the latest even though it is now dismissed.
+        Assert.Equal(failed, (await harness.LatestAsync())["_id"].AsObjectId);
     }
 
     [Fact]
@@ -680,12 +683,15 @@ public sealed class ArchiveImportTests(LocalServices services)
     {
         public List<string> Names { get; } = [];
         public List<byte[]> Contents { get; } = [];
+        public int Attempts { get; private set; }
         public Func<int, string, Exception?>? Error { get; set; }
 
         public async Task UploadAsync(BsonDocument project, string filename, Stream content, long length,
             CancellationToken ct)
         {
-            var index = Names.Count;
+            // Caller callbacks address archive entry positions, not successful-upload count: a failed entry must
+            // not shift every later entry back onto the same index.
+            var index = Attempts++;
             var error = Error?.Invoke(index, filename);
             if (error is not null) throw error;
             using var memory = new MemoryStream();

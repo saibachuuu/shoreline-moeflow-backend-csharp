@@ -173,7 +173,13 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
         if (user is not null && projects.Count > 0)
         {
             var projectIds = new BsonArray(projects.Select(p => p["_id"]));
-            var teamIds = new BsonArray(projects.Select(p => p["t"]).Distinct());
+            // Legacy rows may predate the team reference (or carry a malformed one). They simply have no team
+            // relation/policy; never fail the whole page snapshot with a KeyNotFoundException.
+            var teamIds = new BsonArray(projects
+                .Select(p => Id(p, "t"))
+                .Where(id => id is not null)
+                .Distinct(StringComparer.Ordinal)
+                .Select(id => (BsonValue)new BsonObjectId(ObjectId.Parse(id!))));
             var memberTask = store.Collection("project_member").Find(new BsonDocument { ["user"] = user["_id"], ["project"] = new BsonDocument("$in", projectIds) }).ToListAsync(ct);
             var relationTask = store.Collection("team_member").Find(new BsonDocument { ["user"] = user["_id"], ["team"] = new BsonDocument("$in", teamIds), ["status"] = "active" }).ToListAsync(ct);
             var policyTask = store.Collection("identity_tag_policy").Find(new BsonDocument("team", new BsonDocument("$in", teamIds))).ToListAsync(ct);
@@ -182,8 +188,14 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
             relations = (await relationTask).ToDictionary(p => p["team"].ToString()!, StringComparer.Ordinal);
             policies = (await policyTask).ToDictionary(p => p["team"].ToString()!, StringComparer.Ordinal);
         }
-        return projects.ToDictionary(p => p["_id"].AsObjectId, p => ProjectSnapshot(user, p,
-            relations.GetValueOrDefault(p["t"].ToString()!), members.GetValueOrDefault(p["_id"].ToString()!), policies.GetValueOrDefault(p["t"].ToString()!)));
+        return projects.ToDictionary(p => p["_id"].AsObjectId, p =>
+        {
+            var teamId = Id(p, "t");
+            return ProjectSnapshot(user, p,
+                teamId is null ? null : relations.GetValueOrDefault(teamId),
+                members.GetValueOrDefault(p["_id"].ToString()!),
+                teamId is null ? null : policies.GetValueOrDefault(teamId));
+        });
     }
 
     private PermissionSnapshot ProjectSnapshot(BsonDocument? user, BsonDocument project, BsonDocument? relation, BsonDocument? member, BsonDocument? policy)
@@ -233,7 +245,7 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
         if (action != "clear") return false;
         return await store.Collection("team_member").Find(new BsonDocument
         {
-            ["team"] = project["t"],
+            ["team"] = project.GetValue("t", BsonNull.Value),
             ["user"] = user["_id"],
             ["status"] = "active",
             ["base_tag"] = "creator"

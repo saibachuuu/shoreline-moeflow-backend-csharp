@@ -633,8 +633,13 @@ public sealed class ArchiveImportService
             var now = Now;
             var token = Guid.NewGuid().ToString("N");
             var lease = now.Add(_options.ClaimLease);
-            if (await _claims.TryTakeAsync(projectId, taskId, token, lease, now, ct))
-                return new ArchiveClaimOwner(projectId, taskId, token, lease);
+            if (!await _claims.TryTakeAsync(projectId, taskId, token, lease, now, ct)) continue;
+            var owner = new ArchiveClaimOwner(projectId, taskId, token, lease);
+            if (await _tasks.TryBindOwnerAsync(taskId, owner, ct)) return owner;
+            // The task finished or disappeared between the initial read and the claim. Do not leave a claim
+            // fencing a completed row; a later task for this project may bind it freely.
+            await _claims.ReleaseAsync(projectId, taskId, token, ct);
+            return null;
         }
         throw new ArchiveRetryException("archive claim is busy");
     }
