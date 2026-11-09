@@ -75,7 +75,7 @@ public static class UserEndpoints
             var (user, auditId) = await profiles.UpdateAsync(actor, actor, data, true, RequestId(ctx), ct);
             return new { user = await view.ToApiAsync(user, ctx), audit_event_id = auditId.ToString() };
         });
-        app.MapPatch("/v1/admin/users/{id}/aliases", async (string id, JsonElement data, HttpContext ctx, CurrentUser current,
+        app.MapPatch("/v1/users/{id}/aliases", async (string id, JsonElement data, HttpContext ctx, CurrentUser current,
             MongoStore store, UserProfileService profiles, UserView view, CancellationToken ct) =>
         {
             var actor = await current.RequireAdminAsync(ctx, ct);

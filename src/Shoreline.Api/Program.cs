@@ -17,6 +17,7 @@ builder.Services.AddSingleton<CaptchaService>();
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<UserView>();
 builder.Services.AddScoped<UserProfileService>();
+builder.Services.AddSingleton<SiteSettings>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
 builder.Services.AddSingleton<EmailCodeService>();
@@ -66,6 +67,7 @@ app.Use(async (context, next) =>
 app.MapGet("/ping", () => Results.Json(new { message = "pong" }));
 app.MapUsers();
 app.MapEmail();
+app.MapSite();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {

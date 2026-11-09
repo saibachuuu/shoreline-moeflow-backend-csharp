@@ -25,6 +25,8 @@ public sealed class MongoStore
 
     public async Task InitializeAsync(CancellationToken ct)
     {
+        await Collection("site_setting").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("n"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
         var users = Collection("user");
         await users.Indexes.CreateManyAsync([
             new(Builders<BsonDocument>.IndexKeys.Ascending("e"), new CreateIndexOptions { Unique = true }),

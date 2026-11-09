@@ -41,7 +41,7 @@ public sealed class ProfileTests(LocalServices services)
             var search = await client.GetFromJsonAsync<JsonElement>("/v1/users?word=STRASSE");
             Assert.Contains(search.EnumerateArray(), item => item.GetProperty("id").GetString() == user["_id"].ToString());
             Assert.All(search.EnumerateArray(), item => Assert.False(item.TryGetProperty("email", out _)));
-            using var denied = await client.PatchAsJsonAsync($"/v1/admin/users/{user["_id"]}/aliases", new { aliases = new[] { "attempt" } });
+            using var denied = await client.PatchAsJsonAsync($"/v1/users/{user["_id"]}/aliases", new { aliases = new[] { "attempt" } });
             Assert.Equal(103, (await denied.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetInt32());
         }
     }
