@@ -35,8 +35,8 @@ public sealed class SiteSettings(MongoStore store)
     public async Task<BsonDocument> UpdateAsync(JsonElement data, CancellationToken ct)
     {
         // Validate everything before a single atomic $set; preserve extension-owned fields.
-        var changes = new BsonDocument { ["ew"] = Boolean(data, "enable_whitelist"),
-            ["oacg"] = Boolean(data, "only_allow_admin_create_team") };
+        var changes = new BsonDocument { ["ew"] = data.RequiredBoolean("enable_whitelist"),
+            ["oacg"] = data.RequiredBoolean("only_allow_admin_create_team") };
         changes["we"] = Array(data, "whitelist_emails", value =>
         {
             if (!MailAddress.TryCreate(value, out var email) || email.Address != value || !email.Host.Contains('.'))
@@ -49,16 +49,6 @@ public sealed class SiteSettings(MongoStore store)
             changes[bson] = data.TryGetProperty(api, out _) ? data.RequiredText(api, int.MaxValue) : "";
         return await store.Collection("site_setting").FindOneAndUpdateAsync(new BsonDocument("n", "site"),
             new BsonDocument("$set", changes), new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, ct);
-    }
-
-    private static bool Boolean(JsonElement data, string field)
-    {
-        if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty(field, out var value))
-            throw ApiError.Field(field, "缺少必填字段");
-        // Marshmallow Boolean accepts these string and numeric forms too.
-        if (value.ValueKind == JsonValueKind.True || value.ToString() is "1" or "true" or "True" or "TRUE" or "yes" or "Yes" or "YES" or "on" or "On" or "ON" or "t" or "T" or "y" or "Y") return true;
-        if (value.ValueKind == JsonValueKind.False || value.ToString() is "0" or "false" or "False" or "FALSE" or "no" or "No" or "NO" or "off" or "Off" or "OFF" or "f" or "F" or "n" or "N") return false;
-        throw ApiError.Field(field, "布尔值格式不正确");
     }
 
     private static BsonArray Array(JsonElement data, string field, Func<string, BsonValue> parse)

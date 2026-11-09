@@ -68,6 +68,7 @@ app.MapGet("/ping", () => Results.Json(new { message = "pong" }));
 app.MapUsers();
 app.MapEmail();
 app.MapSite();
+app.MapAdminUsers();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {
