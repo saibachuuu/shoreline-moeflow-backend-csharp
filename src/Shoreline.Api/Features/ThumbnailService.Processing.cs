@@ -452,17 +452,8 @@ public sealed partial class ThumbnailService
 
     private async Task CleanupAsync(string runId, string tempDirectory)
     {
-        try
-        {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await _storage.DeleteAsync(StagingCoverKey(runId), timeout.Token);
-            await _storage.DeleteAsync(StagingResampleKey(runId), timeout.Token);
-        }
-        catch
-        {
-            // Staging objects are namespaced by run id and never served. A
-            // missed cleanup is harmless and must not mask the task result.
-        }
+        await TryDeleteStagingAsync(StagingCoverKey(runId));
+        await TryDeleteStagingAsync(StagingResampleKey(runId));
 
         try
         {
@@ -473,6 +464,24 @@ public sealed partial class ThumbnailService
         }
         catch (UnauthorizedAccessException)
         {
+        }
+    }
+
+    private async Task TryDeleteStagingAsync(string key)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await _storage.DeleteAsync(key, timeout.Token);
+                return;
+            }
+            catch
+            {
+                // Staging objects are namespaced by run id and never served. A
+                // missed cleanup is harmless and must not mask the task result.
+            }
         }
     }
 

@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
+using Shoreline.Api.Jobs;
 using Shoreline.Api.Security;
 
 namespace Shoreline.Api.Modules.ArchiveImport;
@@ -263,8 +264,8 @@ public sealed class ArchiveImportService
             throw new ArchiveImportFailure(ArchiveImportText.FailedStage, "项目标签版本已变更，导入已取消");
 
         var (apiUrl, keys) = await ResolveProviderAsync(project, ct);
-        var gid = task.Text("g");
-        var token = task.Text("t");
+        var gid = ArchiveImportIds.StringValue(task.GetValue("g", BsonNull.Value));
+        var token = ArchiveImportIds.StringValue(task.GetValue("t", BsonNull.Value));
 
         string? zipUrl = null;
         foreach (var key in keys)

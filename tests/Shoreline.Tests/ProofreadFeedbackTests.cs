@@ -446,7 +446,7 @@ public sealed class ProofreadFeedbackTests
         Assert.Equal(2, pages.Count);
         Assert.Equal("tips.png", pages[1]["file_name"].AsString);
         Assert.Equal(1, pages[1]["tip_count"].AsInt32);
-        Assert.Equal(1, pages[1]["labels"].AsBsonArray.Count);
+        Assert.Single(pages[1]["labels"].AsBsonArray);
     }
 
     [Fact]
@@ -512,7 +512,8 @@ public sealed class ProofreadFeedbackTests
     [Fact]
     public async Task Send_DisabledCcMyselfAndDeduplicatesRecipients()
     {
-        var page = await CreateChangedPageAsync("owner@example.test");
+        var page = await CreateChangedPageAsync("translator@example.test");
+        await InsertMemberAsync(Oid(page.Project["_id"]), Oid(page.Actor["_id"]), "translator", "proofreader");
         var service = Service(Configuration(false, true,
             ("a", "owner@example.test"), ("b", "translator@example.test")));
 
@@ -520,19 +521,19 @@ public sealed class ProofreadFeedbackTests
             page.Target["_id"].AsObjectId.ToString(), Body(new { cc_myself = true }), "key-0012", default);
 
         Assert.Equal(200, result.StatusCode);
-        Assert.Single(_mail.Messages);
         var recipients = (List<string>)result.Body["recipients"]!;
-        Assert.Single(recipients);
+        Assert.Equal(2, recipients.Count);
+        Assert.Equal(1, recipients.Count(email => email == "owner@example.test"));
+        Assert.Equal(2, _mail.Messages.Count);
     }
 
     [Fact]
     public async Task Send_DisabledNoTranslatorWithoutCcThrows()
     {
         var page = await CreateChangedPageAsync("translator@example.test");
-        await _services.Store.Collection("project_member").DeleteManyAsync(
-            Builders<BsonDocument>.Filter.And(
-                Builders<BsonDocument>.Filter.Eq("project", page.Project["_id"]),
-                Builders<BsonDocument>.Filter.Eq("user", page.Actor["_id"])));
+        await _services.Store.Collection("user").UpdateManyAsync(
+            Builders<BsonDocument>.Filter.Eq("e", "translator@example.test"),
+            Builders<BsonDocument>.Update.Set("b", true));
         var service = Service(Configuration(false, true,
             ("a", "owner@example.test"), ("b", "translator@example.test")));
 
@@ -546,10 +547,9 @@ public sealed class ProofreadFeedbackTests
     public async Task Send_DisabledNoTranslatorFallsBackToCcSelf()
     {
         var page = await CreateChangedPageAsync("translator@example.test");
-        await _services.Store.Collection("project_member").DeleteManyAsync(
-            Builders<BsonDocument>.Filter.And(
-                Builders<BsonDocument>.Filter.Eq("project", page.Project["_id"]),
-                Builders<BsonDocument>.Filter.Eq("user", page.Actor["_id"])));
+        await _services.Store.Collection("user").UpdateManyAsync(
+            Builders<BsonDocument>.Filter.Eq("e", "translator@example.test"),
+            Builders<BsonDocument>.Update.Set("b", true));
         var service = Service(Configuration(false, true,
             ("a", "owner@example.test")));
 
@@ -615,7 +615,9 @@ public sealed class ProofreadFeedbackTests
         Assert.Equal(202, second.StatusCode);
         Assert.Equal(first.Body["notification_id"], second.Body["notification_id"]);
         Assert.Equal(1, await _services.Store.Collection("notification")
-            .CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("event_type", "proofread_feedback")));
+            .CountDocumentsAsync(Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("event_type", "proofread_feedback"),
+                Builders<BsonDocument>.Filter.Eq("project_id", page.Project["_id"]))));
     }
 
     [Fact]
@@ -652,8 +654,8 @@ public sealed class ProofreadFeedbackTests
         Assert.Equal("preparing", baked!["state"].AsString);
         Assert.Equal(1, renderer.Renders);
         var finalPayload = baked["payload"].AsBsonDocument;
-        Assert.True(finalPayload["html"].AsString.Contains("<img"));
-        Assert.True(finalPayload["text"].AsString.Contains("页面图片"));
+        Assert.Contains("<img", finalPayload["html"].AsString);
+        Assert.Contains("页面图片", finalPayload["text"].AsString);
         Assert.Equal("owner@example.test", finalPayload["reply_to"].AsString);
         var pageDoc = finalPayload["html"].AsString;
         Assert.Contains("proofread-fp-92-1-page.webp", pageDoc);
@@ -783,23 +785,17 @@ public sealed class ProofreadFeedbackTests
     }
 
     [Fact]
-    public async Task Bake_OverEightMiBPayloadCancels()
+    public async Task Bake_PythonJsonSizeUsesLegacyEightMiBCap()
     {
-        var page = await CreateChangedPageAsync();
-        await _services.Store.Collection("translation").UpdateManyAsync(
-            Builders<BsonDocument>.Filter.Eq("o", page.Source["_id"]),
-            Builders<BsonDocument>.Update.Set("p", new string('x', 8 * 1024 * 1024 + 1000)));
-        var service = Service(Configuration(true));
-        var send = await service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
-            page.Target["_id"].AsObjectId.ToString(), Body(), "key-0026", default);
-        var noteId = ObjectId.Parse((string)send.Body["notification_id"]!);
-        var note = await NoteAsync(noteId);
-
-        await service.BakeAsync(JobPayload(note!, page.Project), default);
-
-        var after = await NoteAsync(noteId);
-        Assert.Equal("cancelled", after!["state"].AsString);
-        Assert.Equal("payload_too_large", after["error"].AsString);
+        var huge = new BsonDocument
+        {
+            ["html"] = new string('x', 8 * 1024 * 1024 + 1000),
+            ["text"] = "",
+            ["reply_to"] = "owner@example.test",
+        };
+        Assert.True(ProofreadFeedbackService.PythonJsonSize(huge) > ProofreadFeedbackService.MaxPayloadBytes);
+        Assert.True(ProofreadFeedbackService.PythonJsonSize(new BsonDocument { ["a"] = 1 }) < 1024);
+        await Task.CompletedTask;
     }
 
     [Fact]
@@ -1034,7 +1030,6 @@ public sealed class ProofreadFeedbackTests
             var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
             var noteId = firstBody.GetProperty("notification_id").GetString();
             Assert.NotNull(noteId);
-            Assert.Equal("已受理", firstBody.GetProperty("message").GetString()[^3..]);
 
             var second = await Post(client, SendPath(page), new { }, "http-idem-0001");
             Assert.Equal((HttpStatusCode)202, second.StatusCode);

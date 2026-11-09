@@ -165,7 +165,11 @@ public sealed partial class ProofreadFeedbackService(
         {
             if (toEmails.Count == 0)
             {
-                if (ccMyself && currentEmail.Length > 0) toEmails.Add(currentEmail);
+                if (ccMyself && currentEmail.Length > 0)
+                {
+                    toEmails.Add(currentEmail);
+                    ccEmails.Clear();
+                }
                 else throw new ApiError("NoTranslatorMemberError", 4026, "项目没有可接收校对稿的翻译成员");
             }
             foreach (var page in pages)

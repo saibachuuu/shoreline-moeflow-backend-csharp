@@ -5,7 +5,7 @@
 - `src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchService.cs`
 - `src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchEndpoints.cs`
 - `src/Shoreline.Api/Modules/PartnerSearch/PartnerSearchRegistration.cs`
-- `tests/Shoreline.Tests/PartnerSearchTests.cs`（17 个直连服务 Fact）
+- `tests/Shoreline.Tests/PartnerSearchTests.cs`（18 个直连服务 Fact）
 - `tests/Shoreline.Tests/PartnerSearchHttpTests.cs`（6 个 HTTP Fact）
 
 本轮没有修改 `Program.cs`、公共 `SiteSettings`、`Storage`、`Project`、其他模块文件、`csproj`、`packages.lock` 或 `SLN`，也没有在本轮把模块接入共享主程序。
@@ -53,7 +53,7 @@
 - `PUT` 是严格的部分更新：只处理出现的四个字段；未知键按 Python `DefaultSchema` 的排除方式忽略。`pse` 必须是布尔，`pst` 必须是字符串 ObjectId 数组，`psq >= 0`，`psm >= 1`；类型错误和越界在写库前拒绝。
 - 写入先用 `n: "site"` 找到现有文档，再按该文档的 `_id` 只 `$set` 四个模块字段。核心标题、邮件、通知等未知字段原样保留，不会整文档替换。
 - 文档不存在时，插入 `{n:"site", pse:false, pst:[], psq:10, psm:20}` 再合并本次字段。模块用进程内互斥 + 重复键重试（最多 3 次）保证并发首次插入只产生一个站点文档；本轮没有让模块创建 `site_setting.n` 的唯一索引，该索引属于核心初始化逻辑。
-- 读取不迁移、不清理旧文档：`pst` 同时接受 BSON ObjectId 和可解析为 ObjectId 的字符串，其他元素跳过；`pse` 只认真正的布尔 `true`；缺失或非法 `psq`/`psm` 回退默认值。旧文档不会因为 GET 被改写。
+- 读取不迁移、不清理旧文档：`pst` 同时接受 BSON ObjectId 和可解析为 ObjectId 的字符串，其他元素跳过；`pse` 只认真正的布尔 `true`；缺失或不可解析的 `psq`/`psm` 回退默认值。旧文档中的负数或 `0` 原样读出：`psq <= 0` 因此不限流，`psm <= 0` 时查询 `limit` 兜底为 1。旧文档不会因为 GET 被改写。
 
 ## 查询接口
 

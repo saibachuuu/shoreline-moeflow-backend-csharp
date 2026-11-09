@@ -108,6 +108,33 @@ public sealed class PartnerSearchTests(LocalServices services)
     }
 
     [Fact]
+    public async Task Settings_legacy_numeric_values_are_preserved_and_bounded()
+    {
+        using var runtime = new PartnerSearchRuntime(services);
+        var team = runtime.InsertTeam("legacy numeric");
+        runtime.InsertProject(team, "legacy match");
+        await runtime.Store.Collection("site_setting").InsertOneAsync(new BsonDocument
+        {
+            ["n"] = "site",
+            ["pse"] = true,
+            ["pst"] = new BsonArray { team },
+            ["psq"] = -5,
+            ["psm"] = 0,
+        });
+
+        var view = await runtime.Service.GetSettingsAsync(default);
+        Assert.Equal(-5, view["partner_search_rate_limit_seconds"].AsInt32);
+        Assert.Equal(0, view["partner_search_max_limit"].AsInt32);
+
+        var result = await runtime.Service.QueryAsync(Body("""{"keyword":"legacy"}"""),
+            null, "127.0.0.1", default);
+        Assert.Equal(1L, result["total"].ToInt64());
+        Assert.Equal(1, result["limit"].AsInt32);
+        Assert.Equal(0L, await runtime.Store.Collection("partner_search_throttle")
+            .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
+    }
+
+    [Fact]
     public async Task Disabled_query_returns_403_before_body_parsing()
     {
         using var runtime = new PartnerSearchRuntime(services);

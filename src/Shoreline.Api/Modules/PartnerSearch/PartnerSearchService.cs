@@ -264,10 +264,11 @@ public sealed class PartnerSearchService
 
         var enabled = row.TryGetValue("pse", out var rawEnabled) &&
                       rawEnabled.BsonType == BsonType.Boolean && rawEnabled.AsBoolean;
+        // Legacy values are returned as stored: Python reads the raw int fields
+        // and lets <=0 rate limits disable throttling and <=0 max limits fall
+        // back to 1 at query time. Only missing/non-numeric fields default.
         var rateLimit = Integer(row, "psq", DefaultRateLimitSeconds);
         var maxLimit = Integer(row, "psm", DefaultMaxLimit);
-        if (rateLimit < 0) rateLimit = DefaultRateLimitSeconds;
-        if (maxLimit < 1) maxLimit = DefaultMaxLimit;
         return new SettingsSnapshot(enabled, teamIds, rateLimit, maxLimit);
     }
 

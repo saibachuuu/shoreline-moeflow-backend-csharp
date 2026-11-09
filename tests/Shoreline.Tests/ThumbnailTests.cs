@@ -16,6 +16,13 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
 {
     private readonly List<string> _tempRoots = [];
     private readonly CancellationToken ct = CancellationToken.None;
+    private readonly string _run = Guid.NewGuid().ToString("N");
+
+    private string Save(string name) => $"{_run}-{name}";
+    private static string CoverKey(string saveName) =>
+        $"files/cover-{Path.GetFileNameWithoutExtension(saveName)}.webp";
+    private static string ResampleKey(string saveName) =>
+        $"files/resample-{Path.GetFileNameWithoutExtension(saveName)}.webp";
 
     [Fact]
     public void Processor_Jpeg_ProducesCoverAndProportionalResample()
@@ -84,9 +91,10 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
     public async Task Schedule_EnqueuesDurableJobBeforeAdvertisingQueuing()
     {
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "schedule.jpg");
+        var save = Save("schedule.jpg");
+        var file = await FileAsync(project, save);
         var storage = Storage();
-        await PutAsync(storage, $"files/schedule.jpg", ImageBytes(300, 200, MagickFormat.Jpeg));
+        await PutAsync(storage, $"files/{save}", ImageBytes(300, 200, MagickFormat.Jpeg));
         var service = Service(storage);
 
         Assert.True(await service.ScheduleAsync(file, project, null, ct));
@@ -103,7 +111,7 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
         Assert.Equal(file.ToString(), payload.Text("file_id"));
         Assert.Equal(project.ToString(), payload.Text("project_id"));
         Assert.Equal(0L, payload["label_revision"].ToInt64());
-        Assert.Equal("schedule.jpg", payload.Text("save_name"));
+        Assert.Equal(save, payload.Text("save_name"));
         Assert.Equal(32, payload.Text("run_id").Length);
     }
 
@@ -111,9 +119,10 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
     public async Task Run_GeneratesWebpObjectsAndUpdatesBytesAndProject()
     {
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "generated.jpg");
+        var save = Save("generated.jpg");
+        var file = await FileAsync(project, save);
         var storage = Storage();
-        await PutAsync(storage, "files/generated.jpg", ImageBytes(2400, 1200, MagickFormat.Jpeg));
+        await PutAsync(storage, $"files/{save}", ImageBytes(2400, 1200, MagickFormat.Jpeg));
         var service = Service(storage);
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
