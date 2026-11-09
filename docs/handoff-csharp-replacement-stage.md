@@ -2,6 +2,20 @@
 
 更新日期：2026-11-09。当前为收尾草稿，现有后台任务交付后继续补充。
 
+## 最新保存状态与 E1 幂等 helper 交付
+
+- 当前代码现场已经由主代理保存为 WIP：`dc9f1bd752cc7285775e83d9460a77d2ffba0ccc`，并补收至 `5f6d081ad305ddb2599e8c142f7e2b8789a97495`。下文各表的“未提交”是模块交付时的历史状态；已被 WIP 收入不等于模块已审查、正式接线或整体验收。
+- E1 helper 三文件已在 WIP 中：`src/Shoreline.Api/Features/LabelService.Idempotent.cs`、`tests/Shoreline.Tests/LabelIdempotencyTests.cs`、`docs/label-idempotent-writes.md`。Agent 未自行提交；主代理为断电迁移保存现场。
+- 隔离证据：`C:\Users\88888888\AppData\Local\Temp\opencode\e1-idem\repo`，仅 `git archive 3edd683` + 三文件；build **0 warning / 0 error**，focused **17/17**，full **403/403**（386 + 17）。不能将该结果当作 WIP 整树已通过。
+- source API：`Task<SourceWriteResult> CreateSourceOnceAsync(HttpContext context, BsonDocument actor, ObjectId fileId, ObjectId sourceId, string content, double x, double y, int positionType, int sourceRank, long expectedRevision, CancellationToken ct)`；结果含 `SourceWriteOutcome { Created, AlreadyApplied }`、`SourceId`、`Revision`、`CountersApplied`。
+- translation API：`Task<TranslationWriteResult> CreateTranslationOnceAsync(HttpContext context, BsonDocument actor, ObjectId sourceId, ObjectId targetId, ObjectId translationId, string content, long expectedRevision, CancellationToken ct)`；结果含 `TranslationWriteOutcome { Created, AlreadyApplied, Empty }`、`TranslationId`、`Revision`、`CountersApplied`。
+- source 使用预分配 ID，校验 file/epoch/content/x/y/position，rank 仅排序；translation 使用稳定 ID 或旧唯一键 `{source,target,user}`，校验身份/content/mt，同 id 冲突 code 2，机器翻译冲突 8007。空 translation 无已有行时不插入、不计数。
+- pending marker 与业务行同文档持久化；重试已存在行仍 reconcile。持项目锁从 primary 确定性重算 file/祖先/project/target/cache 标签计数并 `$set`，不修改存储、文件数量或导出 accounting。folder rollup、inactive own counts、blank 排除、distinct source 与 selected distinct 均有测试。所有计数与 touch 完成后才 owner + revision CAS 清 marker。
+- 源码 SHA-256 `020CA3191ABC7551C68D7933A681190DB02EF7BDD5826340FD0720CBA1F4B147`；测试 SHA-256 `8DD499DEF692C9AB900F65EB5B39702CA02CCC2E2668709CD45BEF8E31C6A168`，agent 报告与隔离快照一致。
+- **G2 尚未接入该 helper，六个恢复测试仍待恢复。** 云端先审查此接口与 journal 契约，再完成 source → translation → reconcile → checkpoint；同时接预存 jobId 的 EnqueueOnceAsync。不要因 helper 已交付便解除 G2 blocked 或宣称普通旧标签写路径 crash-safe。
+- Agent 承认一次误在共享目录 build，因 Imaging 缺引用失败，已清理其生成的 `.artifacts`；通过证据全部来自隔离树。此次不续派、不执行共享构建。
+- 当前完整迁移现场仍有未接线、编译和环境故障，最后完成模块验收的历史基线为 `3edd683`。本地 bundle 为 `C:\Users\88888888\shoreline-moeflow\shoreline-csharp-cloud-handoff.bundle`，转云端时务必携带最新生成版本；无远程配置、未 push。
+
 ## 断电前 WIP 保存（用户最新授权）
 
 用户要求为转云端继续而提交现场：现在允许把当前未完成迁移代码保存为明确的 WIP 检查点。它不代表任何未验收模块已通过，不能部署；此前“仅模块验收后提交”的约束在本次紧急保存上由用户新要求覆盖。本文件同步保存到仓库 `docs/handoff-csharp-replacement-stage.md`，云端优先阅读该文件。
