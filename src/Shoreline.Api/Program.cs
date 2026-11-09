@@ -28,6 +28,7 @@ builder.Services.AddSingleton<ArchiveSecrets>();
 builder.Services.AddSingleton<IdentityAuditWriter>();
 builder.Services.AddScoped<TeamMemberService>();
 builder.Services.AddScoped<TeamService>();
+builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<IdentityTagPolicyService>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
@@ -88,6 +89,7 @@ app.MapLanguages();
 app.MapTypes();
 app.MapTeams();
 app.MapTeamIdentity();
+app.MapProjects();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {
