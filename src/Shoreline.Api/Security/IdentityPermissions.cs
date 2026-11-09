@@ -18,7 +18,7 @@ public sealed record PermissionSnapshot(string? ProjectMemberId, string? UserId,
 
 // Runtime authority for identity permissions. Site administrator status is not
 // a project or team membership and never bypasses these checks.
-public sealed class IdentityPermissions(MongoStore store, TimeProvider clock)
+public sealed partial class IdentityPermissions(MongoStore store, TimeProvider clock)
 {
     private const string ProjectNames = "ACCESS CHANGE COMPLETE_PROJECT ADD_FILE MOVE_FILE RENAME_FILE DELETE_FILE OUTPUT_TRA ADD_LABEL MOVE_LABEL DELETE_LABEL ADD_TRA DELETE_TRA PROOFREAD_TRA CHECK_TRA ADD_TARGET CHANGE_TARGET DELETE_TARGET CHECK_USER INVITE_USER CHANGE_USER_REMARK CHANGE_USER_ROLE DELETE_USER MANAGE_MEMBERS";
     private const string TeamNames = "ACCESS DELETE CHANGE CREATE_ROLE DELETE_ROLE CHECK_USER INVITE_USER DELETE_USER CHANGE_USER_ROLE CHANGE_USER_REMARK CREATE_PROJECT CREATE_PROJECT_SET CHANGE_PROJECT_SET DELETE_PROJECT_SET USE_OCR_QUOTA USE_MT_QUOTA INSIGHT ACCESS_TERM_BANK CREATE_TERM_BANK CHANGE_TERM_BANK DELETE_TERM_BANK CREATE_TERM CHANGE_TERM DELETE_TERM";

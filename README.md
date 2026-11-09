@@ -7,7 +7,10 @@ one process. MongoDB and object-storage clients are shared. Password hashing has
 a separate concurrency limit. The current implementation includes legacy password
 and token compatibility, captchas, user profiles and aliases, email verification,
 password recovery, site settings, administrator user management, identity
-permission calculation, a leased job queue, and streaming S3 operations.
+permission calculation and tag-assignment validation, a leased job queue, and
+streaming S3 operations. Assignment validation covers qualification and open
+modes, protected identities, external invitations and custom policy tags; member
+mutation endpoints still need their own authorization and version checks.
 
 Project/team business endpoints, translation workflows, files, snapshots, exports,
 storage transfers and other business modules still need to be ported and tested.
