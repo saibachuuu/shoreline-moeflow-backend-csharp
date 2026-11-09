@@ -1,0 +1,2259 @@
+{
+  "bootstrap": {
+    "celery": "memory",
+    "mail": "disabled",
+    "mongodb": "8.0.34",
+    "network_guard": "only 127.0.0.1:27128",
+    "optional_modules": "disabled",
+    "packages": {
+      "Flask": "3.1.3",
+      "Pillow": "12.3.0",
+      "PyJWT": "2.13.0",
+      "boto3": "1.43.80",
+      "celery": "5.6.3",
+      "cryptography": "50.0.1",
+      "flask-babel": "4.0.0",
+      "google-cloud-storage": "3.13.1",
+      "itsdangerous": "2.2.0",
+      "marshmallow": "3.26.2",
+      "mongoengine": "0.29.3",
+      "oss2": "2.19.1",
+      "pymongo": "4.17.0"
+    },
+    "python": "3.12.10",
+    "storage": "LOCAL_STORAGE",
+    "synthetic_config": "generated app/config.py; no production config read",
+    "translations": "not copied; passthrough/noop"
+  },
+  "cases": [
+    {
+      "database_after": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "database_before": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "index": 1,
+      "name": "ping",
+      "request": {
+        "authorization": "absent",
+        "method": "GET",
+        "path": "/ping",
+        "query": {}
+      },
+      "response": {
+        "body": {
+          "kind": "text",
+          "value": "pong"
+        },
+        "headers": {
+          "Content-Length": "4",
+          "Content-Type": "text/html; charset=utf-8"
+        },
+        "status": 200
+      }
+    },
+    {
+      "database_after": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "database_before": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "index": 2,
+      "name": "missing_token_team_list",
+      "request": {
+        "authorization": "absent",
+        "method": "GET",
+        "path": "/v1/teams",
+        "query": {
+          "word": "Reference"
+        }
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "code": 1003,
+            "error": "NeedTokenError",
+            "message": "需要令牌"
+          }
+        },
+        "headers": {
+          "Content-Length": "76",
+          "Content-Type": "application/json"
+        },
+        "status": 401
+      }
+    },
+    {
+      "database_after": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "database_before": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "index": 3,
+      "name": "user_info",
+      "request": {
+        "authorization": "redacted",
+        "method": "GET",
+        "path": "/v1/user/info",
+        "query": {}
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "admin": false,
+            "aliases": [],
+            "avatar": "",
+            "can_manage_site_admins": false,
+            "default_display_name": "Reference Owner",
+            "has_avatar": false,
+            "id": "650000000000000000000101",
+            "locale": {
+              "id": "en",
+              "intro": "",
+              "name": "英文"
+            },
+            "name": "Reference Owner",
+            "signature": "reference owner"
+          }
+        },
+        "headers": {
+          "Content-Length": "273",
+          "Content-Type": "application/json"
+        },
+        "status": 200
+      }
+    },
+    {
+      "database_after": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "database_before": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "index": 4,
+      "name": "team_list_missing_word",
+      "request": {
+        "authorization": "redacted",
+        "method": "GET",
+        "path": "/v1/teams",
+        "query": {}
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "code": 110,
+            "error": "RequestDataEmptyError",
+            "message": "请求参数不能为空或没有需要的值"
+          }
+        },
+        "headers": {
+          "Content-Length": "148",
+          "Content-Type": "application/json"
+        },
+        "status": 400
+      }
+    },
+    {
+      "database_after": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "database_before": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "index": 5,
+      "name": "team_list",
+      "request": {
+        "authorization": "redacted",
+        "method": "GET",
+        "path": "/v1/teams",
+        "query": {
+          "word": "Reference"
+        }
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": [
+            {
+              "allow_apply_type": 1,
+              "application_check_type": 2,
+              "archive_api_keys": [],
+              "archive_api_url": "",
+              "avatar": "",
+              "base_tag": null,
+              "create_time": "2026-01-01T00:00:00",
+              "default_role": "650000000000000000000002",
+              "edit_time": "2026-01-01T00:00:00",
+              "effective_permissions": [],
+              "group_type": "team",
+              "has_avatar": false,
+              "id": "650000000000000000000201",
+              "intro": "A deterministic reference team",
+              "is_need_check_application": true,
+              "joined": true,
+              "max_user": 100,
+              "name": "Reference Team",
+              "ocr_quota_month": 0,
+              "ocr_quota_used": 0,
+              "proofread_marker_enabled": true,
+              "proofread_marker_opacity": 92,
+              "role": null,
+              "staff_list_page": null,
+              "user_count": 2,
+              "worker_qualification_mode": "open"
+            }
+          ]
+        },
+        "headers": {
+          "Content-Length": "646",
+          "Content-Type": "application/json",
+          "X-Pagination-Count": "1",
+          "X-Pagination-Limit": "10",
+          "X-Pagination-Page": "1",
+          "X-Pagination-Page-Count": "1"
+        },
+        "status": 200
+      }
+    },
+    {
+      "database_after": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "database_before": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "index": 6,
+      "name": "term_bank_list",
+      "request": {
+        "authorization": "redacted",
+        "method": "GET",
+        "path": "/v1/teams/650000000000000000000201/term-banks",
+        "query": {}
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": [
+            {
+              "create_time": "2026-01-01T00:00:00",
+              "edit_time": "2026-01-01T00:00:00",
+              "id": "650000000000000000000401",
+              "name": "Reference Glossary",
+              "source_language": {
+                "code": "ja",
+                "en_name": "Japanese",
+                "g_ocr_code": "ja",
+                "g_tra_code": "ja",
+                "i18n_name": "Japanese",
+                "id": "650000000000000000000301",
+                "lo_name": "Japanese",
+                "no_space": true,
+                "sort": 1
+              },
+              "target_language": {
+                "code": "en",
+                "en_name": "English",
+                "g_ocr_code": "en",
+                "g_tra_code": "en",
+                "i18n_name": "English",
+                "id": "650000000000000000000302",
+                "lo_name": "English",
+                "no_space": false,
+                "sort": 2
+              },
+              "tip": "reference terms only",
+              "user": {
+                "admin": false,
+                "aliases": [],
+                "avatar": "",
+                "can_manage_site_admins": false,
+                "default_display_name": "Reference Owner",
+                "has_avatar": false,
+                "id": "650000000000000000000101",
+                "locale": {
+                  "id": "en",
+                  "intro": "",
+                  "name": "英文"
+                },
+                "name": "Reference Owner",
+                "signature": "reference owner"
+              }
+            }
+          ]
+        },
+        "headers": {
+          "Content-Length": "821",
+          "Content-Type": "application/json",
+          "X-Pagination-Count": "1",
+          "X-Pagination-Limit": "10",
+          "X-Pagination-Page": "1",
+          "X-Pagination-Page-Count": "1"
+        },
+        "status": 200
+      }
+    },
+    {
+      "database_after": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "database_before": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "index": 7,
+      "name": "application_list",
+      "request": {
+        "authorization": "redacted",
+        "method": "GET",
+        "path": "/v1/teams/650000000000000000000201/applications",
+        "query": {}
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": [
+            {
+              "create_time": "2026-01-01T00:00:00+00:00",
+              "group": {
+                "allow_apply_type": 1,
+                "application_check_type": 2,
+                "archive_api_keys": [],
+                "archive_api_url": "",
+                "avatar": "",
+                "base_tag": null,
+                "create_time": "2026-01-01T00:00:00",
+                "default_role": "650000000000000000000002",
+                "edit_time": "2026-01-01T00:00:00",
+                "effective_permissions": [],
+                "group_type": "team",
+                "has_avatar": false,
+                "id": "650000000000000000000201",
+                "intro": "A deterministic reference team",
+                "is_need_check_application": true,
+                "max_user": 100,
+                "name": "Reference Team",
+                "ocr_quota_month": 0,
+                "ocr_quota_used": 0,
+                "proofread_marker_enabled": true,
+                "proofread_marker_opacity": 92,
+                "role": null,
+                "staff_list_page": null,
+                "user_count": 2,
+                "worker_qualification_mode": "open"
+              },
+              "group_roles": [
+                {
+                  "create_time": "2026-01-01T00:00:00",
+                  "id": "650000000000000000000003",
+                  "level": 400,
+                  "name": "管理员",
+                  "permissions": [
+                    {
+                      "id": 1,
+                      "intro": "",
+                      "name": "访问团队"
+                    },
+                    {
+                      "id": 10,
+                      "intro": "",
+                      "name": "设置团队"
+                    },
+                    {
+                      "id": 15,
+                      "intro": "",
+                      "name": "新建角色"
+                    },
+                    {
+                      "id": 20,
+                      "intro": "",
+                      "name": "删除角色"
+                    },
+                    {
+                      "id": 101,
+                      "intro": "",
+                      "name": "审核用户加入申请"
+                    },
+                    {
+                      "id": 105,
+                      "intro": "邀请时仅可设置比自己角色等级低的用户",
+                      "name": "邀请用户"
+                    },
+                    {
+                      "id": 110,
+                      "intro": "仅可删除比自己角色等级低的用户",
+                      "name": "删除用户"
+                    },
+                    {
+                      "id": 115,
+                      "intro": "仅可修改比自己角色等级低的角色",
+                      "name": "修改用户角色"
+                    },
+                    {
+                      "id": 120,
+                      "intro": "",
+                      "name": "修改用户备注"
+                    },
+                    {
+                      "id": 1010,
+                      "intro": "自动获得团队内所有项目的管理员权限",
+                      "name": "管理项目"
+                    },
+                    {
+                      "id": 1020,
+                      "intro": "在团队内创建术语库",
+                      "name": "创建术语库"
+                    },
+                    {
+                      "id": 1030,
+                      "intro": "若无此权限只能查看自己创建的术语库中的术语",
+                      "name": "查看他人术语库"
+                    },
+                    {
+                      "id": 1040,
+                      "intro": "若无此权限只能修改自己创建的术语库设置",
+                      "name": "设置他人术语库"
+                    },
+                    {
+                      "id": 1050,
+                      "intro": "若无此权限只能删除自己创建的术语库",
+                      "name": "删除他人术语库"
+                    },
+                    {
+                      "id": 1060,
+                      "intro": "若无此权限只能在自己创建的术语库中增加术语",
+                      "name": "在他人术语库中增加术语"
+                    },
+                    {
+                      "id": 1070,
+                      "intro": "若无此权限只能修改自己创建的术语或自己术语库中的术语",
+                      "name": "修改他人术语"
+                    },
+                    {
+                      "id": 1080,
+                      "intro": "若无此权限只能删除自己创建的术语或自己术语库中的术语",
+                      "name": "删除他人术语"
+                    },
+                    {
+                      "id": 1090,
+                      "intro": "在团队内创建项目",
+                      "name": "创建项目"
+                    },
+                    {
+                      "id": 1100,
+                      "intro": "在团队内创建项目集",
+                      "name": "创建项目集"
+                    },
+                    {
+                      "id": 1110,
+                      "intro": "修改团队内项目集的设置",
+                      "name": "设置项目集"
+                    },
+                    {
+                      "id": 1120,
+                      "intro": "删除团队内的项目集",
+                      "name": "删除项目集"
+                    },
+                    {
+                      "id": 1130,
+                      "intro": "可以使用团队的自动标记额度",
+                      "name": "使用自动标记额度"
+                    },
+                    {
+                      "id": 1140,
+                      "intro": "可以使用团队的机器翻译额度",
+                      "name": "使用机器翻译额度"
+                    },
+                    {
+                      "id": 1150,
+                      "intro": "可以查看团队项目统计",
+                      "name": "查看项目统计"
+                    }
+                  ],
+                  "system": true,
+                  "system_code": "admin"
+                },
+                {
+                  "create_time": "2026-01-01T00:00:00",
+                  "id": "650000000000000000000004",
+                  "level": 300,
+                  "name": "资深成员",
+                  "permissions": [
+                    {
+                      "id": 1,
+                      "intro": "",
+                      "name": "访问团队"
+                    },
+                    {
+                      "id": 1020,
+                      "intro": "在团队内创建术语库",
+                      "name": "创建术语库"
+                    },
+                    {
+                      "id": 1030,
+                      "intro": "若无此权限只能查看自己创建的术语库中的术语",
+                      "name": "查看他人术语库"
+                    },
+                    {
+                      "id": 1040,
+                      "intro": "若无此权限只能修改自己创建的术语库设置",
+                      "name": "设置他人术语库"
+                    },
+                    {
+                      "id": 1050,
+                      "intro": "若无此权限只能删除自己创建的术语库",
+                      "name": "删除他人术语库"
+                    },
+                    {
+                      "id": 1060,
+                      "intro": "若无此权限只能在自己创建的术语库中增加术语",
+                      "name": "在他人术语库中增加术语"
+                    },
+                    {
+                      "id": 1070,
+                      "intro": "若无此权限只能修改自己创建的术语或自己术语库中的术语",
+                      "name": "修改他人术语"
+                    },
+                    {
+                      "id": 1080,
+                      "intro": "若无此权限只能删除自己创建的术语或自己术语库中的术语",
+                      "name": "删除他人术语"
+                    },
+                    {
+                      "id": 1090,
+                      "intro": "在团队内创建项目",
+                      "name": "创建项目"
+                    },
+                    {
+                      "id": 1100,
+                      "intro": "在团队内创建项目集",
+                      "name": "创建项目集"
+                    },
+                    {
+                      "id": 1110,
+                      "intro": "修改团队内项目集的设置",
+                      "name": "设置项目集"
+                    },
+                    {
+                      "id": 1120,
+                      "intro": "删除团队内的项目集",
+                      "name": "删除项目集"
+                    },
+                    {
+                      "id": 1130,
+                      "intro": "可以使用团队的自动标记额度",
+                      "name": "使用自动标记额度"
+                    },
+                    {
+                      "id": 1140,
+                      "intro": "可以使用团队的机器翻译额度",
+                      "name": "使用机器翻译额度"
+                    }
+                  ],
+                  "system": true,
+                  "system_code": "senior"
+                },
+                {
+                  "create_time": "2026-01-01T00:00:00",
+                  "id": "650000000000000000000005",
+                  "level": 200,
+                  "name": "成员",
+                  "permissions": [
+                    {
+                      "id": 1,
+                      "intro": "",
+                      "name": "访问团队"
+                    },
+                    {
+                      "id": 1020,
+                      "intro": "在团队内创建术语库",
+                      "name": "创建术语库"
+                    },
+                    {
+                      "id": 1030,
+                      "intro": "若无此权限只能查看自己创建的术语库中的术语",
+                      "name": "查看他人术语库"
+                    },
+                    {
+                      "id": 1040,
+                      "intro": "若无此权限只能修改自己创建的术语库设置",
+                      "name": "设置他人术语库"
+                    },
+                    {
+                      "id": 1050,
+                      "intro": "若无此权限只能删除自己创建的术语库",
+                      "name": "删除他人术语库"
+                    },
+                    {
+                      "id": 1060,
+                      "intro": "若无此权限只能在自己创建的术语库中增加术语",
+                      "name": "在他人术语库中增加术语"
+                    },
+                    {
+                      "id": 1070,
+                      "intro": "若无此权限只能修改自己创建的术语或自己术语库中的术语",
+                      "name": "修改他人术语"
+                    },
+                    {
+                      "id": 1080,
+                      "intro": "若无此权限只能删除自己创建的术语或自己术语库中的术语",
+                      "name": "删除他人术语"
+                    },
+                    {
+                      "id": 1090,
+                      "intro": "在团队内创建项目",
+                      "name": "创建项目"
+                    },
+                    {
+                      "id": 1100,
+                      "intro": "在团队内创建项目集",
+                      "name": "创建项目集"
+                    },
+                    {
+                      "id": 1110,
+                      "intro": "修改团队内项目集的设置",
+                      "name": "设置项目集"
+                    },
+                    {
+                      "id": 1120,
+                      "intro": "删除团队内的项目集",
+                      "name": "删除项目集"
+                    }
+                  ],
+                  "system": true,
+                  "system_code": "member"
+                },
+                {
+                  "create_time": "2026-01-01T00:00:00",
+                  "id": "650000000000000000000002",
+                  "level": 100,
+                  "name": "见习成员",
+                  "permissions": [
+                    {
+                      "id": 1,
+                      "intro": "",
+                      "name": "访问团队"
+                    }
+                  ],
+                  "system": true,
+                  "system_code": "beginner"
+                }
+              ],
+              "group_type": "team",
+              "id": "6955b9000000000000000501",
+              "message": "Deterministic approved application",
+              "operator": {
+                "admin": false,
+                "aliases": [],
+                "avatar": "",
+                "can_manage_site_admins": false,
+                "default_display_name": "Reference Owner",
+                "has_avatar": false,
+                "id": "650000000000000000000101",
+                "locale": {
+                  "id": "en",
+                  "intro": "",
+                  "name": "英文"
+                },
+                "name": "Reference Owner",
+                "signature": "reference owner"
+              },
+              "status": 2,
+              "user": {
+                "admin": false,
+                "aliases": [],
+                "avatar": "",
+                "default_display_name": "Reference Applicant",
+                "has_avatar": false,
+                "id": "650000000000000000000102",
+                "locale": {
+                  "id": "en",
+                  "intro": "",
+                  "name": "英文"
+                },
+                "name": "Reference Applicant",
+                "signature": "reference applicant"
+              },
+              "user_role": {
+                "create_time": "2026-01-01T00:00:00",
+                "id": "650000000000000000000005",
+                "level": 200,
+                "name": "成员",
+                "permissions": [
+                  {
+                    "id": 1,
+                    "intro": "",
+                    "name": "访问团队"
+                  },
+                  {
+                    "id": 1020,
+                    "intro": "在团队内创建术语库",
+                    "name": "创建术语库"
+                  },
+                  {
+                    "id": 1030,
+                    "intro": "若无此权限只能查看自己创建的术语库中的术语",
+                    "name": "查看他人术语库"
+                  },
+                  {
+                    "id": 1040,
+                    "intro": "若无此权限只能修改自己创建的术语库设置",
+                    "name": "设置他人术语库"
+                  },
+                  {
+                    "id": 1050,
+                    "intro": "若无此权限只能删除自己创建的术语库",
+                    "name": "删除他人术语库"
+                  },
+                  {
+                    "id": 1060,
+                    "intro": "若无此权限只能在自己创建的术语库中增加术语",
+                    "name": "在他人术语库中增加术语"
+                  },
+                  {
+                    "id": 1070,
+                    "intro": "若无此权限只能修改自己创建的术语或自己术语库中的术语",
+                    "name": "修改他人术语"
+                  },
+                  {
+                    "id": 1080,
+                    "intro": "若无此权限只能删除自己创建的术语或自己术语库中的术语",
+                    "name": "删除他人术语"
+                  },
+                  {
+                    "id": 1090,
+                    "intro": "在团队内创建项目",
+                    "name": "创建项目"
+                  },
+                  {
+                    "id": 1100,
+                    "intro": "在团队内创建项目集",
+                    "name": "创建项目集"
+                  },
+                  {
+                    "id": 1110,
+                    "intro": "修改团队内项目集的设置",
+                    "name": "设置项目集"
+                  },
+                  {
+                    "id": 1120,
+                    "intro": "删除团队内的项目集",
+                    "name": "删除项目集"
+                  }
+                ],
+                "system": true,
+                "system_code": "member"
+              }
+            }
+          ]
+        },
+        "headers": {
+          "Content-Length": "11466",
+          "Content-Type": "application/json",
+          "X-Pagination-Count": "1",
+          "X-Pagination-Limit": "10",
+          "X-Pagination-Page": "1",
+          "X-Pagination-Page-Count": "1"
+        },
+        "status": 200
+      }
+    },
+    {
+      "database_after": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "database_before": {
+        "application": {
+          "bytes": 191,
+          "count": 1,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        },
+        "language": {
+          "bytes": 194,
+          "count": 2,
+          "sha256": "025c4a801b69bdab02d2018106fc3a973fed107c0527777ed4adc7c5c1ebd6f7"
+        },
+        "team": {
+          "bytes": 253,
+          "count": 1,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        },
+        "team_member": {
+          "bytes": 515,
+          "count": 2,
+          "sha256": "e0caff3c1359b572ff4db00c0a9b19f20669d936fad42868e4cd8a29f05c0c75"
+        },
+        "team_role": {
+          "bytes": 1097,
+          "count": 5,
+          "sha256": "41a9ad624531a5c1863566e9478e67e89432dd4ec77dd81c8bb6700a647db87b"
+        },
+        "term_bank": {
+          "bytes": 161,
+          "count": 1,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        },
+        "user": {
+          "bytes": 546,
+          "count": 2,
+          "sha256": "238f8b584de015a3aef04d3e2be30a74ebe4158431939b01d605c3fc259371ce"
+        }
+      },
+      "index": 8,
+      "name": "method_not_allowed_ping_post",
+      "request": {
+        "authorization": "absent",
+        "method": "POST",
+        "path": "/ping",
+        "query": {}
+      },
+      "response": {
+        "body": {
+          "kind": "text",
+          "value": "<!doctype html>\n<html lang=en>\n<title>405 Method Not Allowed</title>\n<h1>Method Not Allowed</h1>\n<p>The method is not allowed for the requested URL.</p>\n"
+        },
+        "headers": {
+          "Content-Length": "153",
+          "Content-Type": "text/html; charset=utf-8"
+        },
+        "status": 405
+      }
+    }
+  ],
+  "coverage": {
+    "cases": 8,
+    "http": [
+      "ping text response",
+      "missing token error 1003",
+      "authenticated user info",
+      "validation error for missing word",
+      "team list with pagination metadata",
+      "term bank list",
+      "approved application with applicant role",
+      "405 method not allowed"
+    ],
+    "not_covered": [
+      "actual mail delivery or registration",
+      "real OSS/R2/Google storage",
+      "optional modules",
+      "translation catalogs",
+      "write requests and mutation semantics",
+      "C# differential comparison"
+    ]
+  },
+  "database": {
+    "cleanup": "dropped and verified before fixture write",
+    "name": "shoreline_reference_9a3959c5a53a40e68d94de7db8b89785",
+    "owned": true
+  },
+  "fixed_inputs": {
+    "ids": {
+      "admin_role": "650000000000000000000003",
+      "applicant": "650000000000000000000102",
+      "application": "6955b9000000000000000501",
+      "beginner_role": "650000000000000000000002",
+      "creator_role": "650000000000000000000001",
+      "en": "650000000000000000000302",
+      "ja": "650000000000000000000301",
+      "member_role": "650000000000000000000005",
+      "owner": "650000000000000000000101",
+      "senior_role": "650000000000000000000004",
+      "team": "650000000000000000000201",
+      "term_bank": "650000000000000000000401"
+    },
+    "utc_datetime": "2026-01-01T00:00:00Z"
+  },
+  "schema": "shoreline.python-runtime-reference/v1",
+  "seed_collections": {
+    "application": {
+      "count": 1,
+      "documents": [
+        {
+          "bson_base64": "vwAAAAdfaWQAaVW5AAAAAAAAAAUBB3UAZQAAAAAAAAAAAAECB28AZQAAAAAAAAAAAAEBA2cAPwAAAAJfY2xzAAUAAABUZWFtAANfcmVmACUAAAACJHJlZgAFAAAAdGVhbQAHJGlkAGUAAAAAAAAAAAACAQAAEHMAAgAAAAJtACMAAABEZXRlcm1pbmlzdGljIGFwcHJvdmVkIGFwcGxpY2F0aW9uAAR1YwAUAAAABzAAZQAAAAAAAAAAAAEBAAA=",
+          "bson_hex": "bf000000075f6964006955b9000000000000000501077500650000000000000000000102076f006500000000000000000001010367003f000000025f636c7300050000005465616d00035f7265660025000000022472656600050000007465616d000724696400650000000000000000000201000010730002000000026d002300000044657465726d696e697374696320617070726f766564206170706c69636174696f6e0004756300140000000730006500000000000000000001010000",
+          "bytes": 191,
+          "sha256": "ebde84073f41b4521a084f7b6b6bc21e34fede294ea32217314de599a479371d"
+        }
+      ]
+    },
+    "language": {
+      "count": 2,
+      "documents": [
+        {
+          "bson_base64": "YgAAAAdfaWQAZQAAAAAAAAAAAAMBAmUACQAAAEphcGFuZXNlAAJjAAkAAABKYXBhbmVzZQAIbgABAmNvAAMAAABqYQACZ3QAAwAAAGphAAJnbwADAAAAamEAEHMAAQAAAAA=",
+          "bson_hex": "62000000075f696400650000000000000000000301026500090000004a6170616e65736500026300090000004a6170616e65736500086e000102636f00030000006a610002677400030000006a610002676f00030000006a61001073000100000000",
+          "bytes": 98,
+          "sha256": "711f11fc3759f70ea1541ab6c8e25f20ae886ad286f5633646e91243f24f167e"
+        },
+        {
+          "bson_base64": "YAAAAAdfaWQAZQAAAAAAAAAAAAMCAmUACAAAAEVuZ2xpc2gAAmMACAAAAEVuZ2xpc2gACG4AAAJjbwADAAAAZW4AAmd0AAMAAABlbgACZ28AAwAAAGVuABBzAAIAAAAA",
+          "bson_hex": "60000000075f69640065000000000000000000030202650008000000456e676c6973680002630008000000456e676c69736800086e000002636f0003000000656e000267740003000000656e0002676f0003000000656e001073000200000000",
+          "bytes": 96,
+          "sha256": "880a54781801f0eda9aa6c04e6fe85b9ca9894d3c172f0d2c1f2bd3778aeb8b6"
+        }
+      ]
+    },
+    "team": {
+      "count": 1,
+      "documents": [
+        {
+          "bson_base64": "/QAAAAdfaWQAZQAAAAAAAAAAAAIBEG1fYQABAAAAEG1fdAACAAAAEG1fdWMAAgAAAAltX2MAAKjadpsBAAAJbV9lAACo2nabAQAAAm4ADwAAAFJlZmVyZW5jZSBUZWFtAAJhAAEAAAAAAmkAHwAAAEEgZGV0ZXJtaW5pc3RpYyByZWZlcmVuY2UgdGVhbQAHZHIAZQAAAAAAAAAAAAACEHUAZAAAAAJ3cW0ABQAAAG9wZW4ACnNscAAIcG1lAAEQcG1vAFwAAAAQb20AAAAAABBvdQAAAAAAEG9nAAAAAAAQb3QAAAAAAARhYWsABQAAAAACYWF1AAEAAAAAAA==",
+          "bson_hex": "fd000000075f696400650000000000000000000201106d5f610001000000106d5f740002000000106d5f75630002000000096d5f630000a8da769b010000096d5f650000a8da769b010000026e000f0000005265666572656e6365205465616d0002610001000000000269001f000000412064657465726d696e6973746963207265666572656e6365207465616d0007647200650000000000000000000002107500640000000277716d00050000006f70656e000a736c700008706d65000110706d6f005c000000106f6d0000000000106f750000000000106f670000000000106f7400000000000461616b0005000000000261617500010000000000",
+          "bytes": 253,
+          "sha256": "deaf15130defad810ff483e4b73349f31eab10e00624a0f67174534e5459ce3e"
+        }
+      ]
+    },
+    "team_member": {
+      "count": 2,
+      "documents": [
+        {
+          "bson_base64": "AgEAAAdfaWQAavHaWigZ9kw9OehMB3RlYW0AZQAAAAAAAAAAAAIBB3VzZXIAZQAAAAAAAAAAAAEBAmJhc2VfdGFnAAgAAABjcmVhdG9yAAR0YWdzAAUAAAAABHdvcmtlcl9xdWFsaWZpY2F0aW9ucwAFAAAAAARhbGlhc2VzAAUAAAAABGFzcmNoAAUAAAAAAmRlZmF1bHRfZGlzcGxheV9uYW1lAAEAAAAAEHZlcnNpb24AAAAAAAJzdGF0dXMABwAAAGFjdGl2ZQAJY3JlYXRlX3RpbWUAAKjadpsBAAAJZWRpdF90aW1lAACo2nabAQAACnJlbW92ZWRfdGltZQAA",
+          "bson_hex": "02010000075f6964006af1da5a2819f64c3d39e84c077465616d0065000000000000000000020107757365720065000000000000000000010102626173655f746167000800000063726561746f7200047461677300050000000004776f726b65725f7175616c696669636174696f6e7300050000000004616c69617365730005000000000461737263680005000000000264656661756c745f646973706c61795f6e616d650001000000001076657273696f6e000000000002737461747573000700000061637469766500096372656174655f74696d650000a8da769b01000009656469745f74696d650000a8da769b0100000a72656d6f7665645f74696d650000",
+          "bytes": 258,
+          "sha256": "aec3d41d4cde1864c4363a8d45acea6c64a5b5a2e7e24acbb35e6cd429136842"
+        },
+        {
+          "bson_base64": "AQEAAAdfaWQAavHaWigZ9kw9OehNB3RlYW0AZQAAAAAAAAAAAAIBB3VzZXIAZQAAAAAAAAAAAAECAmJhc2VfdGFnAAcAAABtZW1iZXIABHRhZ3MABQAAAAAEd29ya2VyX3F1YWxpZmljYXRpb25zAAUAAAAABGFsaWFzZXMABQAAAAAEYXNyY2gABQAAAAACZGVmYXVsdF9kaXNwbGF5X25hbWUAAQAAAAAQdmVyc2lvbgAAAAAAAnN0YXR1cwAHAAAAYWN0aXZlAAljcmVhdGVfdGltZQAAqNp2mwEAAAllZGl0X3RpbWUAAKjadpsBAAAKcmVtb3ZlZF90aW1lAAA=",
+          "bson_hex": "01010000075f6964006af1da5a2819f64c3d39e84d077465616d0065000000000000000000020107757365720065000000000000000000010202626173655f74616700070000006d656d62657200047461677300050000000004776f726b65725f7175616c696669636174696f6e7300050000000004616c69617365730005000000000461737263680005000000000264656661756c745f646973706c61795f6e616d650001000000001076657273696f6e000000000002737461747573000700000061637469766500096372656174655f74696d650000a8da769b01000009656469745f74696d650000a8da769b0100000a72656d6f7665645f74696d650000",
+          "bytes": 257,
+          "sha256": "05796c1e4369ad22cf718a86488183f5f58ad17e598ace583b633e3c5bf35b5a"
+        }
+      ]
+    },
+    "team_role": {
+      "count": 5,
+      "documents": [
+        {
+          "bson_base64": "KAEAAAdfaWQAZQAAAAAAAAAAAAABAm1fbgAKAAAA5Yib5bu65Lq6ABBtX2wA9AEAAAJtX2kAAQAAAAAEbV9wAMMAAAAQMAABAAAAEDEABQAAABAyAAYEAAAQMwAKAAAAEDQADwAAABA1ABAEAAAQNgAUAAAAEDcAGgQAABA4ACQEAAAQOQAuBAAAEDEwADgEAAAQMTEAQgQAABAxMgBMBAAAEDEzAFYEAAAQMTQAYAQAABAxNQBlAAAAEDE2AGkAAAAQMTcAagQAABAxOABuAAAAEDE5APIDAAAQMjAAcwAAABAyMQB0BAAAEDIyAHgAAAAQMjMA/AMAABAyNAB+BAAAAAhtX3MAAQJtX28ACAAAAGNyZWF0b3IACW1fYwAAqNp2mwEAAAA=",
+          "bson_hex": "28010000075f696400650000000000000000000001026d5f6e000a000000e5889be5bbbae4baba00106d5f6c00f4010000026d5f69000100000000046d5f7000c30000001030000100000010310005000000103200060400001033000a0000001034000f00000010350010040000103600140000001037001a040000103800240400001039002e04000010313000380400001031310042040000103132004c0400001031330056040000103134006004000010313500650000001031360069000000103137006a040000103138006e00000010313900f203000010323000730000001032310074040000103232007800000010323300fc030000103234007e04000000086d5f730001026d5f6f000800000063726561746f7200096d5f630000a8da769b01000000",
+          "bytes": 296,
+          "sha256": "1b3e302933e120d3517f699ae05ab7c6b3230e51e948f0aec018f7110ef9e3b3"
+        },
+        {
+          "bson_base64": "dQAAAAdfaWQAZQAAAAAAAAAAAAACAm1fbgANAAAA6KeB5Lmg5oiQ5ZGYABBtX2wAZAAAAAJtX2kAAQAAAAAEbV9wAAwAAAAQMAABAAAAAAhtX3MAAQJtX28ACQAAAGJlZ2lubmVyAAltX2MAAKjadpsBAAAA",
+          "bson_hex": "75000000075f696400650000000000000000000002026d5f6e000d000000e8a781e4b9a0e68890e5919800106d5f6c0064000000026d5f69000100000000046d5f70000c0000001030000100000000086d5f730001026d5f6f0009000000626567696e6e657200096d5f630000a8da769b01000000",
+          "bytes": 117,
+          "sha256": "f2f21d7f4ad8aea01acb0b16e4cd0955ad6ff6ca1382c3ecac3eab78ae9fea4b"
+        },
+        {
+          "bson_base64": "HgEAAAdfaWQAZQAAAAAAAAAAAAADAm1fbgAKAAAA566h55CG5ZGYABBtX2wAkAEAAAJtX2kAAQAAAAAEbV9wALsAAAAQMAABAAAAEDEABgQAABAyAAoAAAAQMwAPAAAAEDQAEAQAABA1ABQAAAAQNgAaBAAAEDcAJAQAABA4AC4EAAAQOQA4BAAAEDEwAEIEAAAQMTEATAQAABAxMgBWBAAAEDEzAGAEAAAQMTQAZQAAABAxNQBpAAAAEDE2AGoEAAAQMTcAbgAAABAxOADyAwAAEDE5AHMAAAAQMjAAdAQAABAyMQB4AAAAEDIyAPwDAAAQMjMAfgQAAAAIbV9zAAECbV9vAAYAAABhZG1pbgAJbV9jAACo2nabAQAAAA==",
+          "bson_hex": "1e010000075f696400650000000000000000000003026d5f6e000a000000e7aea1e79086e5919800106d5f6c0090010000026d5f69000100000000046d5f7000bb00000010300001000000103100060400001032000a0000001033000f00000010340010040000103500140000001036001a040000103700240400001038002e040000103900380400001031300042040000103131004c0400001031320056040000103133006004000010313400650000001031350069000000103136006a040000103137006e00000010313800f203000010313900730000001032300074040000103231007800000010323200fc030000103233007e04000000086d5f730001026d5f6f000600000061646d696e00096d5f630000a8da769b01000000",
+          "bytes": 286,
+          "sha256": "712aca749021c3a2d111fce81d38a78ce428719805b9fdaa7251c51e29b86196"
+        },
+        {
+          "bson_base64": "0gAAAAdfaWQAZQAAAAAAAAAAAAAEAm1fbgANAAAA6LWE5rex5oiQ5ZGYABBtX2wALAEAAAJtX2kAAQAAAAAEbV9wAGsAAAAQMABgBAAAEDEAAQAAABAyAEIEAAAQMwAkBAAAEDQABgQAABA1AGoEAAAQNgBMBAAAEDcALgQAABA4ABAEAAAQOQB0BAAAEDEwAFYEAAAQMTEAOAQAABAxMgAaBAAAEDEzAPwDAAAACG1fcwABAm1fbwAHAAAAc2VuaW9yAAltX2MAAKjadpsBAAAA",
+          "bson_hex": "d2000000075f696400650000000000000000000004026d5f6e000d000000e8b584e6b7b1e68890e5919800106d5f6c002c010000026d5f69000100000000046d5f70006b00000010300060040000103100010000001032004204000010330024040000103400060400001035006a0400001036004c0400001037002e040000103800100400001039007404000010313000560400001031310038040000103132001a04000010313300fc03000000086d5f730001026d5f6f000700000073656e696f7200096d5f630000a8da769b01000000",
+          "bytes": 210,
+          "sha256": "9f2153d84ce275198c7a7ee74008da2be1163ed5f7c15b8f1f1cbff139def59c"
+        },
+        {
+          "bson_base64": "vAAAAAdfaWQAZQAAAAAAAAAAAAAFAm1fbgAHAAAA5oiQ5ZGYABBtX2wAyAAAAAJtX2kAAQAAAAAEbV9wAFsAAAAQMABgBAAAEDEAAQAAABAyAEIEAAAQMwAkBAAAEDQABgQAABA1AEwEAAAQNgAuBAAAEDcAEAQAABA4AFYEAAAQOQA4BAAAEDEwABoEAAAQMTEA/AMAAAAIbV9zAAECbV9vAAcAAABtZW1iZXIACW1fYwAAqNp2mwEAAAA=",
+          "bson_hex": "bc000000075f696400650000000000000000000005026d5f6e0007000000e68890e5919800106d5f6c00c8000000026d5f69000100000000046d5f70005b00000010300060040000103100010000001032004204000010330024040000103400060400001035004c0400001036002e040000103700100400001038005604000010390038040000103130001a04000010313100fc03000000086d5f730001026d5f6f00070000006d656d62657200096d5f630000a8da769b01000000",
+          "bytes": 188,
+          "sha256": "4a9f0adba20ca968274c94f1056ba4b7d761b7b7e64f672b95cc33cbe34aff17"
+        }
+      ]
+    },
+    "term_bank": {
+      "count": 1,
+      "documents": [
+        {
+          "bson_base64": "oQAAAAdfaWQAZQAAAAAAAAAAAAQBB3QAZQAAAAAAAAAAAAIBAm4AEwAAAFJlZmVyZW5jZSBHbG9zc2FyeQAHc2wAZQAAAAAAAAAAAAMBB3RsAGUAAAAAAAAAAAADAgJ0aQAVAAAAcmVmZXJlbmNlIHRlcm1zIG9ubHkAB3UAZQAAAAAAAAAAAAEBCWMAAKjadpsBAAAJZQAAqNp2mwEAAAA=",
+          "bson_hex": "a1000000075f696400650000000000000000000401077400650000000000000000000201026e00130000005265666572656e636520476c6f73736172790007736c0065000000000000000000030107746c0065000000000000000000030202746900150000007265666572656e6365207465726d73206f6e6c790007750065000000000000000000010109630000a8da769b01000009650000a8da769b01000000",
+          "bytes": 161,
+          "sha256": "e9dfa46bab775b9a641abb2b98aece90c466b153f19ec967bd1f686bb82e9033"
+        }
+      ]
+    },
+    "user": {
+      "count": 2,
+      "documents": [
+        {
+          "bson_base64": "BwEAAAdfaWQAZQAAAAAAAAAAAAEBAmUAGAAAAG93bmVyQHJlZmVyZW5jZS5pbnZhbGlkAAJuABAAAABSZWZlcmVuY2UgT3duZXIABGFzAAUAAAAAAm5zABAAAAByZWZlcmVuY2Ugb3duZXIABGFzcmNoAAUAAAAAAmRkbgAQAAAAUmVmZXJlbmNlIE93bmVyAAJzABAAAAByZWZlcmVuY2Ugb3duZXIAAmwAAwAAAGVuAAJ0AAQAAABVVEMAAmEAAQAAAAAIYgAAAnAAIwAAAHBia2RmMjpzaGEyNTY6MSRyZWZlcmVuY2UkZGVhZGJlZWYACGFkbWluAAAJYwAAqNp2mwEAAAA=",
+          "bson_hex": "07010000075f696400650000000000000000000101026500180000006f776e6572407265666572656e63652e696e76616c696400026e00100000005265666572656e6365204f776e657200046173000500000000026e7300100000007265666572656e6365206f776e6572000461737263680005000000000264646e00100000005265666572656e6365204f776e657200027300100000007265666572656e6365206f776e657200026c0003000000656e0002740004000000555443000261000100000000086200000270002300000070626b6466323a7368613235363a31247265666572656e6365246465616462656566000861646d696e000009630000a8da769b01000000",
+          "bytes": 263,
+          "sha256": "22a316c11c72cf930f011c8a0b3f5b2fa5f93b8b241c24a020b8e9a021827f70"
+        },
+        {
+          "bson_base64": "GwEAAAdfaWQAZQAAAAAAAAAAAAECAmUAHAAAAGFwcGxpY2FudEByZWZlcmVuY2UuaW52YWxpZAACbgAUAAAAUmVmZXJlbmNlIEFwcGxpY2FudAAEYXMABQAAAAACbnMAFAAAAHJlZmVyZW5jZSBhcHBsaWNhbnQABGFzcmNoAAUAAAAAAmRkbgAUAAAAUmVmZXJlbmNlIEFwcGxpY2FudAACcwAUAAAAcmVmZXJlbmNlIGFwcGxpY2FudAACbAADAAAAZW4AAnQABAAAAFVUQwACYQABAAAAAAhiAAACcAAjAAAAcGJrZGYyOnNoYTI1NjoxJHJlZmVyZW5jZSRjYWZlYmFiZQAIYWRtaW4AAAljAACo2nabAQAAAA==",
+          "bson_hex": "1b010000075f6964006500000000000000000001020265001c0000006170706c6963616e74407265666572656e63652e696e76616c696400026e00140000005265666572656e6365204170706c6963616e7400046173000500000000026e7300140000007265666572656e6365206170706c6963616e74000461737263680005000000000264646e00140000005265666572656e6365204170706c6963616e7400027300140000007265666572656e6365206170706c6963616e7400026c0003000000656e0002740004000000555443000261000100000000086200000270002300000070626b6466323a7368613235363a31247265666572656e6365246361666562616265000861646d696e000009630000a8da769b01000000",
+          "bytes": 283,
+          "sha256": "acaee6c7727388f2a450569fd5c2d7097526520f2cad29ca8d9ab8e8731f7f9f"
+        }
+      ]
+    }
+  },
+  "source_provenance": [
+    {
+      "bytes": 1514,
+      "path": "app/__init__.py",
+      "sha256": "698daf7fa2a8da00ea31baabe10637171b58141b79101af0782ca68ecd6a9560"
+    },
+    {
+      "bytes": 1194,
+      "path": "app/apis/__init__.py",
+      "sha256": "c8745f9183c1db92b8d9b9358bd4f09069ae0667aa1e2846ea4fd4364bb30fbd"
+    },
+    {
+      "bytes": 6310,
+      "path": "app/apis/application.py",
+      "sha256": "431c1510adb7a8cf66ec0b44845ca37c60cf3c9e4e51167fdf0283fad8e26c62"
+    },
+    {
+      "bytes": 2658,
+      "path": "app/apis/avatar.py",
+      "sha256": "d655f21c00c47d77d55bdb78d307a54719a2df67ac48be54e4f969e1a72e89b0"
+    },
+    {
+      "bytes": 13954,
+      "path": "app/apis/file.py",
+      "sha256": "03ac5ed4b7ce09d065236dfec386d9d967596225b38bb4b0badcec2871a9b668"
+    },
+    {
+      "bytes": 1569,
+      "path": "app/apis/group.py",
+      "sha256": "f6a8ab487d7655a396396e3580fc355eff8c0e75d5616668028330b57fedc7f9"
+    },
+    {
+      "bytes": 10918,
+      "path": "app/apis/identity.py",
+      "sha256": "59f0ee24b797d27d840e61e0fd48ff1a126d47adffc1ab20769f81fa52ee5243"
+    },
+    {
+      "bytes": 1493,
+      "path": "app/apis/index.py",
+      "sha256": "07f7c4f3e1f097cfed1d554e30b5d250a9b708a6215311eee0ad4fa257b792a0"
+    },
+    {
+      "bytes": 11860,
+      "path": "app/apis/invitation.py",
+      "sha256": "2ab66713211f53e0334f8c6529f63eee7e2958d345939e055990f6a37d65fcee"
+    },
+    {
+      "bytes": 6040,
+      "path": "app/apis/label_snapshot.py",
+      "sha256": "41caf53ef3cd02209310f3c88b65323db586063b7e126be33dabe0efa64ba844"
+    },
+    {
+      "bytes": 539,
+      "path": "app/apis/language.py",
+      "sha256": "3a5efd0c7ee31532b8c19ab9d8d65dfa1dfcca2c8d1ddcd8ea1f9fc81e92db0a"
+    },
+    {
+      "bytes": 3278,
+      "path": "app/apis/manga_image_translator.py",
+      "sha256": "722f6fa68a9c933733e2a0a81ca28e690a1081b82ddb42ee66ff628b276ba4d4"
+    },
+    {
+      "bytes": 14627,
+      "path": "app/apis/me.py",
+      "sha256": "208c6bca539bef906b637df6eb33c818bd1015be451f0eca775f06610bfc7190"
+    },
+    {
+      "bytes": 25285,
+      "path": "app/apis/notification.py",
+      "sha256": "5cfc8f919bda826fa5b53e0c9e478636f6c339a80b8fee4bce2f4fcd9ca25848"
+    },
+    {
+      "bytes": 1803,
+      "path": "app/apis/presence.py",
+      "sha256": "a293c3c59104c83c214c82c237cf07abe242a6e32058048083294f5266f5e5a6"
+    },
+    {
+      "bytes": 29860,
+      "path": "app/apis/project.py",
+      "sha256": "3644a85019c6c4dfe93a620bd7f47d9e73a8b3e022ec2226c62a6fa61597a590"
+    },
+    {
+      "bytes": 3333,
+      "path": "app/apis/project_set.py",
+      "sha256": "159a894c7a7416888f75b51ec1be2ceb89fd1925d6427db63bd39b0d4e30fa2c"
+    },
+    {
+      "bytes": 4197,
+      "path": "app/apis/role.py",
+      "sha256": "129c6c261386a92eecc055b2c812b79f7f88e297c60e08ba77a3583ca790eaa3"
+    },
+    {
+      "bytes": 2618,
+      "path": "app/apis/site_setting.py",
+      "sha256": "244fefbfbfcbf62f81a37d634311c0022c42d43dba17881dd3cabe2a8458744a"
+    },
+    {
+      "bytes": 6889,
+      "path": "app/apis/source.py",
+      "sha256": "cc17845977ba87378800636a4d723989764437cddb62bd2987c3e5b906e42c1a"
+    },
+    {
+      "bytes": 4746,
+      "path": "app/apis/storage.py",
+      "sha256": "5fb6defab843eb9ea51166bbd929f64be22ba9a80dc4147f25efb920eb5ec72c"
+    },
+    {
+      "bytes": 952,
+      "path": "app/apis/target.py",
+      "sha256": "d8f0246ddfb012cc593bbb4215e0260b2574c64396bbc485753b340e3e5da8f0"
+    },
+    {
+      "bytes": 27593,
+      "path": "app/apis/team.py",
+      "sha256": "6c785438cbc98e6b388a6f7c34bc7a687c944a425549b9df0cc275124b09d2d4"
+    },
+    {
+      "bytes": 9694,
+      "path": "app/apis/term.py",
+      "sha256": "350adeadcb5c291a6fc94d2b90fa52da55e845ca1d485d0a4afc537c9c025e33"
+    },
+    {
+      "bytes": 3710,
+      "path": "app/apis/tip.py",
+      "sha256": "6181f38df54690d262055649dbbc7baeaef535a78a5ffe2f7d9ad0b7ebd8991a"
+    },
+    {
+      "bytes": 5044,
+      "path": "app/apis/translation.py",
+      "sha256": "72d8ad4fe2f878e78e2a837bd947e8aa582a3390721c9fde8249b325ee0f72ae"
+    },
+    {
+      "bytes": 2979,
+      "path": "app/apis/type.py",
+      "sha256": "a33541e9bfd35cc042b94b8f0c7e87aa37e827b9542cf2702513df3e9bc6cb9f"
+    },
+    {
+      "bytes": 20593,
+      "path": "app/apis/urls.py",
+      "sha256": "e930692d18cbde531991f1990637d6639b31e56c6a84e5242de653211a299f5e"
+    },
+    {
+      "bytes": 6976,
+      "path": "app/apis/user.py",
+      "sha256": "3d98a2ea8fa421926341c3df31b485aecfacf08dc1bcda52c0ea65580b899f6b"
+    },
+    {
+      "bytes": 4944,
+      "path": "app/apis/v_code.py",
+      "sha256": "db71f0cf71b3e8b7d3ac6d2f3d769595cadca2b45c0744ef3211c0572bb4b6d2"
+    },
+    {
+      "bytes": 0,
+      "path": "app/constants/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3199,
+      "path": "app/constants/base.py",
+      "sha256": "f9ae91197000776dfef8d5941f60eba499075a0cf7fa28e148f60f461b1e442c"
+    },
+    {
+      "bytes": 4792,
+      "path": "app/constants/file.py",
+      "sha256": "b046d9c19c3c5651773b012662969157e59d5f355751f027a69ff28076a7e33c"
+    },
+    {
+      "bytes": 518,
+      "path": "app/constants/locale.py",
+      "sha256": "329ba44602a260844a9616adb8c8ea3e7f4215ac5d641baf54824b1eabdd3555"
+    },
+    {
+      "bytes": 174,
+      "path": "app/constants/message.py",
+      "sha256": "a3f2a8cdf602e45980fb24518db5ec00c57d4b57ae0152d547ffef1b1bb30771"
+    },
+    {
+      "bytes": 914,
+      "path": "app/constants/output.py",
+      "sha256": "8edb5342b7289b05b5710baf5fa1e1b0bfbe218b260a7fa1a241f12ad8cf1678"
+    },
+    {
+      "bytes": 1902,
+      "path": "app/constants/project.py",
+      "sha256": "6b087a8ce440084e860b8c28d7913dac876bb7e036a6ad6bccaffc98e9bd2609"
+    },
+    {
+      "bytes": 210,
+      "path": "app/constants/role.py",
+      "sha256": "93eb76a1455a364ea5492ea32f0cd5ef1ea7baeccdd715dd5b382308156f81a7"
+    },
+    {
+      "bytes": 181,
+      "path": "app/constants/source.py",
+      "sha256": "ff97a50b811477a6b3aad59283113f985c7037103d0eeddb95d433c7e117c9e6"
+    },
+    {
+      "bytes": 6949,
+      "path": "app/constants/storage.py",
+      "sha256": "427b367e56217b0285262bf665ec150df84c08968f3c2ddbefe93307a98b55b8"
+    },
+    {
+      "bytes": 1022,
+      "path": "app/constants/v_code.py",
+      "sha256": "86e4130912312c2a7802611550f311ad3fe28fc6ee9be29c428db12c2fb92553"
+    },
+    {
+      "bytes": 13367,
+      "path": "app/core/api.py",
+      "sha256": "cdafdee4272012fa0a5898227d89dce7c3eeda096868287178924eb8fa91802c"
+    },
+    {
+      "bytes": 23003,
+      "path": "app/core/rbac.py",
+      "sha256": "6caf5a72ffd48018950d95151ab11615b6ac8e2ae060c1854b5a5029ccd6e93b"
+    },
+    {
+      "bytes": 530,
+      "path": "app/core/responses.py",
+      "sha256": "cb583379fca62e560d1f45683e347b800e76634febc46c65392ec8b91ec2a05e"
+    },
+    {
+      "bytes": 252,
+      "path": "app/core/views.py",
+      "sha256": "93b83957f2873f0c07299345cf6115eba290e67edb506d35a54ef9af6b0f230e"
+    },
+    {
+      "bytes": 45,
+      "path": "app/decorators/__init__.py",
+      "sha256": "9efe0f5a424b8a3144604cb515d045d18d123224f1c039308ef27a81061e2cf9"
+    },
+    {
+      "bytes": 1133,
+      "path": "app/decorators/auth.py",
+      "sha256": "62b86689890bf3acefbfc85691036988594f9318e04b01b758ef261e1f6928ec"
+    },
+    {
+      "bytes": 1685,
+      "path": "app/decorators/file.py",
+      "sha256": "6e487e5f7f2b57a6597e0b4f44b78d552886c51279590f714cc56c9bce6a247d"
+    },
+    {
+      "bytes": 2090,
+      "path": "app/decorators/url.py",
+      "sha256": "9bce79f91895a8af05720a98c33dd39b1fa31c1c1c614c52e839ba7f6ea3f2d4"
+    },
+    {
+      "bytes": 579,
+      "path": "app/exceptions/__init__.py",
+      "sha256": "3ad46d5224b0f728b34ce4ba4bf621af2b09f2b062a645a1762e2587dae26c01"
+    },
+    {
+      "bytes": 2956,
+      "path": "app/exceptions/auth.py",
+      "sha256": "5cb79e616fc71f0c87260c92f10934c581fdb5f77911f03d63c341a6b3b15adb"
+    },
+    {
+      "bytes": 3513,
+      "path": "app/exceptions/base.py",
+      "sha256": "e7aeb58d4f981e85946ed89e581fe42b262308719e249bbd824bfda43cf27159"
+    },
+    {
+      "bytes": 2638,
+      "path": "app/exceptions/file.py",
+      "sha256": "4cd6a6350681d316f3914556e668dcb0d4432f5b9b1be197c152a3529b5c124a"
+    },
+    {
+      "bytes": 4080,
+      "path": "app/exceptions/identity.py",
+      "sha256": "b770da1c04408cd88ea26ddd03a449084e670673b5ebaf49068aaf1c7add4414"
+    },
+    {
+      "bytes": 3609,
+      "path": "app/exceptions/join_process.py",
+      "sha256": "5b4892cff143c851f66104c78696c541d555b1acd22f9d34bacc6fb85d98e872"
+    },
+    {
+      "bytes": 1204,
+      "path": "app/exceptions/language.py",
+      "sha256": "511627ffce39dfd880d0c723e65e7c9d062ec31c9a456aa834634f9d2ae0d38a"
+    },
+    {
+      "bytes": 472,
+      "path": "app/exceptions/message.py",
+      "sha256": "9a8ce098100743beda9181ab0f1e2fa60112fcf6c640f864379d654f5200ebd9"
+    },
+    {
+      "bytes": 727,
+      "path": "app/exceptions/output.py",
+      "sha256": "041ca568a787b50d6a6c321fafa495b2dd00528506dea301aefb8fc3596376e5"
+    },
+    {
+      "bytes": 6987,
+      "path": "app/exceptions/project.py",
+      "sha256": "9571f892bb6eaddfe14768ef3416c12f4ffd0840f3a6f73512e1d9772ed5a2bf"
+    },
+    {
+      "bytes": 1554,
+      "path": "app/exceptions/team.py",
+      "sha256": "b6eb20e1654985b3b136c2731dfdee75635bc83228a40d19c89a1241babb726b"
+    },
+    {
+      "bytes": 666,
+      "path": "app/exceptions/term.py",
+      "sha256": "856d57f26a6c8d4f0b0fed07316d5621fa0ca11c7cd1a01cd5109ee7df807e6d"
+    },
+    {
+      "bytes": 1290,
+      "path": "app/exceptions/v_code.py",
+      "sha256": "991e98b8d6e6c4ad6495f95ef1c6c463b866102701db1a7e1a625254ba257838"
+    },
+    {
+      "bytes": 8140,
+      "path": "app/factory.py",
+      "sha256": "9943acdd4bf9d4675a9f8726824f939baed8b7f6986dfa89cc3a21397b276a2e"
+    },
+    {
+      "bytes": 891,
+      "path": "app/models/__init__.py",
+      "sha256": "e9173820891ff499a8ded62b5abeba12d46077c693f19f2e01589cfdedde92e4"
+    },
+    {
+      "bytes": 2999,
+      "path": "app/models/_indexing.py",
+      "sha256": "aace2f8a9b3d2d63a91c2c2ddad01678e36be4136b2675c2bddf53cdfba0af48"
+    },
+    {
+      "bytes": 7315,
+      "path": "app/models/application.py",
+      "sha256": "f4d16310bc5b6c54915d9a1c57e8b0e277023e0112c0051c64d175ec44929e71"
+    },
+    {
+      "bytes": 1863,
+      "path": "app/models/audit.py",
+      "sha256": "d62b15bc44cc0e0b27fd0143283df5b8297f8cccb3fa0a122d533f100f315393"
+    },
+    {
+      "bytes": 75502,
+      "path": "app/models/file.py",
+      "sha256": "0887106e4a0aa06dd5737c118a104fe9e70c0e6dac174e6360ef9627b349b38e"
+    },
+    {
+      "bytes": 1044,
+      "path": "app/models/identity_operation.py",
+      "sha256": "012874c1cae28521d18aed3dc01ff68e9888c500bc463515272572d66a6797bc"
+    },
+    {
+      "bytes": 8885,
+      "path": "app/models/identity_tag.py",
+      "sha256": "37ad41c3a4b00ae70e8dfc34332c1b2c067cf05e56c4d82a464f3cf1fa2d7660"
+    },
+    {
+      "bytes": 6822,
+      "path": "app/models/invitation.py",
+      "sha256": "1af5978a2b1a82ac056526a4f3864e44d335c8acb4bb94e5b3e0ef32f24d6497"
+    },
+    {
+      "bytes": 27718,
+      "path": "app/models/language.py",
+      "sha256": "4fcb9b784256273f2adc94ccfe3793995f3273d4bd8930b1950a09a634392dfb"
+    },
+    {
+      "bytes": 1825,
+      "path": "app/models/message.py",
+      "sha256": "27a462847bead2d79eae484831100e18ab985f9ccccb3850dea894ae4d113c02"
+    },
+    {
+      "bytes": 5812,
+      "path": "app/models/notification.py",
+      "sha256": "01a5f0098a1d9fbdbe6cb14b18ddc2419ad4c54dad3f5c88deba119f97f9f980"
+    },
+    {
+      "bytes": 7541,
+      "path": "app/models/output.py",
+      "sha256": "074850ce814fc231a1679ae290c75074979b3aa3b7b3c419ec0cfa53840e7320"
+    },
+    {
+      "bytes": 4881,
+      "path": "app/models/presence.py",
+      "sha256": "7ff3173fb66d533b3edcfaade0b88930b96997ab2220f259a1d31c7a14073bec"
+    },
+    {
+      "bytes": 56774,
+      "path": "app/models/project.py",
+      "sha256": "ccd8d4f8fac6818faa172bd7dc413d4516c0a82c262ea3612c8fc96776b4281c"
+    },
+    {
+      "bytes": 8655,
+      "path": "app/models/project_member.py",
+      "sha256": "332d850e3764b92aaa27b7a77422497d3b48d549a344972a5839753821589a32"
+    },
+    {
+      "bytes": 2172,
+      "path": "app/models/site_setting.py",
+      "sha256": "bcf7d7b7383ecb6cd69875ae8f67386391ed80b6bafcb33d4c7cff29225f7451"
+    },
+    {
+      "bytes": 3292,
+      "path": "app/models/target.py",
+      "sha256": "86bf8fc69a3060f353e26ffef98c77e2a9de9f2d5beb71c7420d168d808a62f7"
+    },
+    {
+      "bytes": 23981,
+      "path": "app/models/team.py",
+      "sha256": "809e17820b78dc2e8769c9d007cac6d6cb079e2389f111d84ba4e43db649f4b9"
+    },
+    {
+      "bytes": 6264,
+      "path": "app/models/team_member.py",
+      "sha256": "2f23edb868b7588c79d0701379fff3f04e29361b62831a8820bbb94e0ab3789e"
+    },
+    {
+      "bytes": 5832,
+      "path": "app/models/term.py",
+      "sha256": "8bde548229f1f35ef17092e91fc223499fbdf3a925d1a6524d1d266c68810b7d"
+    },
+    {
+      "bytes": 34047,
+      "path": "app/models/user.py",
+      "sha256": "6b31204b933a7787575811617bc8c10b7f558aa3a94d65bbb8f36931e05d6156"
+    },
+    {
+      "bytes": 17198,
+      "path": "app/models/v_code.py",
+      "sha256": "8edd63c9b71658dceb60612ebae8f82a92ec616433a2428bd42411a082d1c40c"
+    },
+    {
+      "bytes": 4697,
+      "path": "app/modules/__init__.py",
+      "sha256": "0d64e63ec423be95560452b7d77b3fdf1e132c05e06538616a2de7ed54df6373"
+    },
+    {
+      "bytes": 452,
+      "path": "app/regexs/__init__.py",
+      "sha256": "71b3fa334f9f3398d7f51f52b54780d7d6d5ca5dff2a61c8269b0b913c9bf996"
+    },
+    {
+      "bytes": 0,
+      "path": "app/services/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 5780,
+      "path": "app/services/file_order.py",
+      "sha256": "ec642f6cd504b2d4d16830b1167915185baab99abb0d87351a35d8fcc049e0e7"
+    },
+    {
+      "bytes": 937,
+      "path": "app/services/google_storage.py",
+      "sha256": "52d965a056fbc141889d6f0b0b665943abed0b9d8b4e13650f6e61df292f0cb9"
+    },
+    {
+      "bytes": 1214,
+      "path": "app/services/identity_audit.py",
+      "sha256": "9987039dc3ad613818dbab6b4c1f1ce0040963ae112d70fc7e145c936ff96983"
+    },
+    {
+      "bytes": 25340,
+      "path": "app/services/identity_permission.py",
+      "sha256": "9127b63ae4e0ec93a0ed1d74705775e999c9f44bacff895aab448edc2707710a"
+    },
+    {
+      "bytes": 14756,
+      "path": "app/services/label_lock.py",
+      "sha256": "2f91a4ac610ea73646278403c6ab872726aaf02209b9246ed6f2872249fd3b5b"
+    },
+    {
+      "bytes": 16576,
+      "path": "app/services/label_snapshot.py",
+      "sha256": "bbee6ec3c9e07b18d0ceffce56f4dd03c803ec53ada3ae26a78d1d7b080dde6c"
+    },
+    {
+      "bytes": 7193,
+      "path": "app/services/notification_content.py",
+      "sha256": "abefeb7309ad708443c265fd514618327ed6b01e6dceb08744d8796b7225b08d"
+    },
+    {
+      "bytes": 4096,
+      "path": "app/services/notification_mail.py",
+      "sha256": "9d8486327cb75f430d405106d19e4b896f6a9c4d1481e331a1dbb3e99fc43f5a"
+    },
+    {
+      "bytes": 31913,
+      "path": "app/services/notifications.py",
+      "sha256": "ce26bb617be0ecab722e3692b2cd5158c282357b921711408dd648584020be1e"
+    },
+    {
+      "bytes": 24279,
+      "path": "app/services/oss.py",
+      "sha256": "94d6acd22dd1d12b1a50760fac49ccad5af0c293b19b9c1375c103fc462c9e12"
+    },
+    {
+      "bytes": 13604,
+      "path": "app/services/project_invitation.py",
+      "sha256": "d68073eb7b5845582153ff1fe85b21ec22f82855340511324831bd9613f0a873"
+    },
+    {
+      "bytes": 17444,
+      "path": "app/services/project_lifecycle.py",
+      "sha256": "ab5c64ac09b1d8140de88571c43275c5657f0176718dd2654c4f31bfd7339061"
+    },
+    {
+      "bytes": 62804,
+      "path": "app/services/project_member.py",
+      "sha256": "86247113141461610e5dda1475a27a8495d6336d7a57efc1cee69ad47a760160"
+    },
+    {
+      "bytes": 5220,
+      "path": "app/services/project_statistics.py",
+      "sha256": "eea0e5cf425a7a9deaa8210d95d4030630d1ae2bddadc4809e8478bb6d702f99"
+    },
+    {
+      "bytes": 5672,
+      "path": "app/services/proofread_image.py",
+      "sha256": "8b553a9dd6edca48f9bb20a614ddf82e5ea8973e019e1d1220e90dff9f214d76"
+    },
+    {
+      "bytes": 5423,
+      "path": "app/services/storage_router.py",
+      "sha256": "dc54ccc77b223f2541220bd11ff7e9a21f086b4020b66298b3039004bfde7de4"
+    },
+    {
+      "bytes": 29680,
+      "path": "app/services/team_member.py",
+      "sha256": "1621d97222b938664fd188b156dbe4019d0acebf15a0d226606f6e20fc98315f"
+    },
+    {
+      "bytes": 2181,
+      "path": "app/services/user_alias.py",
+      "sha256": "03cfab0d3c3972077e5f21cda510cd82bec70b79c2cd104686aa08e00ce77807"
+    },
+    {
+      "bytes": 1570,
+      "path": "app/tasks/__init__.py",
+      "sha256": "b006eebaecfb6b24504bf03a951b0ad08334da4f4637f35011b4e0e412136012"
+    },
+    {
+      "bytes": 5623,
+      "path": "app/tasks/email.py",
+      "sha256": "86f80de7970b04372ce09ee6668c58319739d9359168de5427523a89d8a3584b"
+    },
+    {
+      "bytes": 6036,
+      "path": "app/tasks/file_parse.py",
+      "sha256": "3c071e5e8fac5a164b2c3c8de82af437e7bfb675da0a4dcfcceb4335bfa60517"
+    },
+    {
+      "bytes": 4908,
+      "path": "app/tasks/import_from_labelplus.py",
+      "sha256": "ecad8e998c96a5158d2ddbdad9d05d2991035ca3cae6e469400216662946af3f"
+    },
+    {
+      "bytes": 4862,
+      "path": "app/tasks/mit.py",
+      "sha256": "2ae500490cb984d8a39c7bf9e17db94c97648bf6b71a978ec6c6a4617c9a4386"
+    },
+    {
+      "bytes": 10840,
+      "path": "app/tasks/notification.py",
+      "sha256": "ceb35379a15ed31ea9563dabc095bc2408e1f6e8c01404e09c5f3d3223ecaf34"
+    },
+    {
+      "bytes": 2468,
+      "path": "app/tasks/notification_security.py",
+      "sha256": "69977f7a54853a6ca08f190f1f04373d58d829d53842761e4ea4938682b69fb5"
+    },
+    {
+      "bytes": 24425,
+      "path": "app/tasks/ocr.py",
+      "sha256": "0b3c3ad7b544b5fa8dfce7ff45a5b92a5de615f544c1d83c9fc61ad1a4433d1b"
+    },
+    {
+      "bytes": 10955,
+      "path": "app/tasks/output_project.py",
+      "sha256": "ba93a3de3a811c8c1a82de0a7edf4e2446069e66d02f4ceb86617112bd050c7e"
+    },
+    {
+      "bytes": 2644,
+      "path": "app/tasks/output_team_projects.py",
+      "sha256": "d672c875a0ca8bff4684e944191c7b793a14318af3a680cecdd10f0cbdd90393"
+    },
+    {
+      "bytes": 5419,
+      "path": "app/tasks/proofread_draft.py",
+      "sha256": "f9a1cb15dee2e089ea0fe1d6cf223f561a5e81f1060b858a6106abaf10dc2eb0"
+    },
+    {
+      "bytes": 15887,
+      "path": "app/tasks/thumbnail.py",
+      "sha256": "54df70ec1940cf56f0762e0084204e622795273f2ed9a3494f6142829eea35e2"
+    },
+    {
+      "bytes": 2158,
+      "path": "app/translations/__init__.py",
+      "sha256": "18739d73b8f157bc53d1428ba71080e5628211db02c00e7d41af7c5e6f9d8521"
+    },
+    {
+      "bytes": 646,
+      "path": "app/utils/__init__.py",
+      "sha256": "b0166b3e8f790fb3ce8452c70f28c0b897ec1b964f72a9f8fd85f2ee176e8e7c"
+    },
+    {
+      "bytes": 134,
+      "path": "app/utils/datetime.py",
+      "sha256": "939a9a1320d93d342e8aac72121edca154d6eab429a47a38160922e5d43498e1"
+    },
+    {
+      "bytes": 2726,
+      "path": "app/utils/external_url.py",
+      "sha256": "a64b5a91cc5c70e2d62f25f8aabe89680c2ef9ca0be2083f08a40a47c36b3713"
+    },
+    {
+      "bytes": 640,
+      "path": "app/utils/file.py",
+      "sha256": "6d3a80bcb28e64dbd1e7a6a9780f823f7b3beb82c5f613c5355277b13629d318"
+    },
+    {
+      "bytes": 423,
+      "path": "app/utils/hash.py",
+      "sha256": "3e947140e433c8cf451a0acd230f10524c321392bcdf6f794e39e3d845a60f86"
+    },
+    {
+      "bytes": 1713,
+      "path": "app/utils/labelplus.py",
+      "sha256": "225d606e37b16016adfbaa9fc65aebf6421586de64082d6d8e223791051624d0"
+    },
+    {
+      "bytes": 5325,
+      "path": "app/utils/logging.py",
+      "sha256": "feb9ad27ad4a55fcfb69c366b5d8c39c787cf456181edf20150ab7fb4429c723"
+    },
+    {
+      "bytes": 697,
+      "path": "app/utils/mongo.py",
+      "sha256": "aaeb57fdbbdb4c2e3669c83f6be7d4bf86d2ed4d3998572cdaea7ff2fbd031f0"
+    },
+    {
+      "bytes": 354,
+      "path": "app/utils/search.py",
+      "sha256": "33f553c53680b87cd4042650ffeb40fc8915a18273368f593106a9434f4af566"
+    },
+    {
+      "bytes": 2063,
+      "path": "app/utils/secrets.py",
+      "sha256": "0f1bad801ca5f132b10dbe7f0cbbf6bfc8050e03b83e41306aa73af7bdff3ccf"
+    },
+    {
+      "bytes": 421,
+      "path": "app/utils/str.py",
+      "sha256": "3a3834bf271d4f5b84cdb507fe5f1d68d5c06109c1a78343e35d44d57788f970"
+    },
+    {
+      "bytes": 182,
+      "path": "app/utils/type.py",
+      "sha256": "685de92d37d1c840c6f2552bc96eeb9e35c254f963dbd1655859ba7df3a8dde8"
+    },
+    {
+      "bytes": 287,
+      "path": "app/validators/__init__.py",
+      "sha256": "951c849631a5d0f5cde86c5f33bd9d24e153f82bf04097bcaeebb9de138eb275"
+    },
+    {
+      "bytes": 488,
+      "path": "app/validators/admin.py",
+      "sha256": "59af3b31d358aa839e71a48f90f652e0f37b0d80a311109119b98acb1fa42fcc"
+    },
+    {
+      "bytes": 6269,
+      "path": "app/validators/auth.py",
+      "sha256": "ca25acd09c7fbd2be438d4e240b1e56843f3b136ea245f21279bb4a773699e0e"
+    },
+    {
+      "bytes": 917,
+      "path": "app/validators/avatar.py",
+      "sha256": "97aefda24498b8141babe2b68e6bb4eafc74519e1586e90abd7d7cb79a01f45e"
+    },
+    {
+      "bytes": 173,
+      "path": "app/validators/custom_message.py",
+      "sha256": "962a42ac34f96409aaed076c7293a360f418dd82ebba4f46a635b9c6a68529b8"
+    },
+    {
+      "bytes": 153,
+      "path": "app/validators/custom_schema.py",
+      "sha256": "6160394a04d8262904ae17a5f78f4a3774a6ceeee7eb3722f359d441e21f320d"
+    },
+    {
+      "bytes": 6501,
+      "path": "app/validators/custom_validate.py",
+      "sha256": "5e0032984590910c548365565ce2e9843254b7d9e1cff4c46a6d701001b4b991"
+    },
+    {
+      "bytes": 991,
+      "path": "app/validators/file.py",
+      "sha256": "9ed8d0543560347b040686a7064831e2aedad4ce346a7b59f839d75f48c50e95"
+    },
+    {
+      "bytes": 3084,
+      "path": "app/validators/join_process.py",
+      "sha256": "df89fc9f3a649e8a47aa46b25f8406baa5dfb234b3c21074ea0afda1ca5b6953"
+    },
+    {
+      "bytes": 423,
+      "path": "app/validators/member.py",
+      "sha256": "7de1bebe8e6add5f262f443fac4dd9c99b0390f07b2126e1643b0ec88fc12f48"
+    },
+    {
+      "bytes": 10425,
+      "path": "app/validators/project.py",
+      "sha256": "7ae4e5d72be8c3a05f92efd365ca4b2ad7d6719c30b212e8b36077940693e20c"
+    },
+    {
+      "bytes": 1037,
+      "path": "app/validators/role.py",
+      "sha256": "e5bf0168f3d8b8bd99343eea63d9bd9b45b06af0b39b4e0c02e72f46d3a65dcf"
+    },
+    {
+      "bytes": 979,
+      "path": "app/validators/site_setting.py",
+      "sha256": "b3e96b2a8a06c473fe56e2fcf9ad73264275ba8a9e8f7a69ee584c7647bce56d"
+    },
+    {
+      "bytes": 1905,
+      "path": "app/validators/source.py",
+      "sha256": "c23ef70f62903f02771dbced22fd04c0c411ff2e8b41663a988b82b0e80678bc"
+    },
+    {
+      "bytes": 173,
+      "path": "app/validators/target.py",
+      "sha256": "0eb4c636c1f207e3499eaf8cd0485f935eda76e4fc6559f5a694384ba5725c66"
+    },
+    {
+      "bytes": 4293,
+      "path": "app/validators/team.py",
+      "sha256": "72951bf99a4ccf2516c8f3f4e80bcef1e2efa7b0bafa7d9d80344e9299479b3d"
+    },
+    {
+      "bytes": 1776,
+      "path": "app/validators/term.py",
+      "sha256": "c450c020fe8fe1e9848044a66a17e0a0c8d9616d766c5f404cfbf98a29db399b"
+    },
+    {
+      "bytes": 581,
+      "path": "app/validators/tip.py",
+      "sha256": "f794c104a3d14179c4aa83473a0a05a218ffa919fa5ef86478de387b4b4baa6b"
+    },
+    {
+      "bytes": 875,
+      "path": "app/validators/translation.py",
+      "sha256": "81885891dd78d851028d6e747bf18bdc7c43a9c2dcf3457d42ace437628c0d2b"
+    },
+    {
+      "bytes": 3175,
+      "path": "app/validators/v_code.py",
+      "sha256": "17e234702f42d06023f4811732da2d46991832c2a5e9f5904678b2e8c8321f7e"
+    }
+  ]
+}
