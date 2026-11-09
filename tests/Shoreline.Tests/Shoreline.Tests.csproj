@@ -23,4 +23,10 @@
     <ProjectReference Include="..\..\src\Shoreline.Api\Shoreline.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\tools\legacy-reference\fixtures\goldens.json"
+          Link="tools\legacy-reference\fixtures\goldens.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
