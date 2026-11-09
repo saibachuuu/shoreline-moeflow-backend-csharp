@@ -12,8 +12,12 @@ public sealed class JobQueue(MongoStore store, TimeProvider clock)
         var id = ObjectId.GenerateNewId();
         await Jobs.InsertOneAsync(new BsonDocument
         {
-            ["_id"] = id, ["kind"] = kind, ["payload"] = payload, ["state"] = "pending",
-            ["attempts"] = 0, ["available_at"] = clock.GetUtcNow().UtcDateTime,
+            ["_id"] = id,
+            ["kind"] = kind,
+            ["payload"] = payload,
+            ["state"] = "pending",
+            ["attempts"] = 0,
+            ["available_at"] = clock.GetUtcNow().UtcDateTime,
             ["created_at"] = clock.GetUtcNow().UtcDateTime
         }, cancellationToken: ct);
         return id;
@@ -32,8 +36,11 @@ public sealed class JobQueue(MongoStore store, TimeProvider clock)
         return await Jobs.FindOneAndUpdateAsync<BsonDocument>(eligible,
             Builders<BsonDocument>.Update.Set("state", "running").Set("owner", owner)
                 .Set("lease_until", now.AddMinutes(2)).Inc("attempts", 1),
-            new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After,
-                Sort = Builders<BsonDocument>.Sort.Ascending("available_at").Ascending("_id") }, ct);
+            new FindOneAndUpdateOptions<BsonDocument>
+            {
+                ReturnDocument = ReturnDocument.After,
+                Sort = Builders<BsonDocument>.Sort.Ascending("available_at").Ascending("_id")
+            }, ct);
     }
 
     public async Task<bool> RenewAsync(ObjectId id, string owner, CancellationToken ct)
@@ -53,11 +60,13 @@ public sealed class JobQueue(MongoStore store, TimeProvider clock)
             .Unset("owner").Unset("lease_until"), cancellationToken: ct);
 
     public Task CancelPendingAsync(ObjectId id, CancellationToken ct) => Jobs.UpdateOneAsync(
-        new BsonDocument { ["_id"] = id, ["state"] = "pending" },
+        new BsonDocument { ["_id"] = id, ["state"] = "pending", ["cancellable"] = new BsonDocument("$ne", false) },
         Builders<BsonDocument>.Update.Set("state", "cancelled"), cancellationToken: ct);
 
     private static BsonDocument Owned(ObjectId id, string owner) => new()
     {
-        ["_id"] = id, ["owner"] = owner, ["state"] = "running"
+        ["_id"] = id,
+        ["owner"] = owner,
+        ["state"] = "running"
     };
 }

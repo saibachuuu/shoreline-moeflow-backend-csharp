@@ -4,6 +4,23 @@ namespace Shoreline.Api.Infrastructure;
 
 public static class RequestData
 {
+    public static long RequiredInteger(this JsonElement data, string field)
+    {
+        if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty(field, out var value))
+            throw ApiError.Field(field, "缺少必填字段");
+        if (value.ValueKind == JsonValueKind.True) return 1;
+        if (value.ValueKind == JsonValueKind.False) return 0;
+        if (value.ValueKind == JsonValueKind.Number)
+        {
+            if (value.TryGetInt64(out var number)) return number;
+            if (value.TryGetDecimal(out var decimalNumber) && decimalNumber >= long.MinValue && decimalNumber <= long.MaxValue)
+                return (long)decimal.Truncate(decimalNumber);
+        }
+        if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var textNumber)) return textNumber;
+        throw ApiError.Field(field, "整数格式不正确");
+    }
+
     public static bool RequiredBoolean(this JsonElement data, string field)
     {
         if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty(field, out var value))

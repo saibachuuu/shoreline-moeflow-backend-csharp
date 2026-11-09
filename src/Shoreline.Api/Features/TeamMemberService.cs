@@ -74,6 +74,26 @@ public sealed class TeamMemberService(MongoStore store, IdentityPermissions perm
         if (baseTag == "admin" && relation.Text("base_tag") != "creator") throw ApiError.Forbidden();
         var tags = await permissions.ValidateTeamTagsAsync(team, Tags(data, "tags"), ct);
         var qualifications = Qualifications(Tags(data, "worker_qualifications"));
+        return await AddOrRestoreLockedAsync(team, actor, user, member, baseTag!, tags, qualifications, requestId, ct);
+    }
+
+    // Trusted creation/registration paths only; this is not exposed as a way to
+    // bypass the ordinary membership API's manager/creator authorization.
+    internal async Task<BsonDocument> JoinTrustedAsync(BsonDocument team, BsonDocument user, string baseTag, string requestId, CancellationToken ct)
+    {
+        if (baseTag is not ("creator" or "admin" or "member")) throw IdentityErrors.InvalidTag();
+        using var held = await gates.EnterAsync(team["_id"].AsObjectId, ct);
+        team = await GetTeamAsync(team["_id"].ToString()!, ct);
+        var member = await ForUserAsync(team, user, false, ct);
+        if (member?.Text("status", "active") == "active") return member;
+        var tags = member?.GetValue("tags", new BsonArray()).AsBsonArray.Where(value => value.IsString).Select(value => value.AsString).ToArray() ?? [];
+        var qualifications = member?.GetValue("worker_qualifications", new BsonArray()).AsBsonArray.Where(value => value.IsString).Select(value => value.AsString).ToArray() ?? [];
+        return await AddOrRestoreLockedAsync(team, user, user, member, baseTag, tags, qualifications, requestId, ct);
+    }
+
+    private async Task<BsonDocument> AddOrRestoreLockedAsync(BsonDocument team, BsonDocument actor, BsonDocument user,
+        BsonDocument? member, string baseTag, string[] tags, string[] qualifications, string requestId, CancellationToken ct)
+    {
         var before = member is null ? new BsonDocument() : State(member);
         await SyncCountAsync(team, ct);
         var reservation = await store.Collection("team").UpdateOneAsync(new BsonDocument

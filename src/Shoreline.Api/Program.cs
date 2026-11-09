@@ -26,11 +26,13 @@ builder.Services.AddSingleton<IdentityNameGate>();
 builder.Services.AddSingleton<ArchiveSecrets>();
 builder.Services.AddSingleton<IdentityAuditWriter>();
 builder.Services.AddScoped<TeamMemberService>();
+builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<IdentityTagPolicyService>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
 builder.Services.AddSingleton<EmailCodeService>();
 builder.Services.AddSingleton<IJobHandler, SecurityEmailHandler>();
+builder.Services.AddSingleton<IJobHandler, TeamCreationHandler>();
 builder.Services.AddHostedService<JobWorker>();
 builder.Services.AddRateLimiter(o =>
 {
@@ -83,6 +85,7 @@ app.MapSite();
 app.MapAdminUsers();
 app.MapLanguages();
 app.MapTypes();
+app.MapTeams();
 app.MapTeamIdentity();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>

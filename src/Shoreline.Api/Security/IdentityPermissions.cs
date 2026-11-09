@@ -127,11 +127,32 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
 
     public async Task<PermissionSnapshot> TeamSnapshotAsync(BsonDocument? user, BsonDocument? team, CancellationToken ct = default)
     {
+        if (team is null) return Snapshot(user, null, null, null, [], new(StringComparer.Ordinal));
+        return (await TeamSnapshotsAsync(user, [team], ct))[team["_id"].AsObjectId];
+    }
+
+    public async Task<IReadOnlyDictionary<ObjectId, PermissionSnapshot>> TeamSnapshotsAsync(BsonDocument? user,
+        IReadOnlyList<BsonDocument> teams, CancellationToken ct = default)
+    {
+        var relations = new Dictionary<ObjectId, BsonDocument>();
+        var policies = new Dictionary<ObjectId, BsonDocument>();
+        if (user is not null && teams.Count != 0)
+        {
+            var ids = new BsonDocument("$in", new BsonArray(teams.Select(team => team["_id"])));
+            var memberTask = store.Collection("team_member").Find(new BsonDocument { ["team"] = ids, ["user"] = user["_id"], ["status"] = "active" }).ToListAsync(ct);
+            var policyTask = store.Collection("identity_tag_policy").Find(new BsonDocument("team", ids)).ToListAsync(ct);
+            await Task.WhenAll(memberTask, policyTask);
+            relations = (await memberTask).ToDictionary(member => member["team"].AsObjectId);
+            policies = (await policyTask).ToDictionary(policy => policy["team"].AsObjectId);
+        }
+        return teams.ToDictionary(team => team["_id"].AsObjectId, team => TeamSnapshot(user, team,
+            relations.GetValueOrDefault(team["_id"].AsObjectId), policies.GetValueOrDefault(team["_id"].AsObjectId)));
+    }
+
+    private PermissionSnapshot TeamSnapshot(BsonDocument? user, BsonDocument team, BsonDocument? relation, BsonDocument? policy)
+    {
         var sources = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        if (user is null || team is null) return Snapshot(user, null, team, null, [], sources);
-        var relation = await store.Collection("team_member").Find(new BsonDocument { ["team"] = team["_id"], ["user"] = user["_id"], ["status"] = "active" }).FirstOrDefaultAsync(ct);
         if (relation is null) return Snapshot(user, null, team, null, [], sources);
-        var policy = await store.Collection("identity_tag_policy").Find(new BsonDocument("team", team["_id"])).FirstOrDefaultAsync(ct);
         var baseTag = relation.Text("base_tag", "member");
         foreach (var permission in TagPermissions(policy, "team", baseTag) ?? []) Add(sources, permission, "team_base:" + baseTag);
         foreach (var tag in Strings(relation, "tags").Select(t => t.Trim()).Where(t => t.Length > 0).Distinct().Order(StringComparer.Ordinal))

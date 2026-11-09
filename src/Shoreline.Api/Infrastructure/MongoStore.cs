@@ -42,6 +42,14 @@ public sealed class MongoStore
         await Collection("csharp_job").Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("purge_at"),
                 new CreateIndexOptions { ExpireAfter = TimeSpan.Zero }), cancellationToken: ct);
+        await Collection("csharp_job").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("reserved_name"), new CreateIndexOptions<BsonDocument>
+            { Unique = true, PartialFilterExpression = new BsonDocument("reserved_name", new BsonDocument("$exists", true)) }), cancellationToken: ct);
+        await Collection("team").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("n"), new CreateIndexOptions<BsonDocument>
+            { Name = "csharp_team_name_unique_v1", Unique = true, PartialFilterExpression = new BsonDocument("n", new BsonDocument("$type", "string")) }), cancellationToken: ct);
+        await Collection("project_set").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("t").Ascending("d")), cancellationToken: ct);
         await Collection("csharp_captcha").Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("expires_at"),
                 new CreateIndexOptions { ExpireAfter = TimeSpan.Zero }), cancellationToken: ct);

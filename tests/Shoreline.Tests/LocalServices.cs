@@ -24,11 +24,17 @@ public sealed class LocalServices : IAsyncLifetime
             ["Mongo:Uri"] = "mongodb://127.0.0.1:27128/" + DatabaseName,
             ["Auth:Secret"] = SecurityTests.Secret,
             ["Auth:AdminEmail"] = "owner@example.test",
+            ["Archive:AllowedHosts:0"] = "api.example.test",
             ["Storage:Endpoint"] = "http://127.0.0.1:29128",
-            ["Storage:Bucket"] = "shoreline-test", ["Storage:AccessKey"] = "local-test-only",
-            ["Storage:SecretKey"] = "local-disposable-test-secret", ["Storage:ForcePathStyle"] = "true",
-            ["Mail:Enabled"] = "true", ["Mail:Host"] = "127.0.0.1", ["Mail:Port"] = "21128",
-            ["Mail:StartTls"] = "false", ["Mail:From"] = "noreply@example.test"
+            ["Storage:Bucket"] = "shoreline-test",
+            ["Storage:AccessKey"] = "local-test-only",
+            ["Storage:SecretKey"] = "local-disposable-test-secret",
+            ["Storage:ForcePathStyle"] = "true",
+            ["Mail:Enabled"] = "true",
+            ["Mail:Host"] = "127.0.0.1",
+            ["Mail:Port"] = "21128",
+            ["Mail:StartTls"] = "false",
+            ["Mail:From"] = "noreply@example.test"
         };
         Configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         Store = new MongoStore(Configuration);

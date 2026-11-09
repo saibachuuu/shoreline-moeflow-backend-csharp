@@ -1,7 +1,7 @@
 # Refactor checkpoint — 2026-11-09
 
 The user resumed work after the language catalog checkpoint. Team identity APIs
-are now complete; the replacement backend is still incomplete. Do not replace
+and team setup/settings/navigation are now implemented; the replacement backend is still incomplete. Do not replace
 the Python deployment yet.
 
 ## Constraints for continuation
@@ -40,10 +40,17 @@ the Python deployment yet.
 - Team/project custom tag policies, protected system overrides, resets and checks
   preventing removal of tags used by any member status. Mutation audits preserve
   the original identity audit schema.
+- Team creation with a persisted, uncancellable intent, default project-set creation
+  and creator membership. HTTP and worker recovery share idempotent upserts; partial
+  creation can be retried by the same creator with the original name/settings.
+- Team detail/settings APIs preserve the original fields, creator-only configuration
+  rules, legacy role IDs and masked archive-key handling. Own-team navigation projects
+  only compact fields and calculates page permissions in batches; global discovery
+  remains test-only. Trusted joining is internal, not an authorization bypass API.
 
 Current verification: `dotnet test --no-restore --verbosity minimal` passes
-122 tests against disposable local MongoDB, S3Mock and Mailpit, including concurrent
-admission/edit tests and cross-team/hierarchy checks. The service builds with zero
+130 tests against disposable local MongoDB, S3Mock and Mailpit, including concurrent
+admission/edit/creation tests, partial-creation recovery and cross-team/hierarchy checks. The service builds with zero
 warnings. Its Docker image has not been
 rebuilt; the existing API container still runs the earlier foundation image.
 
@@ -54,12 +61,12 @@ the running C# service requires neither Python nor the old repository.
 
 ## Next work
 
-1. Team creation/editing/listing, default project-set creation and user joining.
-   Reuse the fixed-size team mutation gates for all membership-changing paths.
-2. Complete registration with email-code consumption and automatic team joining.
+1. Complete registration with email-code consumption and automatic team joining.
    The Python registration path uses site_setting.ajt; do not omit this behavior.
-3. Project/member services and ownership, position locks, lifecycle operations,
+2. Project/member services and ownership, position locks, lifecycle operations,
    project sets, listings and identity policy endpoints.
+3. Team dissolution must be implemented together with complete project lifecycle
+   cleanup; do not expose a partial delete that leaves project/storage data behind.
 4. Files, targets, labels/translations/tips, complete snapshots and recovery,
    text parsing/OCR/import, exports, notifications, term banks and optional modules.
 5. Storage transfers, quota/capacity reconciliation and their progress/cancellation
@@ -67,7 +74,7 @@ the running C# service requires neither Python nor the old repository.
 
 ## Remaining safety constraints
 
-- Future registration/team name writers must share the name gates; existing
+- Registration and other future name writers must share the name gates; existing
   duplicate legacy names are not silently rewritten or deleted.
 - Profile/team writes and audit inserts remain separate documents, not a
   multi-document transaction guarantee. Gates are local to one business process;
@@ -77,5 +84,5 @@ the running C# service requires neither Python nor the old repository.
   archive ciphertext. No deployment configuration has been read during tests.
 - Stored URL checks are not a DNS-rebinding defense by themselves: archive HTTP
   clients still need connection-time DNS checks and safe redirect handling.
-- Durable jobs need business handlers beyond security email. Do not describe the
+- Durable jobs need business handlers beyond security email and team creation. Do not describe the
   current service as production-ready or infer full compatibility from its tests.
