@@ -141,6 +141,7 @@ app.MapProjectMembers();
 app.MapInvitations();
 app.MapApplications();
 app.MapFileEndpoints();
+app.MapOcr();
 OutputEndpoints.MapOutputs(app);
 NotificationManagementEndpoints.MapNotificationManagementEndpoints(app);
 app.MapTeamDissolution();

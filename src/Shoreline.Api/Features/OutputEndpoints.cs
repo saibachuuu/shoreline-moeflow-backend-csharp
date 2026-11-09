@@ -78,6 +78,25 @@ public static class OutputEndpoints
             var output = await outputs.CreateAsync(document, targetRow, actor, type, include, exclude, ct);
             return await outputs.ViewAsync(document, targetRow, output, context, ct);
         });
+
+        // Python TeamProjectOutputListAPI.post (app/apis/team.py:498-506):
+        // team-level export of every WORKING project/target.
+        app.MapPost("/v1/teams/{teamId}/outputs", async (
+            string teamId,
+            HttpContext context,
+            CurrentUser current,
+            ProjectService projects,
+            IdentityPermissions permissions,
+            OutputService outputs,
+            CancellationToken ct) =>
+        {
+            var actor = await current.RequireAsync(context, ct);
+            var team = await projects.GetTeamAsync(teamId, ct);
+            var snapshot = await permissions.TeamSnapshotAsync(actor, team, ct);
+            if (!snapshot.Has("team:AUTO_BECOME_PROJECT_ADMIN")) throw ApiError.Forbidden();
+            await outputs.CreateTeamAsync(team, actor, ct);
+            return new { message = "创建导出任务成功" };
+        });
     }
 
     private static async Task RequireOutputPermission(

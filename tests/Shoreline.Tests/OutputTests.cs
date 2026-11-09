@@ -118,6 +118,60 @@ public sealed class OutputTests(LocalServices services)
     }
 
     [Fact]
+    public async Task CreateTeam_CreatesWorkingProjectTargetsOnly()
+    {
+        var clock = new TestClock(BaseTime);
+        var service = Outputs(clock);
+        var teamId = ObjectId.GenerateNewId();
+        var working = await ProjectAsync(teamId: teamId);
+        var completed = await ProjectAsync(teamId: teamId);
+        await services.Store.Collection("project").UpdateOneAsync(
+            new BsonDocument("_id", completed["_id"]),
+            new BsonDocument("$set", new BsonDocument("st", 1)));
+        var workingTarget = await TargetAsync(working);
+        var completedTarget = await TargetAsync(completed);
+
+        await service.CreateTeamAsync(new BsonDocument("_id", teamId), Actor(), CancellationToken.None);
+
+        Assert.Equal(1, await services.Store.Collection("output")
+            .CountDocumentsAsync(new BsonDocument("t", workingTarget["_id"])));
+        Assert.Equal(0, await services.Store.Collection("output")
+            .CountDocumentsAsync(new BsonDocument("t", completedTarget["_id"])));
+        Assert.Equal(1, await services.Store.Collection("csharp_job")
+            .CountDocumentsAsync(new BsonDocument
+            {
+                ["kind"] = OutputService.JobKind,
+                ["payload.project_id"] = working["_id"].AsObjectId,
+            }));
+    }
+
+    [Fact]
+    public async Task CreateTeam_PooledStorageFailsClosedWithoutPartialOutput()
+    {
+        var clock = new TestClock(BaseTime);
+        var service = Outputs(clock);
+        var teamId = ObjectId.GenerateNewId();
+        var project = await ProjectAsync(teamId: teamId);
+        project["csid"] = ObjectId.GenerateNewId();
+        await services.Store.Collection("project").ReplaceOneAsync(
+            new BsonDocument("_id", project["_id"]), project);
+        await TargetAsync(project);
+
+        var error = await Assert.ThrowsAsync<ApiError>(() =>
+            service.CreateTeamAsync(new BsonDocument("_id", teamId), Actor(), CancellationToken.None));
+
+        Assert.Equal(9003, error.Code);
+        Assert.Equal(0, await services.Store.Collection("output")
+            .CountDocumentsAsync(new BsonDocument("p", project["_id"].AsObjectId)));
+        Assert.Equal(0, await services.Store.Collection("csharp_job")
+            .CountDocumentsAsync(new BsonDocument
+            {
+                ["kind"] = OutputService.JobKind,
+                ["payload.project_id"] = project["_id"].AsObjectId,
+            }));
+    }
+
+    [Fact]
     public async Task Prune_DeletesOldestObjectsAndRowsKeepingNewestTwo()
     {
         var clock = new TestClock(BaseTime);
@@ -736,7 +790,8 @@ public sealed class OutputTests(LocalServices services)
     private async Task<BsonDocument> ProjectAsync(
         ObjectId? id = null,
         long outputBytes = 0,
-        long fileSize = 0)
+        long fileSize = 0,
+        ObjectId? teamId = null)
     {
         if (id is not null)
             return await services.Store.Collection("project")
@@ -761,6 +816,7 @@ public sealed class OutputTests(LocalServices services)
             ["cip"] = false,
             ["label_revision"] = 0L
         };
+        if (teamId is not null) document["t"] = teamId.Value;
         if (id is null) await services.Store.Collection("project").InsertOneAsync(document);
         return document;
     }

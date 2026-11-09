@@ -27,6 +27,19 @@ public static class AdminUserEndpoints
             page.Apply(ctx.Response, count);
             return await Task.WhenAll(rows.Select(user => view.ToApiAsync(user, ctx)));
         });
+        // Python AdminUserListAPI.post (app/apis/user.py:169-176): admin-only
+        // account creation through AdminRegisterSchema + User.create. Unlike
+        // public registration there is no email code, no whitelist and no
+        // token in the response.
+        app.MapPost("/v1/admin/users", async (JsonElement data, HttpContext ctx, CurrentUser current,
+            UserRegistrationService users, CancellationToken ct) =>
+        {
+            await current.RequireAdminAsync(ctx, ct);
+            var requestId = ctx.Request.Headers["X-Request-ID"].FirstOrDefault()
+                ?? ctx.Request.Headers["Idempotency-Key"].FirstOrDefault() ?? "";
+            await users.AdminCreateAsync(data, requestId, ct);
+            return new { message = "注册成功" };
+        });
         app.MapPut("/v1/admin/users/{id}", async (string id, JsonElement data, HttpContext ctx, CurrentUser current,
             MongoStore store, PasswordService passwords, CancellationToken ct) =>
         {

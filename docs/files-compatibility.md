@@ -13,10 +13,12 @@
 - `DELETE /v1/files/{fileId}` 删除（文件/文件夹、修订版、关联数据）
 - `GET/PUT /v1/projects/{projectId}/files/order` 手动排序与快照
 - `GET /v1/admin/files` 管理员列表
+- `POST /v1/files/{fileId}/ocr` 显式 fail-closed（501，见第 12 节）
+- `POST /v1/projects/{projectId}/ocr` 同一 OCR 禁用语义（501，见第 12 节）
 
 未实现（明确不做假成功）：
 
-- 缩略图生成、封面/重采样生成（`FileOCRAPI`、`FileThumbnailAPI`、`File.parseOCR` 均保持未接线）
+- 缩略图生成、封面/重采样生成（`FileThumbnailAPI`、`File.parseOCR` 仍保持未接线）
 - 非默认对象存储池的写入/删除路由；当前对 `project.csid` 非空采取 fail-closed
 - 文件审校图片（proofread）生命周期，删除时按 Python 语义保留
 
@@ -171,4 +173,32 @@ SHA-256：`141c271429d8e7a8aaef0ed105ff0e8cc0eeabad3b933520f9ab8ab50c554306`
 - Python golden：`Fixtures/file-goldens.json` 由实际 Python 源码 AST 执行生成（`Filename` 16 例、`order_snapshot` 4 例），未手工改写期望值；`FileGoldenTests` 通过 `CallerFilePath` 读取同一 fixture。
 - 测试依赖：本地 MongoDB `127.0.0.1:27128`、S3 兼容存储 `127.0.0.1:29128`（bucket `shoreline-test`）；dotnet SDK 10.0.204。
 - HTTP 覆盖：无令牌 1003、项目 4001、文件 8001、schema 2、无权限 103、外来 parent 8002、外来 target 4024、multipart 上传→详情→覆盖同 ID→删除、`X-Label-Revision` 正确/过期、恢复中 409、HTTP 中间件持锁时服务层借用租约不死锁。
+
+## 12. OCR 路由：显式 fail-closed
+
+Python 的 OCR 管线处于重建状态：`app/tasks/ocr.py:421` 直接
+`raise NotImplementedError("OCR under reconstruction")`，因此
+`FileOCRAPI`（`app/apis/file.py:304`）与 `ProjectOCRAPI`
+（`app/apis/project.py:317`）即使通过权限/额度校验，也无法产生真实结果。
+单文件路径更早在 `File.parse` 就返回字符串 `"单个图片OCR暂未实现..."`
+（`app/models/file.py:1116`），不会排入任务。
+
+C# 不伪造能力，两个路由统一显式禁用：
+
+- `POST /v1/files/{fileId}/ocr`
+- `POST /v1/projects/{projectId}/ocr`
+
+行为契约：
+
+- 无令牌 → `NeedTokenError` / 1003 / HTTP 401（沿用全局认证）。
+- 文件或项目 id 不存在 → `FileNotExistError` / 8001 或
+  `ProjectNotExistError` / 4001，与既有资源路由一致。
+- 其他情况（包括本可有权限/额度的调用）→
+  `OcrUnavailableError` / 5010 / HTTP 501，文案
+  `OCR 功能暂不可用（后端重建中）`。
+- 不写 `parse_status`/任务行，不修改项目 `ocring`，不返回成功消息；测试
+  `OcrHttpTests.OcrRoutes_ReturnExplicit501AndDoNotMutateState` 断言了这些禁用语义。
+- 权限与 OCR 额度检查刻意不执行：功能整体不可用，先鉴权并解析资源，再统一
+  501，避免对不同角色返回“可用但稍后失败”的假象。真实 OCR 恢复后需要重新
+  接入 Python 的 `USE_OCR_QUOTA` / 源语言 `g_ocr_code` / 额度语义。
 - 快照的 E1 文件（`ProjectLabelLock`、`LabelRequestGuard`、`LabelRegistration`、`LabelEndpoints`、`LabelService*`、`LabelPlusReader`）按 SHA256 固定复制，未修改；`Infrastructure/Pagination.cs` 复制共享配置化稳定版 SHA256 `7DFC5FB6DAAD1FA3524084491FAEAF0D0AC0025849794464BFF0FA543812EA32`；共享工作区 `Program.cs` 未改。依赖 E1 的 `file_target_cache (f,t)` 索引已存在（E1 命名为 `label_file_target_cache`），`FileService.EnsureCacheIndexAsync` 检测到同键索引后跳过创建。

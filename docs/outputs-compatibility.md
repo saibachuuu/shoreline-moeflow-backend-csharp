@@ -14,10 +14,14 @@ Routes are mounted under `/v1/projects/{projectId}`:
 | POST | `/outputs` | `ProjectOutputListAPI.post` (all targets) |
 | GET | `/targets/{targetId}/outputs` | `ProjectTargetOutputListAPI.get` |
 | POST | `/targets/{targetId}/outputs` | `ProjectTargetOutputListAPI.post` |
+| POST | `/v1/teams/{teamId}/outputs` | `TeamProjectOutputListAPI.post` (all WORKING projects) |
 
-All three require `project:OUTPUT_TRA`. A target whose `t` is another project
-returns error 4024 (`项目目标语言不存在`). Missing output is 9001
-(`导出导出文件不存在`); cooldown is 9002 (`导出过于频繁，请稍后再试`).
+The three project routes require `project:OUTPUT_TRA`. The team route requires
+`team:AUTO_BECOME_PROJECT_ADMIN` (`app/apis/team.py:498-506`); that permission is
+now part of the C# creator/admin team defaults, matching Python
+`TeamRole.system_role_data` (`app/models/team.py:146,177`). A target whose `t`
+is another project returns error 4024 (`项目目标语言不存在`). Missing output is
+9001 (`导出导出文件不存在`); cooldown is 9002 (`导出过于频繁，请稍后再试`).
 
 GET sorts by `ct` descending. Python's `Output.objects.order_by("-create_time")`
 has no `_id` tie-break; the C# list adds `_id` descending as a deterministic
@@ -80,6 +84,29 @@ The output row is inserted under the lock, then the job is enqueued after
 release. Enqueue failure marks the row `s=5` with `job_error` and never
 pretends the export succeeded. A normal request returns a queued row; the
 client polls GET. No synchronous fallback is performed.
+
+### Team-wide export
+
+`POST /v1/teams/{teamId}/outputs` mirrors
+`app/tasks/output_team_projects.py:21-66`: it selects projects by
+`{t: team, st: 0}` (Python `team.projects(status=ProjectStatus.WORKING)`), then
+runs the same per-target all-target export as `POST /v1/projects/{id}/outputs`
+— cooldown skip, newest-two pruning, type `0` (`ALL`) and one queued job per
+created row. The response is `{"message": "创建导出任务成功"}`.
+
+Differences / unverified:
+
+- Python may execute the Celery task synchronously when no worker answers
+  (`output_team_projects.py:69-80`); C# always enqueues and returns immediately,
+  like the existing project output routes.
+- Content is produced per project, so the team call creates N independent
+  archives, never a combined team archive.
+- A project with non-empty `csid` fails the whole call closed with 9003/503
+  before its row is inserted. Python's storage router would resolve that
+  project's backend; real R2/storage-pool export remains unverified in C#.
+- The Python task has no per-project exception handling; the first failure
+  aborts the remaining loop. C# propagates the same way, leaving earlier
+  queued outputs intact.
 
 ## Job, leasing, fencing
 
@@ -288,7 +315,7 @@ handler; `MapOutputs()` maps the routes. The integrator must call both.
 
 ## Direct-service facts (28)
 
-`tests/Shoreline.Tests/OutputTests.cs` contains 28 `[Fact]` tests covering:
+`tests/Shoreline.Tests/OutputTests.cs` contains 30 `[Fact]` tests covering:
 canonical BSON/job payload; pooled storage fail-closed 9003; cooldown 9002 and
 all-target skip; prune keeps two and deletes objects before rows;
 physical-delete failure preserves rows/bytes; foreign target 4024; status
@@ -302,19 +329,21 @@ double accounting; stale revision; deleted target; deleted frozen file metadata
 (409); changed frozen save name (409); concurrent duplicate runs publishing once;
 stale owner after lease expiry; and staging cleanup after success.
 
-These are direct-service facts. `OutputHttpTests.cs` adds 4 real
+These are direct-service facts. `OutputHttpTests.cs` adds 5 real
 `WebApplicationFactory<Program>` facts for token/permission/foreign-target,
 canonical queued creation followed by an explicit real job-handler run,
-schema/cooldown/all-target skipping, and epoch-header/restore-stale failure.
+schema/cooldown/all-target skipping, epoch-header/restore-stale failure, and the
+team-wide route (team permission, legacy message, one job per target).
 `OutputGoldenTests.cs` adds 3 facts reading the committed Python AST goldens for
 file LabelPlus bytes, staff-block placement, and manual export names.
 
-Isolated verification used `git archive 3edd683` plus only the G1 files and a
-private `Program.cs` wiring patch (the shared worktree `Program.cs` was not
-edited). `dotnet build -warnaserror` completed with 0 warnings/0 errors; the
-focused output run passed 36/36 and the full isolated suite passed 421/421.
-The focused count is 35 new output Facts plus one pre-existing test matching the
-`Output` filter.
+The team-output additions were verified from a clean `git archive 5bb9404` with
+only the touched feature/endpoint/registration/test files. `dotnet build
+-warnaserror` completed with 0 warnings/0 errors, the focused
+`Output|AdminUser|OcrHttp` run passed 51/51, and the full isolated suite passed
+783/783 with 6 skipped (789 total). The new direct facts are
+`CreateTeam_CreatesWorkingProjectTargetsOnly` and
+`CreateTeam_PooledStorageFailsClosedWithoutPartialOutput`.
 
 ## Open boundaries / integration notes
 

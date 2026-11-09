@@ -156,6 +156,25 @@ public sealed class OutputService(
         return created.Select(item => item.Output).ToList();
     }
 
+    /// <summary>
+    /// Python app/tasks/output_team_projects.py: create one ALL output for every
+    /// target of every WORKING project in the team, subject to the same
+    /// cooldown/prune rules as <see cref="CreateAllAsync"/>. Projects are read
+    /// in natural collection order, matching Team.projects(status=WORKING).
+    /// </summary>
+    public async Task CreateTeamAsync(BsonDocument team, BsonDocument actor, CancellationToken ct)
+    {
+        var projects = await store.Collection("project")
+            .Find(new BsonDocument { ["t"] = team["_id"], ["st"] = 0 })
+            .ToListAsync(ct);
+        foreach (var project in projects)
+            // Python has no per-project catch: the first failure aborts the
+            // task, leaving already-queued outputs intact. Pooled storage
+            // fail-closed (9003) surfaces the same way instead of silently
+            // reading a different backend.
+            await CreateAllAsync(project, actor, ct);
+    }
+
     private async Task PruneAsync(BsonDocument project, ObjectId targetId, CancellationToken ct)
     {
         var projectId = project["_id"].AsObjectId;

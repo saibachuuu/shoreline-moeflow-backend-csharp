@@ -5,6 +5,8 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Shoreline.Api.Features;
+using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Security;
 
 namespace Shoreline.Tests;
@@ -57,6 +59,82 @@ public sealed class AdminUserTests(LocalServices services)
             Assert.Equal(HttpStatusCode.Unauthorized, revoked.StatusCode);
             var updated = await services.Store.Collection("user").Find(new BsonDocument("_id", user["_id"])).SingleAsync();
             Assert.True(PasswordHash.Verify(updated["p"].AsString, "new-test-password"));
+        }
+    }
+
+    [Fact]
+    public async Task AdminCreateService_UsesAdminRegisterSchemaAndPersistsOrdinaryUser()
+    {
+        using var scope = services.App.Services.CreateScope();
+        var registration = scope.ServiceProvider.GetRequiredService<UserRegistrationService>();
+        var id = ObjectId.GenerateNewId();
+        var email = "created-" + id + "@Example.Test";
+        var name = "c" + id.ToString()[12..];
+        using var payload = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            email,
+            name,
+            password = "admin-created-password"
+        }));
+
+        var user = await registration.AdminCreateAsync(payload.RootElement, "admin-create", CancellationToken.None);
+
+        Assert.Equal(email.ToLowerInvariant(), user.Text("e"));
+        Assert.Equal(name, user.Text("n"));
+        Assert.False(user.Flag("admin"));
+        Assert.True(PasswordHash.Verify(user.Text("p"), "admin-created-password"));
+        Assert.Single(await services.Store.Collection("user")
+            .Find(new BsonDocument("e", email.ToLowerInvariant())).ToListAsync());
+
+        using var duplicate = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            email = email.ToUpperInvariant(),
+            name = "d" + id.ToString()[12..],
+            password = "admin-created-password"
+        }));
+        var error = await Assert.ThrowsAsync<ApiError>(() =>
+            registration.AdminCreateAsync(duplicate.RootElement, "admin-create", CancellationToken.None));
+        Assert.Equal(2, error.Code);
+        Assert.Equal("ValidateError", error.Error);
+        Assert.IsType<Dictionary<string, string[]>>(error.ResponseMessage);
+        Assert.Contains("email", ((Dictionary<string, string[]>)error.ResponseMessage).Keys);
+    }
+
+    [Fact]
+    public async Task AdminCreateHttp_RequiresAdminAndReturnsLegacyMessage()
+    {
+        var (_, adminClient) = await CreateAsync(true);
+        var (_, userClient) = await CreateAsync(false);
+        var id = ObjectId.GenerateNewId();
+        var payload = new
+        {
+            email = id + "@example.test",
+            name = "h" + id.ToString()[12..],
+            password = "http-admin-password"
+        };
+        using (adminClient)
+        using (userClient)
+        {
+            using var denied = await userClient.PostAsJsonAsync("/v1/admin/users", payload);
+            Assert.Equal(HttpStatusCode.BadRequest, denied.StatusCode);
+            Assert.Equal(103, (await denied.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetInt32());
+
+            using var created = await adminClient.PostAsJsonAsync("/v1/admin/users", payload);
+            created.EnsureSuccessStatusCode();
+            Assert.Equal("注册成功", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
+            var row = await services.Store.Collection("user")
+                .Find(new BsonDocument("e", payload.email)).FirstAsync();
+            Assert.Equal(payload.name, row.Text("n"));
+            Assert.False(row.Flag("admin"));
+            Assert.True(PasswordHash.Verify(row.Text("p"), payload.password));
+
+            using var duplicate = await adminClient.PostAsJsonAsync("/v1/admin/users", new
+            {
+                email = payload.email.ToUpperInvariant(),
+                name = "x" + id.ToString()[12..],
+                password = "http-admin-password"
+            });
+            Assert.Equal(2, (await duplicate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetInt32());
         }
     }
 

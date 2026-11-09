@@ -62,6 +62,34 @@ public sealed class OutputHttpTests
     }
 
     [Fact]
+    public async Task Http_team_outputs_requires_auto_admin_permission_and_queues_all_targets()
+    {
+        await using var world = await World.CreateAsync();
+
+        using var anonymous = world.App.CreateClient();
+        var unauthorized = await anonymous.PostAsync($"/v1/teams/{world.TeamId}/outputs", null);
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+        Assert.Equal(1003, await ErrorCodeAsync(unauthorized));
+
+        var forbidden = await world.SendAsync(HttpMethod.Post,
+            $"/v1/teams/{world.TeamId}/outputs", client: world.StrangerClient);
+        Assert.Equal(HttpStatusCode.BadRequest, forbidden.StatusCode);
+        Assert.Equal(103, await ErrorCodeAsync(forbidden));
+
+        var created = await world.SendAsync(HttpMethod.Post, $"/v1/teams/{world.TeamId}/outputs");
+        Assert.True(created.StatusCode == HttpStatusCode.OK, await created.Content.ReadAsStringAsync());
+        Assert.Equal("创建导出任务成功", (await JsonAsync(created)).GetProperty("message").GetString());
+        Assert.Equal(2, await world.Store.Collection("output")
+            .CountDocumentsAsync(new BsonDocument("p", world.ProjectId)));
+        Assert.Equal(2, await world.Store.Collection("csharp_job")
+            .CountDocumentsAsync(new BsonDocument
+            {
+                ["kind"] = OutputService.JobKind,
+                ["payload.project_id"] = world.ProjectId,
+            }));
+    }
+
+    [Fact]
     public async Task Http_create_is_queued_then_real_handler_produces_archive()
     {
         await using var world = await World.CreateAsync();
@@ -204,6 +232,7 @@ public sealed class OutputHttpTests
         public required HttpClient Http { get; init; }
         public required HttpClient StrangerClient { get; init; }
         public required ObjectStorage Storage { get; init; }
+        public required ObjectId TeamId { get; init; }
         public required ObjectId ProjectId { get; init; }
         public required ObjectId TargetId { get; init; }
         public required ObjectId SecondTargetId { get; init; }
@@ -264,6 +293,12 @@ public sealed class OutputHttpTests
                 ["_id"] = teamId, ["n"] = "HTTP output team", ["ou"] = userId,
                 ["ct"] = now, ["et"] = now
             });
+            await store.Collection("team_member").InsertOneAsync(new BsonDocument
+            {
+                ["_id"] = ObjectId.GenerateNewId(), ["team"] = teamId,
+                ["user"] = userId, ["base_tag"] = "creator", ["tags"] = new BsonArray(),
+                ["status"] = "active", ["create_time"] = now, ["edit_time"] = now
+            });
             await store.Collection("project_role")
                 .DeleteManyAsync(new BsonDocument("m_o", "translator"));
             await store.Collection("project_role").InsertOneAsync(new BsonDocument
@@ -322,7 +357,7 @@ public sealed class OutputHttpTests
             return new World
             {
                 DatabaseName = database, Store = store, App = app, Http = http,
-                StrangerClient = stranger, Storage = storage, ProjectId = projectId,
+                StrangerClient = stranger, Storage = storage, TeamId = teamId, ProjectId = projectId,
                 TargetId = targetId, SecondTargetId = secondTargetId,
                 ForeignTargetId = foreignTargetId
             };
