@@ -2,6 +2,16 @@
 
 更新日期：2026-11-09。当前为收尾草稿，现有后台任务交付后继续补充。
 
+## 最新补充：Partner Search 已交付
+
+- 六文件已被主 WIP `55f6bc6` 收入：`Modules/PartnerSearch/PartnerSearchService.cs`、`PartnerSearchEndpoints.cs`、`PartnerSearchRegistration.cs`（均在 `src/Shoreline.Api/` 下），`tests/Shoreline.Tests/PartnerSearchTests.cs` / `PartnerSearchHttpTests.cs`、`docs/partner-search-compatibility.md`。Agent 未自行 commit，报告对应路径干净。
+- 验证为 `git archive 3edd683` + 仅模块文件 + 私有 Program 注册：正常 locked restore，无新增包，build **0 warning / 0 error**，focused **24/24**（18 direct + 6 HTTP），full **410/410**（386 + 24）。五个代码/测试文件 SHA 与快照一致；共享 Program 未注册，不是整树或共享接线通过。
+- **优先待审查：agent 报告搜索按 `-et,-_id` 排序，而之前 Python 源码对照结论为 project `m_e`，project set 才是 `et`。** 云端先检查实际模块源码和 Python 查询排序，补相互冲突 et/m_e 的回归测试；不能以该模块测试全绿忽略这一疑点。本轮不续派、不改业务逻辑。
+- 显式可选接线为 `AddPartnerSearchServices()` / `MapPartnerSearch()`；公开 POST，settings GET/PUT admin，两个 OPTIONS。仅局部更新 site_setting `n=site` 的 pse/pst/psq/psm，不覆盖核心未知字段；CAS throttle 保留旧 XFF/client_key 协议，不能视为可信安全限流。
+- 明确行为差异：模块端点把公共 Forbidden 的错误 400 规范为 403；非法 JSON 类型安全返回 400（旧 Python 可能 500）；封面只在 th=3 且 Head 确认存在时签名，比旧 UNKNOWN 直接签名严格。需产品兼容评估，不描述为逐字段完全一致。
+- HTTP tests 在私有 Program 已接线时走真实宿主；共享未接线时有相同 service/CORS/ApiError 的最小 HTTP fallback，后者不能证明共享应用路由已上线。缩略图仍只走默认 storage，pool router 待统一接入。
+- 未真实访问合作方、R2、SMTP、SSH 或部署配置。本轮只收交付、更新交接和 WIP/bundle，不再新派或续派。
+
 ## 最新保存状态与 E1 幂等 helper 交付
 
 - 当前代码现场已经由主代理保存为 WIP：`dc9f1bd752cc7285775e83d9460a77d2ffba0ccc`，并补收至 `5f6d081ad305ddb2599e8c142f7e2b8789a97495`。下文各表的“未提交”是模块交付时的历史状态；已被 WIP 收入不等于模块已审查、正式接线或整体验收。
