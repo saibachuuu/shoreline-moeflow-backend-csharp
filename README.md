@@ -8,16 +8,17 @@ a separate concurrency limit. The current implementation includes legacy passwor
 and token compatibility, captchas, user profiles and aliases, email verification,
 password recovery, site settings, administrator user management, the public language
 catalog with legacy locale negotiation and resumable new-database seeding, identity
-permission calculation and tag-assignment validation, a leased job queue, and
-streaming S3 operations. Assignment validation covers qualification and open
-modes, protected identities, external invitations and custom policy tags; member
-mutation endpoints still need their own authorization and version checks.
+permission calculation and tag-assignment validation, team membership and identity
+policy endpoints, a leased job queue, and streaming S3 operations. Team mutations
+enforce the base hierarchy, capacity and optimistic versions. Assignment validation
+covers qualification and open modes, protected identities, external invitations
+and custom policy tags; project mutations still need to be ported.
 
 Project/team business endpoints, translation workflows, files, snapshots, exports,
 storage transfers and other business modules still need to be ported and tested.
 No memory-saving claim applies to the complete backend yet.
 
-At the current pause checkpoint, 70 tests pass. The completed stages and remaining
+At the current checkpoint, 92 tests pass. The completed stages and remaining
 work are in [docs/refactor-checkpoint.md](docs/refactor-checkpoint.md).
 
 ## Local verification
@@ -32,6 +33,12 @@ The service requires `Mongo__Uri` (including a database), `Auth__Secret`, and S3
 configuration when object storage is used. It does not load dotenv files. See
 `tests/Shoreline.Tests/LocalServices.cs` for a complete disposable configuration.
 Do not point tests at existing deployment databases or services.
+
+Team membership/policy writes use a fixed-size in-process gate table, absolute
+member recounts and Mongo version checks. Do not run a second backend writer
+(including the Python backend) against the same database. Member lists are paged
+and joined in MongoDB rather than materializing the complete team in the API.
+Audits remain separate writes; they are not a multi-document transaction guarantee.
 
 At the first checkpoint, 33 tests pass on Windows with local WSL Docker services.
 The SDK may roll forward within .NET 10 feature bands so the floating SDK image

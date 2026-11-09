@@ -45,6 +45,14 @@ public sealed class MongoStore
         await Collection("csharp_captcha").Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("expires_at"),
                 new CreateIndexOptions { ExpireAfter = TimeSpan.Zero }), cancellationToken: ct);
+        await Collection("team_member").Indexes.CreateManyAsync([
+            new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("user"),
+                new CreateIndexOptions { Unique = true, Name = "team_member_team_user_v1" }),
+            new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("status"),
+                new CreateIndexOptions { Name = "team_member_status_v1" })
+        ], ct);
+        await Collection("identity_tag_policy").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("team"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
     }
 }
 
@@ -54,6 +62,11 @@ public static class BsonFields
         d.TryGetValue(key, out var value) && value.IsString ? value.AsString : fallback;
     public static bool Flag(this BsonDocument d, string key) =>
         d.TryGetValue(key, out var value) && value.IsBoolean && value.AsBoolean;
+    public static long Integer(this BsonDocument d, string key, long fallback = 0) =>
+        d.TryGetValue(key, out var value) && value.IsNumeric ? value.ToInt64() : fallback;
+    public static string Timestamp(this BsonDocument d, string key) =>
+        d.TryGetValue(key, out var value) && value.IsBsonDateTime
+            ? value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.ffffff", System.Globalization.CultureInfo.InvariantCulture) : "";
     public static ObjectId Id(string value) => ObjectId.TryParse(value, out var id)
         ? id : throw ApiError.Invalid("Invalid object id");
 }

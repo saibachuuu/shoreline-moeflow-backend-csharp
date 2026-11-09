@@ -11,9 +11,18 @@ public sealed record PermissionSnapshot(string? ProjectMemberId, string? UserId,
 {
     public bool Has(string permission) => EffectivePermissions.Contains(IdentityPermissions.Normalize(permission));
     public bool Has(int permission) => Has(IdentityPermissions.Normalize(permission));
-    public object ToApi() => new { project_member_id = ProjectMemberId, user_id = UserId, project_id = ProjectId,
-        team_id = TeamId, source_tags = SourceTags, effective_permissions = EffectivePermissions.Order(StringComparer.Ordinal).ToArray(),
-        permission_sources = PermissionSources, is_owner = IsOwner, generated_at = GeneratedAt.ToString("yyyy-MM-ddTHH:mm:ss.ffffff", System.Globalization.CultureInfo.InvariantCulture) };
+    public object ToApi() => new
+    {
+        project_member_id = ProjectMemberId,
+        user_id = UserId,
+        project_id = ProjectId,
+        team_id = TeamId,
+        source_tags = SourceTags,
+        effective_permissions = EffectivePermissions.Order(StringComparer.Ordinal).ToArray(),
+        permission_sources = PermissionSources,
+        is_owner = IsOwner,
+        generated_at = GeneratedAt.ToString("yyyy-MM-ddTHH:mm:ss.ffffff", System.Globalization.CultureInfo.InvariantCulture)
+    };
 }
 
 // Runtime authority for identity permissions. Site administrator status is not
@@ -27,9 +36,12 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
     private static string[] Codes(string prefix, string names) => names.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(n => prefix + n).ToArray();
     private static readonly FrozenDictionary<string, string[]> ProjectDefaults = new Dictionary<string, string[]>
     {
-        ["creator"] = Codes("project:", ProjectNames), ["admin"] = Codes("project:", ProjectNames),
-        ["raw_provider"] = Codes("project:", FileNames), ["scanner"] = Codes("project:", FileNames),
-        ["cropper"] = Codes("project:", FileNames), ["cleaner"] = Codes("project:", FileNames),
+        ["creator"] = Codes("project:", ProjectNames),
+        ["admin"] = Codes("project:", ProjectNames),
+        ["raw_provider"] = Codes("project:", FileNames),
+        ["scanner"] = Codes("project:", FileNames),
+        ["cropper"] = Codes("project:", FileNames),
+        ["cleaner"] = Codes("project:", FileNames),
         ["translator"] = Codes("project:", FileNames + " " + TranslationNames),
         ["proofreader"] = Codes("project:", FileNames + " " + TranslationNames + " PROOFREAD_TRA CHECK_TRA"),
         ["typesetter"] = Codes("project:", FileNames + " OUTPUT_TRA ADD_LABEL MOVE_LABEL DELETE_LABEL")
@@ -43,19 +55,51 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
     private static readonly FrozenSet<string> NormalOnly = Codes("project:",
         "ADD_FILE MOVE_FILE RENAME_FILE DELETE_FILE OUTPUT_TRA ADD_LABEL MOVE_LABEL DELETE_LABEL ADD_TRA DELETE_TRA PROOFREAD_TRA CHECK_TRA ADD_TARGET CHANGE_TARGET DELETE_TARGET").ToFrozenSet(StringComparer.Ordinal);
 
+    public static BsonDocument SystemTagDefinitions(string scope)
+    {
+        var defaults = scope switch { "team" => TeamDefaults, "project" => ProjectDefaults, _ => throw new ArgumentException("Invalid tag scope", nameof(scope)) };
+        return new BsonDocument(defaults.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new BsonElement(p.Key,
+            new BsonDocument
+            {
+                ["name"] = p.Key,
+                ["code"] = p.Key,
+                ["permissions"] = new BsonArray(p.Value.Order(StringComparer.Ordinal)),
+                ["assignable"] = scope == "project" && p.Key != "creator",
+                ["source"] = "site"
+            })));
+    }
+
+    public static bool IsWorkerTag(string tag) => WorkerTags.Contains(tag);
+
     public static string Normalize(string permission) => permission.StartsWith("project:", StringComparison.Ordinal) ||
         permission.StartsWith("team:", StringComparison.Ordinal) ? permission : "project:" + permission;
 
     public static string Normalize(int permission) => permission switch
     {
-        1 => "project:ACCESS", 5 => "project:DELETE", 10 => "project:CHANGE", 101 => "project:CHECK_USER",
-        105 => "project:INVITE_USER", 110 => "project:DELETE_USER", 115 => "project:CHANGE_USER_ROLE",
-        120 => "project:CHANGE_USER_REMARK", 1010 => "project:COMPLETE_PROJECT", 1020 => "project:ADD_FILE",
-        1030 => "project:MOVE_FILE", 1040 => "project:RENAME_FILE", 1050 => "project:DELETE_FILE",
-        1060 => "project:OUTPUT_TRA", 1080 => "project:ADD_LABEL", 1090 => "project:MOVE_LABEL",
-        1100 => "project:DELETE_LABEL", 1110 => "project:ADD_TRA", 1120 => "project:DELETE_TRA",
-        1130 => "project:PROOFREAD_TRA", 1140 => "project:CHECK_TRA", 1150 => "project:ADD_TARGET",
-        1160 => "project:CHANGE_TARGET", 1170 => "project:DELETE_TARGET",
+        1 => "project:ACCESS",
+        5 => "project:DELETE",
+        10 => "project:CHANGE",
+        101 => "project:CHECK_USER",
+        105 => "project:INVITE_USER",
+        110 => "project:DELETE_USER",
+        115 => "project:CHANGE_USER_ROLE",
+        120 => "project:CHANGE_USER_REMARK",
+        1010 => "project:COMPLETE_PROJECT",
+        1020 => "project:ADD_FILE",
+        1030 => "project:MOVE_FILE",
+        1040 => "project:RENAME_FILE",
+        1050 => "project:DELETE_FILE",
+        1060 => "project:OUTPUT_TRA",
+        1080 => "project:ADD_LABEL",
+        1090 => "project:MOVE_LABEL",
+        1100 => "project:DELETE_LABEL",
+        1110 => "project:ADD_TRA",
+        1120 => "project:DELETE_TRA",
+        1130 => "project:PROOFREAD_TRA",
+        1140 => "project:CHECK_TRA",
+        1150 => "project:ADD_TARGET",
+        1160 => "project:CHANGE_TARGET",
+        1170 => "project:DELETE_TARGET",
         _ => permission.ToString(System.Globalization.CultureInfo.InvariantCulture)
     };
 
@@ -166,7 +210,12 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
         if (user is null) return false;
         if (action is "complete" or "reopen") return (await ProjectSnapshotAsync(user, project, ct)).Has("COMPLETE_PROJECT");
         if (action != "clear") return false;
-        return await store.Collection("team_member").Find(new BsonDocument { ["team"] = project["t"],
-            ["user"] = user["_id"], ["status"] = "active", ["base_tag"] = "creator" }).AnyAsync(ct);
+        return await store.Collection("team_member").Find(new BsonDocument
+        {
+            ["team"] = project["t"],
+            ["user"] = user["_id"],
+            ["status"] = "active",
+            ["base_tag"] = "creator"
+        }).AnyAsync(ct);
     }
 }

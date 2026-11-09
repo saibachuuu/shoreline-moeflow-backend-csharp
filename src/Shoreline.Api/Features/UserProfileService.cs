@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
+using Shoreline.Api.Security;
 
 namespace Shoreline.Api.Features;
 
@@ -61,9 +62,14 @@ public sealed class UserProfileService(MongoStore store, IConfiguration configur
             audit = ObjectId.GenerateNewId();
             await store.Collection("identity_audit_event").InsertOneAsync(new BsonDocument
             {
-                ["_id"] = audit.Value, ["actor"] = actor["_id"], ["scope"] = "user", ["action"] = "user_aliases_replace",
-                ["target_user_id"] = user["_id"].ToString(), ["request_id"] = requestId,
-                ["source"] = "runtime", ["create_time"] = clock.GetUtcNow().UtcDateTime,
+                ["_id"] = audit.Value,
+                ["actor"] = actor["_id"],
+                ["scope"] = "user",
+                ["action"] = "user_aliases_replace",
+                ["target_user_id"] = user["_id"].ToString(),
+                ["request_id"] = requestId,
+                ["source"] = "runtime",
+                ["create_time"] = clock.GetUtcNow().UtcDateTime,
                 ["before"] = new BsonDocument { ["scope"] = "site", ["aliases"] = user.GetValue("as", new BsonArray()), ["default_display_name"] = user.Text("ddn") },
                 ["after"] = new BsonDocument { ["scope"] = "site", ["aliases"] = updated["as"], ["default_display_name"] = updated.Text("ddn") }
             }, cancellationToken: ct);
@@ -72,24 +78,7 @@ public sealed class UserProfileService(MongoStore store, IConfiguration configur
     }
 
     private string[] NormalizeAliases(JsonElement data, string name)
-    {
-        if (data.ValueKind != JsonValueKind.Array) throw AliasError("aliases must be an array");
-        var seen = new HashSet<string>();
-        var result = new List<string>();
-        foreach (var value in data.EnumerateArray())
-        {
-            if (value.ValueKind != JsonValueKind.String) throw AliasError("alias must be a string");
-            var alias = value.GetString()!.Normalize().Trim();
-            if (alias.Length == 0) continue;
-            if (alias.EnumerateRunes().Count() > 64) throw AliasError("alias is too long");
-            var key = SearchText.Normalize(alias);
-            if (key == SearchText.Normalize(name)) throw AliasError("alias cannot equal the user's name");
-            if (seen.Add(key)) result.Add(alias);
-        }
-        if (result.Count > configuration.GetValue("Users:MaxAliases", 10)) throw AliasError("too many aliases");
-        return result.ToArray();
-    }
+        => IdentityAliases.Normalize(data, name, configuration.GetValue("Users:MaxAliases", 10));
 
-    private static ApiError AliasError(string detail) => new("AliasValidationError", 5114, "alias 格式或数量无效: " + detail, 422)
-    { IdentityCode = "ALIAS_INVALID" };
+    private static ApiError AliasError(string detail) => IdentityAliases.Error(detail);
 }

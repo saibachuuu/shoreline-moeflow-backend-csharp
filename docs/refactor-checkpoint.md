@@ -1,7 +1,8 @@
 # Refactor checkpoint — 2026-11-09
 
-Paused at the user's request after completing the language catalog stage. The
-replacement backend is incomplete; do not replace the Python deployment yet.
+The user resumed work after the language catalog checkpoint. Team identity APIs
+are now complete; the replacement backend is still incomplete. Do not replace
+the Python deployment yet.
 
 ## Constraints for continuation
 
@@ -26,10 +27,17 @@ replacement backend is incomplete; do not replace the Python deployment yet.
   remain intact. A persisted seed marker lets interrupted new installations resume;
   unique-code upserts permit concurrent initialization without replacing rows.
 - `/ping` now returns the legacy plain-text `pong`.
+- Team membership add/restore, soft removal, aliases and display names, worker
+  qualifications, database-side joined pagination, capacity recounts and version
+  fencing. Display-name synchronization uses bounded project-id batches.
+- Team/project custom tag policies, protected system overrides, resets and checks
+  preventing removal of tags used by any member status. Mutation audits preserve
+  the original identity audit schema.
 
 Current verification: `dotnet test --no-restore --verbosity minimal` passes
-70 tests against disposable local MongoDB, S3Mock and Mailpit. The language stage
-has also built successfully with zero warnings. Its Docker image has not been
+92 tests against disposable local MongoDB, S3Mock and Mailpit, including concurrent
+admission/edit tests and cross-team/hierarchy checks. The service builds with zero
+warnings. Its Docker image has not been
 rebuilt; the existing API container still runs the earlier foundation image.
 
 The language data is embedded in the assembly. The offline
@@ -39,9 +47,8 @@ the running C# service requires neither Python nor the old repository.
 
 ## Next work
 
-1. Team and member services/endpoints: capacity, status/version checks, audit,
-   base identities, worker qualifications and custom tag policy management. Reuse
-   the permission and eligibility services, with mutation-time authorization.
+1. Team creation/editing/listing, default project-set creation and user joining.
+   Reuse the fixed-size team mutation gates for all membership-changing paths.
 2. Complete registration with email-code consumption and automatic team joining.
    The Python registration path uses site_setting.ajt; do not omit this behavior.
 3. Project/member services and ownership, position locks, lifecycle operations,
@@ -52,7 +59,9 @@ the running C# service requires neither Python nor the old repository.
    endpoints; then full API/data compatibility and equivalent workload RAM testing.
 
 Known issues to revisit: concurrent case-insensitive username uniqueness is not
-fully enforced by the current case-sensitive Mongo name index; profile writes and
-their audit inserts are separate documents. Durable jobs need real business
+fully enforced by the current case-sensitive Mongo name index; profile/team writes
+and their audit inserts are separate documents. Team gates are local to the single
+business process, not distributed locks; do not run a second writer on the same DB.
+Durable jobs need real business
 handlers beyond security email. Do not describe the current service as ready for
 production or infer full compatibility from the existing tests.

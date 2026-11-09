@@ -20,6 +20,10 @@ builder.Services.AddScoped<UserProfileService>();
 builder.Services.AddSingleton<SiteSettings>();
 builder.Services.AddSingleton<LanguageCatalog>();
 builder.Services.AddScoped<IdentityPermissions>();
+builder.Services.AddSingleton<TeamMutationGate>();
+builder.Services.AddSingleton<IdentityAuditWriter>();
+builder.Services.AddScoped<TeamMemberService>();
+builder.Services.AddScoped<IdentityTagPolicyService>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
 builder.Services.AddSingleton<EmailCodeService>();
@@ -31,8 +35,11 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("auth", ctx => RateLimitPartition.GetSlidingWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new SlidingWindowRateLimiterOptions
         {
-            PermitLimit = 20, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 4,
-            QueueLimit = 0, AutoReplenishment = true
+            PermitLimit = 20,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 4,
+            QueueLimit = 0,
+            AutoReplenishment = true
         }));
 });
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
@@ -72,6 +79,7 @@ app.MapEmail();
 app.MapSite();
 app.MapAdminUsers();
 app.MapLanguages();
+app.MapTeamIdentity();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {
