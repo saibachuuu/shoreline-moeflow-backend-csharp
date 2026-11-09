@@ -162,8 +162,9 @@ public sealed class TeamIdentityTests(LocalServices services)
         await services.Store.Collection("user").UpdateOneAsync(new BsonDocument("_id", team.Plain["_id"]), new BsonDocument("$set", new BsonDocument("ddn", "Site alias")));
         var localProject = await ProjectAsync(team.Document);
         var outsideProject = await ProjectAsync(other.Document);
+        var invitedProject = await ProjectAsync(team.Document);
         var active = await ProjectMemberAsync(localProject, team.Plain, "active");
-        var invited = await ProjectMemberAsync(localProject, team.Plain, "invited");
+        var invited = await ProjectMemberAsync(invitedProject, team.Plain, "invited");
         var outside = await ProjectMemberAsync(outsideProject, team.Plain, "active");
         using var own = Client(team.Plain);
         var path = $"{team.Path}/members/{team.PlainMember["_id"]}/default-display-name";

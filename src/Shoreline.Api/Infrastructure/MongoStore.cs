@@ -61,6 +61,28 @@ public sealed class MongoStore
         ], ct);
         await Collection("identity_tag_policy").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("team"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
+        await Collection("project_member").Indexes.CreateManyAsync([
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("ik"),
+                new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_identity_key_v1",
+                    PartialFilterExpression = new BsonDocument("ik", new BsonDocument("$type", "string")) }),
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("user"),
+                new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_project_user_v1",
+                    PartialFilterExpression = new BsonDocument("user", new BsonDocument("$type", "objectId")) }),
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("external_id"),
+                new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_project_external_v1",
+                    PartialFilterExpression = new BsonDocument("external_id", new BsonDocument("$type", "string")) }),
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("status"),
+                new CreateIndexOptions { Name = "project_member_status_v1" }),
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("tags"),
+                new CreateIndexOptions { Name = "project_member_tags_v1" }),
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("display_name"),
+                new CreateIndexOptions { Name = "project_member_display_name_v1" }),
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("status").Ascending("display_name_search"),
+                new CreateIndexOptions { Name = "project_member_display_name_search_v1" })
+        ], cancellationToken: ct);
+        await Collection("identity_operation").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("operation_id"),
+            new CreateIndexOptions { Unique = true, Name = "identity_operation_project_operation_v1" }), cancellationToken: ct);
     }
 }
 

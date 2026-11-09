@@ -13,6 +13,14 @@ public static class IdentityErrors
     public static ApiError InvalidTag() => Error("InvalidIdentityTagError", 5101, "INVALID_IDENTITY_TAG", "项目身份标签无效或不可分配", 422);
     public static ApiError TeamMemberMissing() => Error("IdentityTeamMemberNotFoundError", 5104, "TEAM_MEMBER_NOT_FOUND", "团队成员不存在", 404);
     public static ApiError UserMissing() => Error("IdentityUserNotFoundError", 5105, "USER_NOT_FOUND", "用户不存在", 404);
+    public static ApiError MemberMissing() => Error("IdentityMemberNotFoundError", 5103, "MEMBER_NOT_FOUND", "项目成员不存在", 404);
+    public static ApiError AlreadyExists() => Error("MemberAlreadyExistsError", 5106, "MEMBERS_ALREADY_EXISTS", "成员已存在", 409);
+    public static ApiError MemberVersionConflict() => Error("ProjectMemberVersionConflictError", 5108, "PROJECT_MEMBER_VERSION_CONFLICT", "项目成员版本已变化，请刷新后重试", 409);
+    public static ApiError MergeRequired() => Error("MemberMergeRequiredError", 5109, "MEMBER_MERGE_REQUIRED", "项目中已存在该用户成员，需要显式合并", 409);
+    public static ApiError OwnerConflict() => Error("OwnerConflictError", 5110, "OWNER_CONFLICT", "项目 owner 条件已变化", 409);
+    public static ApiError AlreadyOwner() => Error("MemberAlreadyOwnerError", 5111, "MEMBER_ALREADY_OWNER", "项目 owner 不能被移除或降权", 409);
+    public static ApiError StateConflict() => Error("ProjectStateConflictError", 5112, "PROJECT_STATE_CONFLICT", "项目状态不允许执行该操作", 409);
+    public static ApiError ClearRetryable() => Error("ClearOperationRetryableError", 5113, "CLEAR_OPERATION_RETRYABLE", "项目内容清理未完成，请重试", 503);
     public static ApiError Capacity() => Error("MemberCapacityReachedError", 5107, "MEMBER_CAPACITY_REACHED", "成员数量已达到上限", 409);
     public static ApiError VersionConflict() => Error("IdentityVersionConflictError", 5115, "VERSION_CONFLICT", "版本已变化，请刷新后重试", 409);
     public static ApiError ProtectedTag() => Error("ProtectedIdentityTagError", 5116, "PROTECTED_IDENTITY_TAG", "系统身份标签受保护", 422);

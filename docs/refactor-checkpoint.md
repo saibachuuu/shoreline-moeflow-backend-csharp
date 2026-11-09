@@ -56,9 +56,38 @@ the Python deployment yet.
   internal trusted join (missing teams skipped; a failed join is logged but the
   persisted account and its token still return, whereas Python would 500 after
   the user was saved). Response is `{"message": "注册成功", "token"}`.
+- Project core (`5aab08c`): project sets (create/list/rename/delete with rehome to
+  the default set), project create (team-create gating, target creation per
+  language list, creator membership in one flow), detail/list views with member
+  summaries, project renames with position-lock (ple/plt) guards, and target
+  add/list/delete.
+- Project members and lifecycle (Python identity parity): member list with
+  status/tag/word filters and pagination; idempotent `apply_changes` claim
+  ledger (identity_operation) with claim-token CAS and lease-based steal; add
+  (user/external/restore), update (display name, tags, soft remove), bind with
+  automatic merge when the target user already has a member, explicit merge,
+  external hard delete; owner transfer with keep-admin and compensating rollback
+  (5109 MEMBERS_ALREADY_EXISTS is only raised on duplicate-key races, matching
+  Python); `complete` / `reopen` / `clear` with clear-in-progress fencing and
+  file/output document removal plus count zeroing (real-file deletion deferred
+  to the file-storage stage). Member audits now carry scope `project` and return
+  their event IDs. New IdentityErrors codes 5103/5106/5108/5109/5110/5111/
+  5112/5113. Non-manager external adds are tagless-only (tags ⇒ 103), and
+  locked-tag assignment is team-creator-only, both matching Python. Note: an
+  `invited` projection stand-in is persisted when a non-creator manager invites
+  an existing team member — the invitation lifecycle stage replaces it with the
+  real invitation adapter activation path.
 
 Current verification: `dotnet test --no-restore --verbosity minimal` passes
-137 tests against disposable local MongoDB, S3Mock and Mailpit, including 7 registration tests (lowercase email, single-use consumption, field-error collection without consumption, whitelist `1012`, `ajt` member/admin base tags with missing-team skip, legacy code deletion and concurrent same-name admission), concurrent
+150 tests against disposable local MongoDB, S3Mock and Mailpit, including 6
+project-member tests (idempotent changes + duplicate 5106, update/remove/
+restore with 5108 version fences, external bind auto-merge + explicit merge +
+hard delete, manager/position-lock 103, complete/reopen/clear idempotency with
+file/output removal and count zeroing, owner transfer with keep-admin +
+idempotency + 5110), plus 7 registration tests (lowercase email, single-use
+consumption, field-error collection without consumption, whitelist `1012`,
+`ajt` member/admin base tags with missing-team skip, legacy code deletion and
+concurrent same-name admission), concurrent
 admission/edit/creation tests, partial-creation recovery and cross-team/hierarchy checks. The service builds with zero
 warnings. Its Docker image has not been
 rebuilt; the existing API container still runs the earlier foundation image.
@@ -70,8 +99,9 @@ the running C# service requires neither Python nor the old repository.
 
 ## Next work
 
-1. Project/member services and ownership, position locks, lifecycle operations,
-   project sets, listings and identity policy endpoints.
+1. Invitation lifecycle (replace the `invited` projection stand-in with the real
+   adapter activation path) and project application approve/reject; team
+   application pages.
 2. Team dissolution must be implemented together with complete project lifecycle
    cleanup; do not expose a partial delete that leaves project/storage data behind.
 3. Files, targets, labels/translations/tips, complete snapshots and recovery,
