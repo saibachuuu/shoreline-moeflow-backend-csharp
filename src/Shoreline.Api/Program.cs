@@ -18,6 +18,7 @@ builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<UserView>();
 builder.Services.AddScoped<UserProfileService>();
 builder.Services.AddSingleton<SiteSettings>();
+builder.Services.AddSingleton<LanguageCatalog>();
 builder.Services.AddScoped<IdentityPermissions>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
@@ -65,11 +66,12 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(new { error = "InternalServerError", code = 1, message = "Internal server error" });
     }
 });
-app.MapGet("/ping", () => Results.Json(new { message = "pong" }));
+app.MapGet("/ping", () => Results.Text("pong"));
 app.MapUsers();
 app.MapEmail();
 app.MapSite();
 app.MapAdminUsers();
+app.MapLanguages();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {
@@ -77,6 +79,7 @@ app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
     return Results.Ok(new { status = "ok" });
 });
 await app.Services.GetRequiredService<MongoStore>().InitializeAsync(CancellationToken.None);
+await app.Services.GetRequiredService<LanguageCatalog>().InitializeAsync(CancellationToken.None);
 app.Run();
 
 public partial class Program;

@@ -6,7 +6,8 @@ The ASP.NET Core service runs HTTP requests and bounded, durable MongoDB jobs in
 one process. MongoDB and object-storage clients are shared. Password hashing has
 a separate concurrency limit. The current implementation includes legacy password
 and token compatibility, captchas, user profiles and aliases, email verification,
-password recovery, site settings, administrator user management, identity
+password recovery, site settings, administrator user management, the public language
+catalog with legacy locale negotiation and resumable new-database seeding, identity
 permission calculation and tag-assignment validation, a leased job queue, and
 streaming S3 operations. Assignment validation covers qualification and open
 modes, protected identities, external invitations and custom policy tags; member
@@ -15,6 +16,9 @@ mutation endpoints still need their own authorization and version checks.
 Project/team business endpoints, translation workflows, files, snapshots, exports,
 storage transfers and other business modules still need to be ported and tested.
 No memory-saving claim applies to the complete backend yet.
+
+At the current pause checkpoint, 70 tests pass. The completed stages and remaining
+work are in [docs/refactor-checkpoint.md](docs/refactor-checkpoint.md).
 
 ## Local verification
 

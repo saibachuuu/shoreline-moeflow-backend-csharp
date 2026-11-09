@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Features/system-languages.json" LogicalName="Shoreline.SystemLanguages" />
     <PackageReference Include="AWSSDK.S3" Version="4.0.104.11" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
     <PackageReference Include="MongoDB.Driver" Version="3.13.0" />
