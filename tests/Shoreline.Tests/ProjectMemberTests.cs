@@ -235,12 +235,29 @@ public sealed class ProjectMemberTests(LocalServices services)
         Assert.Equal(103, strangerBody.GetProperty("failed").GetProperty("error_code").GetInt32());
 
         // Position lock: translator is locked to the team creator; a team
-        // admin (manager but not creator) cannot assign it.
+        // admin (manager but not creator) cannot assign it.  Note: the admin
+        // must be a project manager first, otherwise the 103 below could be
+        // produced by the manager check instead of the lock check.
         await services.Store.Collection("project").UpdateOneAsync(new BsonDocument("_id", ObjectId.Parse(projectId)),
             new BsonDocument("$set", new BsonDocument { ["ple"] = true, ["plt"] = new BsonArray { "translator" } }));
         var admin = await UserAsync();
         await MemberAsync(teamId, admin, "admin", ["translator"]);
         using var adminClient = Client(admin);
+        // grant the team admin project MANAGE_MEMBERS via a project member row
+        var managerRow = new BsonDocument
+        {
+            ["_id"] = ObjectId.GenerateNewId(),
+            ["project"] = ObjectId.Parse(projectId),
+            ["user"] = admin["_id"],
+            ["display_name"] = admin.Text("n"),
+            ["dns"] = SearchText.Normalize(admin.Text("n")),
+            ["tags"] = new BsonArray { "admin" },
+            ["status"] = "active",
+            ["create_time"] = DateTime.UtcNow,
+            ["edit_time"] = DateTime.UtcNow,
+            ["version"] = 0
+        };
+        await services.Store.Collection("project_member").InsertOneAsync(managerRow);
         var member = await UserAsync();
         await MemberAsync(teamId, member, "member", ["translator"]);
         var lockedResponse = await adminClient.PostAsJsonAsync($"/v1/projects/{projectId}/members/changes", new
