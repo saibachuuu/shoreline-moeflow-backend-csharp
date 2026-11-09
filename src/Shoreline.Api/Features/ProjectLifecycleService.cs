@@ -16,7 +16,8 @@ namespace Shoreline.Api.Features;
 public sealed class ProjectLifecycleService(MongoStore store, TimeProvider clock, IdentityPermissions permissions,
     IdentityAuditWriter audit, ProjectMemberService members, ObjectStorage? storage = null,
     IConfiguration? configuration = null, ILogger<ProjectLifecycleService>? logger = null,
-    Func<string, CancellationToken, Task>? deleteObject = null)
+    Func<string, CancellationToken, Task>? deleteObject = null,
+    ProjectStorageRouter? router = null)
 {
     private static readonly TimeSpan ClaimReleaseTimeout = TimeSpan.FromSeconds(5);
     private IMongoCollection<BsonDocument> Projects => store.Collection("project");
@@ -298,6 +299,12 @@ public sealed class ProjectLifecycleService(MongoStore store, TimeProvider clock
         }
         if (storage is null)
             throw new InvalidOperationException("Object storage is required to clear project contents.");
+        if (router is not null)
+        {
+            await ProjectContentCleanup.ClearProjectContentsAsync(
+                store, router, storage, configuration, project, ct);
+            return;
+        }
         await ProjectContentCleanup.ClearProjectContentsAsync(store, storage, configuration, project, ct);
     }
 

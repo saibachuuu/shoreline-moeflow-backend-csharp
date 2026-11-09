@@ -58,10 +58,36 @@ public static class ProjectContentCleanup
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(storage);
+        EnsureDefaultStorageSource(project);
         return ClearProjectContentsAsync(
             store,
             ProjectCleanupOptions.FromConfiguration(configuration),
             storage.DeleteAsync,
+            project,
+            ct);
+    }
+
+    /// <summary>
+    /// Pool-aware overload. A project with an empty <c>csid</c> uses the
+    /// borrowed default backend; a project with <c>csid</c> resolves through
+    /// the storage-pool router. An unknown/disabled source fails closed before
+    /// any object or row is touched.
+    /// </summary>
+    public static async Task ClearProjectContentsAsync(
+        MongoStore store,
+        ProjectStorageRouter router,
+        ObjectStorage defaultStorage,
+        IConfiguration? configuration,
+        BsonDocument project,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(router);
+        ArgumentNullException.ThrowIfNull(defaultStorage);
+        await using var lease = await router.ForProjectOrNullAsync(project, ct);
+        await ClearProjectContentsAsync(
+            store,
+            ProjectCleanupOptions.FromConfiguration(configuration),
+            (lease?.Backend ?? defaultStorage).DeleteAsync,
             project,
             ct);
     }
@@ -83,7 +109,6 @@ public static class ProjectContentCleanup
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(deleteObject);
-        EnsureDefaultStorageSource(project);
 
         var projectId = project["_id"].AsObjectId;
         await DeleteAllFileRowsAsync(store, options, deleteObject, projectId, ct);
@@ -141,10 +166,33 @@ public static class ProjectContentCleanup
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(storage);
+        EnsureDefaultStorageSource(project);
         return DeleteTargetCascadesAsync(
             store,
             ProjectCleanupOptions.FromConfiguration(configuration),
             storage.DeleteAsync,
+            project,
+            target,
+            ct);
+    }
+
+    /// <summary>Pool-aware target cascade; see the clear overload above.</summary>
+    public static async Task DeleteTargetCascadesAsync(
+        MongoStore store,
+        ProjectStorageRouter router,
+        ObjectStorage defaultStorage,
+        IConfiguration? configuration,
+        BsonDocument project,
+        BsonDocument target,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(router);
+        ArgumentNullException.ThrowIfNull(defaultStorage);
+        await using var lease = await router.ForProjectOrNullAsync(project, ct);
+        await DeleteTargetCascadesAsync(
+            store,
+            ProjectCleanupOptions.FromConfiguration(configuration),
+            (lease?.Backend ?? defaultStorage).DeleteAsync,
             project,
             target,
             ct);
@@ -168,7 +216,6 @@ public static class ProjectContentCleanup
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(deleteObject);
-        EnsureDefaultStorageSource(project);
 
         var projectId = project["_id"].AsObjectId;
         var targetId = target["_id"].AsObjectId;
@@ -423,18 +470,17 @@ public static class ProjectContentCleanup
 
     // ---- shared guards ----
 
+    // Only the legacy default-only overloads call this. Production callers pass
+    // the router-aware overload; keeping this guard prevents a caller that
+    // forgot the router from deleting the wrong bucket.
     private static void EnsureDefaultStorageSource(BsonDocument project)
     {
         var sourceId = project.GetValue("csid", BsonNull.Value);
         if (sourceId.IsBsonNull) return;
         if (sourceId.IsString && sourceId.AsString.Length == 0) return;
 
-        // Storage-pool routing is not implemented yet. Deleting in the default
-        // bucket would be wrong when the project lives on another source; fail
-        // closed and leave every DB row/object untouched for a retry after the
-        // router lands. The lifecycle layer converts this into a retryable 503.
         throw new InvalidOperationException(
-            "Project storage_source_id is set, but the storage pool router is not implemented; refusing to delete objects from the default bucket.");
+            "Project storage_source_id is set; use the pool-aware cleanup overload instead of the default storage.");
     }
 
     private static Task ZeroContentCountersAsync(MongoStore store, ObjectId projectId, CancellationToken ct) =>

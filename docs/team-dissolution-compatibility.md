@@ -25,8 +25,16 @@ delete rules in `app/models/team.py:621-634` / `app/models/project.py:1438-1451`
 - `tests/Shoreline.Tests/TeamDissolutionTests.cs`
 - this document
 
-No shared source, `Program.cs`, project file, or another agent's file is
-changed by this slice.
+Writer-side integration touches only:
+
+- `src/Shoreline.Api/Features/ProjectService.cs`
+- `src/Shoreline.Api/Features/ProjectImportService.cs`
+- `src/Shoreline.Api/Features/TeamMemberService.cs`
+- `src/Shoreline.Api/Features/InvitationService.cs`
+- `src/Shoreline.Api/Features/ProjectInvitationService.cs`
+
+`Program.cs`, the lock implementation, the delete service semantics, project
+files and other modules are not changed by this slice.
 
 ## Legacy semantics
 
@@ -147,58 +155,94 @@ team. Project label leases are released between projects; the team claim is
 held for the whole operation. Lock order is team lifecycle claim, then project
 label lock, then any operation-local lock.
 
-## Required wiring outside this slice
+## Writer guard wiring (K1 integration)
 
-`EnsureWritableAsync` is the only guard and **is not retroactively called by
-existing writers**. The following methods still need to call it (or acquire
-the same guard) before accepting a new write:
+`EnsureWritableAsync` is now called by every write path listed below. The call
+is always inside the operation's own lock range, immediately before its first
+write; there is no unlocked "check, then write" path.
 
-- `ProjectService.CreateProjectAsync`
-- `ProjectService.CreateProjectSetAsync`
-- `ProjectService.UpdateProjectAsync` (including project-set moves)
-- `ProjectImportService.RunImportAsync`
-- `TeamMemberService.AddAsync` / `JoinTrustedAsync` / `JoinApplicationRoleAsync`
-- `InvitationService.JoinTeamAsync` and invitation acceptance paths
-- `ProjectInvitationService.CreatePendingInvitationAsync` / `JoinProjectAsync`
+| Call site | Team id source | Lock range and rationale |
+| --- | --- | --- |
+| `ProjectService.CreateProjectSetAsync` | `team["_id"]` | Team-scoped write. No project/label lock exists yet; the distributed guard runs after the permission check and before the insert. |
+| `ProjectService.CreateProjectAsync` | `team["_id"]` | Same as above. The project row does not exist when the guard runs, so there is no project label lock to hold. A create that races a delete cannot leave an orphan: the delete pass re-counts `project` and CAS-deletes the team row last. |
+| `ProjectService.UpdateProjectAsync` | `project["t"]` | Runs inside a `ProjectLabelLock` session. The HTTP label guard usually already holds that lease for `/v1/projects/{id}`; the scoped `LabelRequestContext` borrows it. The project is re-read from the session before the status/permission checks and before the update. |
+| `ProjectImportService.InitializeAfterCreateAsync` | `project["t"]` | Inside the project label lock, after the `label_revision` check and before the first `is/ip/it/ij` write or enqueue. |
+| `ProjectImportService.RunImportAsync` | `project["t"]` | Inside the project label lock, after the terminal replay guards and before the first flag write (`FinishAsync` or `is=Running`). |
+| `TeamMemberService.AddAsync` | team `_id` | Inside `TeamMutationGate`, after re-reading the team and before the capacity/member writes. |
+| `TeamMemberService.JoinTrustedAsync` | team `_id` | Same gate and position. `JoinApplicationRoleAsync` delegates here, so registration and application approval are covered. |
+| `InvitationService.JoinTeamAsync` | team `_id` | Every current caller (`PostInviteAsync`, and `PatchInvitationAsync` through `AcceptInvitationCoreAsync`) holds the invitation mutation gate for the group. The guard runs before the member/base-tag write; the nested `JoinTrustedAsync` re-enters the team gate. |
+| `ProjectInvitationService.CreatePendingInvitationAsync` | `project["t"]` | All callers hold the per-project invitation mutation gate. Guard runs before the invitation insert. |
+| `ProjectInvitationService.JoinProjectAsync` | `project["t"]` | Same gate and position; guard runs before the membership row/count writes. |
 
-Until those calls land, a concurrent writer can still create a row after the
-first working-project check. The deletes themselves re-read the team marker and
-reject a stale owner, but this does not make the writer path race-free. The
-HTTP and direct tests therefore prove the guard itself and concurrent DELETE
-behavior, not integration with unwired writers. This is a known pending item,
-not a claim that team dissolution is fully race-free.
+### `ValidateBeforeCreate` has no team id
+
+`ProjectImportService.ValidateBeforeCreate` stays a pure parser and does not
+call the guard. Python's `Project.create` also parses `labelplus_txt` before
+the first `save()` and performs no dissolution check; parsing writes nothing.
+The first real write is `ProjectService.CreateProjectAsync`, which now has the
+team context and calls the guard, and `InitializeAfterCreateAsync` calls it
+again under the project label lock. Changing the parser signature would either
+need a fake team id at its other call site or an unlocked check, neither of
+which is useful.
+
+### Project invitation lock order
+
+`ProjectInvitationService` deliberately does **not** acquire `ProjectLabelLock`
+itself. HTTP project routes already hold that lock outside the invitation gate,
+while invitation/application routes hold the invitation gate; taking the label
+lock after the invitation gate would invert the established label -> invitation
+gate order used by `ProjectMemberService`/`ApplicationService` and could
+deadlock. The invitation gate is the operation lock for these two methods.
+
+### Residual race (not a claim of full serialization)
+
+`EnsureWritableAsync` is a check, not a shared lock. Project-scoped writers
+(`UpdateProjectAsync`, both import hooks) share the deletion's project label
+lock, so they cannot write after the delete pass has claimed that project.
+Team-scoped writers (create project/set, member joins, team invitation join)
+are serialized by their own mutation gate but deletion does not take that gate;
+a writer that passes the check just before `AcquireAsync`/`MarkDeletingAsync`
+can still commit. The delete's project re-count and final team-row CAS prevent
+project/team resurrection, but a team-member or invitation row committed in
+that narrow window is not covered by a project lock. This is the documented
+boundary of the no-TTL owner-CAS design; the lock itself is unchanged.
 
 ## Verification evidence
 
-Snapshot source: `c70c67b` (base 323 tests), plus only this slice's files and
-the stable E1 `ProjectLabelLock` dependency, with a snapshot-only Program
-wiring:
+Current wiring was verified in `/tmp/opencode/k1-wire-work`, built from
+`git archive 70d38ca` plus only the five writer service files, the
+`TeamDissolutionTests` additions and this document. Other agents' concurrent
+working-tree edits were not copied into that tree.
 
 ```text
-AddTeamDissolutionServices()
-MapTeamDissolution()
-InitializeTeamDissolutionAsync()
+dotnet restore --locked-mode                                   -> ok
+dotnet build Shoreline.sln -c Debug -warnaserror               -> 0 warnings / 0 errors
+--filter FullyQualifiedName~TeamDissolutionTests               -> 25 passed / 0 failed
+  (21 pre-existing + 4 new writer/delete concurrency tests)
+--filter ProjectTests|TeamTests|InvitationTests|ApplicationTests|
+         ProjectMemberTests|ProjectImportTests|ProjectCleanupTests
+                                                               -> 100 passed / 0 failed
+dotnet test (full)                                             -> 793 passed / 0 failed / 0 skipped
 ```
 
-Snapshot: `C:\Users\88888888\AppData\Local\Temp\shoreline-k1-snapshot-20261109-231500`
+The new tests pause a real `DeleteAsync` in
+`TeamLifecycleLockHooks.AfterMarkAsync` (after the durable marker is written and
+while the claim is held) and run the writer concurrently:
 
-Commands (UTF-8; 420000 ms timeout):
+- `ProjectCreationRacingDeletionIsRejectedThenRetrySeesDeletedTeam`
+- `MemberJoinsRacingDeletionAreRejected` (both `AddAsync` and
+  `JoinTrustedAsync`)
+- `ImportInitializationRacingDeletionIsRejected`
+- `DurableDeletingMarkerRejectsWritesAfterLeaseRelease` (marker retained after
+  lease release still rejects writes; the next DELETE resumes and completes)
 
-```powershell
-dotnet build Shoreline.sln -v:minimal
-dotnet test tests\Shoreline.Tests\Shoreline.Tests.csproj --no-build --filter "FullyQualifiedName~TeamDissolutionTests"
-dotnet test tests\Shoreline.Tests\Shoreline.Tests.csproj --no-build
-```
+They use the shared disposable MongoDB fixture and a temporary local
+`ObjectStorage` root. All deletes in the test are retryable and no lock row is
+left behind.
 
-Actual results in that snapshot:
-
-- build: 0 warnings, 0 errors
-- focused: **21 passed** (17 direct + 4 HTTP), 0 failed, 0 skipped
-- full: **344 passed**, 0 failed, 0 skipped (323 baseline + 21)
-
-The direct tests use a temporary local `ObjectStorage` root and the shared
-disposable MongoDB test fixture. HTTP tests use the snapshot-only Program
-wiring; shared `Program.cs` remains unwired in this slice.
+Historical snapshot evidence from the original dissolution slice (base
+`c70c67b`, Program wiring added only in the snapshot) remains: 21 focused and
+344 full passed.
 
 ## Remaining boundaries
 

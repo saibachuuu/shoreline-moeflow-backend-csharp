@@ -74,6 +74,7 @@ public sealed partial class FileService
     private readonly ProjectService _projects;
     private readonly IdentityPermissions _permissions;
     private readonly ObjectStorage _storage;
+    private readonly ProjectStorageRouter? _router;
     private readonly IConfiguration _configuration;
     private readonly TimeProvider _clock;
     private readonly FileMutationGate _gate;
@@ -101,12 +102,14 @@ public sealed partial class FileService
         FileMutationGate gate,
         ILogger<FileService>? logger = null,
         ProjectLabelLock? labelLock = null,
-        LabelRequestContext? labelContext = null)
+        LabelRequestContext? labelContext = null,
+        ProjectStorageRouter? router = null)
     {
         _store = store;
         _projects = projects;
         _permissions = permissions;
         _storage = storage;
+        _router = router;
         _configuration = configuration;
         _clock = clock;
         _gate = gate;
@@ -506,13 +509,14 @@ public sealed partial class FileService
         CancellationToken ct)
     {
         EnsureWorking(project);
-        EnsureDefaultStorage(project);
         var projectId = project["_id"].AsObjectId;
 
         await using var labelSession = await EnterLabelAsync(projectId, ct);
         using var _ = await _gate.EnterAsync(projectId, ct);
         // Reload under the locks: another request may have changed the project.
         project = await _projects.GetProjectAsync(projectId.ToString(), ct);
+        await using var storageLease = await LeaseForProjectAsync(project, ct);
+        var storage = storageLease?.Backend ?? _storage;
 
         var parsed = ParseFilename(filename, folder: false);
         if (parsed.Type != TypeImage && !(parsed.Type == TypeText && AllowTextUpload))
@@ -572,7 +576,7 @@ public sealed partial class FileService
                              81920,
                              FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
-                await _storage.PutAsync(
+                await storage.PutAsync(
                     FilePrefix + saveName,
                     stream,
                     string.IsNullOrWhiteSpace(upload.ContentType) ? "application/octet-stream" : upload.ContentType,
@@ -610,7 +614,7 @@ public sealed partial class FileService
 
             if (!string.IsNullOrEmpty(oldSaveName) && oldSaveName != saveName)
             {
-                await DeleteStoredObjectsBestEffortAsync(oldSaveName);
+                await DeleteStoredObjectsBestEffortAsync(oldSaveName, storage);
             }
         }
         catch
@@ -619,7 +623,7 @@ public sealed partial class FileService
             {
                 // Known-before-persist failure: the metadata still points at
                 // the old object, so removing the new orphan is safe.
-                await BestEffortDeleteAsync(FilePrefix + saveName);
+                await BestEffortDeleteAsync(FilePrefix + saveName, storage);
             }
 
             throw;
@@ -815,11 +819,12 @@ public sealed partial class FileService
         }
     }
 
-    private async Task BestEffortDeleteAsync(string key, CancellationToken ct = default)
+    private async Task BestEffortDeleteAsync(string key, IStorageBackend storage,
+        CancellationToken ct = default)
     {
         try
         {
-            await _storage.DeleteAsync(key, ct);
+            await storage.DeleteAsync(key, ct);
         }
         catch (Exception error)
         {
@@ -827,7 +832,7 @@ public sealed partial class FileService
         }
     }
 
-    private async Task DeleteStoredObjectsBestEffortAsync(string saveName)
+    private async Task DeleteStoredObjectsBestEffortAsync(string saveName, IStorageBackend storage)
     {
         // Old-object cleanup runs after the metadata commit.  It is detached
         // from the request token (client may already have gone), but must not
@@ -835,7 +840,7 @@ public sealed partial class FileService
         using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         foreach (var key in StoredObjectKeys(saveName))
         {
-            await BestEffortDeleteAsync(key, cleanup.Token);
+            await BestEffortDeleteAsync(key, storage, cleanup.Token);
         }
     }
 
@@ -942,16 +947,13 @@ public sealed partial class FileService
         }
     }
 
-    private static void EnsureDefaultStorage(BsonDocument project)
+    private async Task<StorageBackendLease?> LeaseForProjectAsync(
+        BsonDocument? project,
+        CancellationToken ct)
     {
-        if (HasStoragePool(project))
-        {
-            throw new ApiError(
-                "StoragePoolUnsupported",
-                2,
-                "当前切片尚未接线存储池路由，无法在迁移后的存储池项目上执行文件操作",
-                409);
-        }
+        if (project is null || !HasStoragePool(project)) return null;
+        if (_router is null) throw ProjectStorageRouter.SourceUnavailable();
+        return await _router.ForProjectAsync(project, ct);
     }
 
     private async Task<BsonDocument?> FindByNameAsync(

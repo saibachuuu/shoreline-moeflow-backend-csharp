@@ -18,6 +18,12 @@ public sealed class TeamDissolutionTests(LocalServices services)
 {
     private static readonly string Password = PasswordHash.Create("test-password");
 
+    // Valid minimal LabelPlus text for the import-initialization guard test.
+    private const string ImportText =
+        ">>>>>>>>[cover.png]<<<<<<<<\n" +
+        "----------------[1]----------------[0.25,0.5,1]\n" +
+        "hello\n";
+
     [Fact]
     public async Task CreatorDissolvesMixedProjectsAndCascadesAllRows()
     {
@@ -519,6 +525,227 @@ public sealed class TeamDissolutionTests(LocalServices services)
         Assert.False(await harness.Lifecycle.IsDeletingAsync(team["_id"].AsObjectId));
     }
 
+    // K1 writer wiring: a real DELETE is paused after MarkDeletingAsync and a
+    // writer runs concurrently against the same team. The writer must see the
+    // durable claim/marker and be rejected with 5120 before any row is written.
+    [Fact]
+    public async Task ProjectCreationRacingDeletionIsRejectedThenRetrySeesDeletedTeam()
+    {
+        var actor = await UserAsync();
+        var team = await TeamAsync(actor);
+        await MemberAsync(team, actor, "creator");
+        await DefaultProjectSetAsync(team);
+        var marked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var harness = new Harness(services, new TeamLifecycleLockHooks
+        {
+            AfterMarkAsync = (_, _, _) =>
+            {
+                marked.TrySetResult();
+                return resume.Task;
+            }
+        });
+
+        var deletion = harness.Service.DeleteAsync(actor, team["_id"].AsObjectId.ToString()!);
+        await marked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        ApiError? rejected = null;
+        try
+        {
+            using var scope = services.App.Services.CreateScope();
+            var projects = scope.ServiceProvider.GetRequiredService<ProjectService>();
+            rejected = await Assert.ThrowsAsync<ApiError>(() => projects.CreateProjectAsync(
+                actor, team, ProjectCreateData("late-project"), CancellationToken.None));
+        }
+        finally
+        {
+            resume.TrySetResult();
+        }
+
+        Assert.NotNull(rejected);
+        Assert.Equal(5120, rejected!.Code);
+        Assert.Equal(TeamLifecycleErrors.BusyMessage, rejected.Message);
+        Assert.Equal(0L, await CountAsync("project", new BsonDocument("t", team["_id"])));
+
+        var result = await deletion;
+        Assert.Equal("解散成功", result.Message);
+        Assert.Equal(0L, await CountAsync("team", new BsonDocument("_id", team["_id"])));
+
+        // After the delete completed, a retry fails normally (team gone or the
+        // actor is no longer a member) instead of hanging on a stale lock.
+        using var retryScope = services.App.Services.CreateScope();
+        var retryProjects = retryScope.ServiceProvider.GetRequiredService<ProjectService>();
+        var retry = await Assert.ThrowsAsync<ApiError>(() => retryProjects.CreateProjectAsync(
+            actor, team, ProjectCreateData("retry-project"), CancellationToken.None));
+        Assert.Contains(retry.Code, new[] { 103, 3001 });
+        Assert.Equal(0L, await CountAsync("project", new BsonDocument("t", team["_id"])));
+    }
+
+    [Fact]
+    public async Task MemberJoinsRacingDeletionAreRejected()
+    {
+        var actor = await UserAsync();
+        var target = await UserAsync();
+        var trustedTarget = await UserAsync();
+        var team = await TeamAsync(actor);
+        await MemberAsync(team, actor, "creator");
+        var marked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var harness = new Harness(services, new TeamLifecycleLockHooks
+        {
+            AfterMarkAsync = (_, _, _) =>
+            {
+                marked.TrySetResult();
+                return resume.Task;
+            }
+        });
+
+        var deletion = harness.Service.DeleteAsync(actor, team["_id"].AsObjectId.ToString()!);
+        await marked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        ApiError? addRejected = null;
+        ApiError? trustedRejected = null;
+        try
+        {
+            using var scope = services.App.Services.CreateScope();
+            var members = scope.ServiceProvider.GetRequiredService<TeamMemberService>();
+            var payload = JsonSerializer.SerializeToElement(new { user_id = target["_id"].ToString() });
+            addRejected = await Assert.ThrowsAsync<ApiError>(() => members.AddAsync(
+                team, actor, payload, "", CancellationToken.None));
+            trustedRejected = await Assert.ThrowsAsync<ApiError>(() => members.JoinTrustedAsync(
+                team, trustedTarget, "member", "", CancellationToken.None));
+        }
+        finally
+        {
+            resume.TrySetResult();
+        }
+
+        Assert.Equal(5120, addRejected!.Code);
+        Assert.Equal(5120, trustedRejected!.Code);
+        Assert.Equal(0L, await CountAsync("team_member", new BsonDocument
+        {
+            ["team"] = team["_id"],
+            ["user"] = new BsonDocument("$in", new BsonArray { target["_id"], trustedTarget["_id"] })
+        }));
+
+        var result = await deletion;
+        Assert.Equal("解散成功", result.Message);
+        Assert.Equal(0L, await CountAsync("team", new BsonDocument("_id", team["_id"])));
+
+        using var retryScope = services.App.Services.CreateScope();
+        var retryMembers = retryScope.ServiceProvider.GetRequiredService<TeamMemberService>();
+        var retry = await Assert.ThrowsAsync<ApiError>(() => retryMembers.AddAsync(
+            team, actor, JsonSerializer.SerializeToElement(new { user_id = target["_id"].ToString() }),
+            "", CancellationToken.None));
+        Assert.Equal(3001, retry.Code);
+    }
+
+    [Fact]
+    public async Task ImportInitializationRacingDeletionIsRejected()
+    {
+        var actor = await UserAsync();
+        var team = await TeamAsync(actor);
+        await MemberAsync(team, actor, "creator");
+        await DefaultProjectSetAsync(team);
+        BsonDocument project;
+        using (var setup = services.App.Services.CreateScope())
+        {
+            var projects = setup.ServiceProvider.GetRequiredService<ProjectService>();
+            project = await projects.CreateProjectAsync(
+                actor, team, ProjectCreateData("import-project"), CancellationToken.None);
+        }
+        // The import hook itself does not require a working project, but the
+        // dissolution precondition does. Complete it so the delete can proceed
+        // to MarkDeletingAsync while the project still exists.
+        await services.Store.Collection("project").UpdateOneAsync(
+            new BsonDocument("_id", project["_id"]),
+            new BsonDocument("$set", new BsonDocument("st", 5)));
+        project["st"] = 5;
+
+        var marked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var harness = new Harness(services, new TeamLifecycleLockHooks
+        {
+            AfterMarkAsync = (_, _, _) =>
+            {
+                marked.TrySetResult();
+                return resume.Task;
+            }
+        });
+
+        var deletion = harness.Service.DeleteAsync(actor, team["_id"].AsObjectId.ToString()!);
+        await marked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        ApiError? rejected = null;
+        try
+        {
+            using var scope = services.App.Services.CreateScope();
+            var imports = scope.ServiceProvider.GetRequiredService<ProjectImportService>();
+            rejected = await Assert.ThrowsAsync<ApiError>(() => imports.InitializeAfterCreateAsync(
+                project, actor, ImportText, "", CancellationToken.None));
+        }
+        finally
+        {
+            resume.TrySetResult();
+        }
+
+        Assert.Equal(5120, rejected!.Code);
+        var stored = await services.Store.Collection("project")
+            .Find(new BsonDocument("_id", project["_id"])).FirstAsync();
+        Assert.Equal(1, stored.Integer("is"));
+        Assert.Equal("", stored.Text("it"));
+        Assert.False(stored.Contains("ij"));
+        Assert.Equal(0L, await CountAsync("csharp_job", new BsonDocument("kind", ProjectImportService.JobKind)));
+
+        var result = await deletion;
+        Assert.Equal("解散成功", result.Message);
+        Assert.Equal(0L, await CountAsync("project", new BsonDocument("_id", project["_id"])));
+
+        using var retryScope = services.App.Services.CreateScope();
+        var retryImports = retryScope.ServiceProvider.GetRequiredService<ProjectImportService>();
+        var retry = await Assert.ThrowsAsync<ApiError>(() => retryImports.InitializeAfterCreateAsync(
+            project, actor, ImportText, "", CancellationToken.None));
+        Assert.Equal(4001, retry.Code);
+    }
+
+    [Fact]
+    public async Task DurableDeletingMarkerRejectsWritesAfterLeaseRelease()
+    {
+        var actor = await UserAsync();
+        var target = await UserAsync();
+        var team = await TeamAsync(actor);
+        await MemberAsync(team, actor, "creator");
+        using var harness = new Harness(services);
+        await using (var lease = await harness.Lifecycle.AcquireAsync(team["_id"].AsObjectId))
+            await harness.Lifecycle.MarkDeletingAsync(lease);
+
+        // The lease is released but the durable marker remains.
+        Assert.Equal(0L, await CountAsync("team_lifecycle_lock", new BsonDocument("_id", team["_id"])));
+        var guard = await Assert.ThrowsAsync<ApiError>(() =>
+            harness.Lifecycle.EnsureWritableAsync(team["_id"].AsObjectId));
+        Assert.Equal(5120, guard.Code);
+
+        using (var scope = services.App.Services.CreateScope())
+        {
+            var members = scope.ServiceProvider.GetRequiredService<TeamMemberService>();
+            var rejected = await Assert.ThrowsAsync<ApiError>(() => members.AddAsync(
+                team, actor, JsonSerializer.SerializeToElement(new { user_id = target["_id"].ToString() }),
+                "", CancellationToken.None));
+            Assert.Equal(5120, rejected.Code);
+        }
+        Assert.Equal(0L, await CountAsync("team_member", new BsonDocument
+        {
+            ["team"] = team["_id"],
+            ["user"] = target["_id"]
+        }));
+
+        // The retained marker is resumable: the next DELETE claims the free lock
+        // and finishes the cleanup.
+        var result = await harness.Service.DeleteAsync(actor, team["_id"].AsObjectId.ToString()!);
+        Assert.Equal("解散成功", result.Message);
+        Assert.Equal(0L, await CountAsync("team", new BsonDocument("_id", team["_id"])));
+    }
+
     [Fact]
     public async Task HttpMissingTokenReturns1003()
     {
@@ -611,6 +838,33 @@ public sealed class TeamDissolutionTests(LocalServices services)
             ["u"] = ObjectId.GenerateNewId()
         });
     }
+
+    private async Task<BsonDocument> DefaultProjectSetAsync(BsonDocument team)
+    {
+        var set = new BsonDocument
+        {
+            ["_id"] = ObjectId.GenerateNewId(),
+            ["t"] = team["_id"],
+            ["n"] = "default",
+            ["i"] = "",
+            ["d"] = true,
+            ["ct"] = DateTime.UtcNow,
+            ["et"] = DateTime.UtcNow
+        };
+        await services.Store.Collection("project_set").InsertOneAsync(set);
+        return set;
+    }
+
+    private static JsonElement ProjectCreateData(string name) =>
+        JsonSerializer.SerializeToElement(new
+        {
+            name,
+            intro = "",
+            allow_apply_type = 1,
+            application_check_type = 2,
+            source_language = "ja",
+            target_languages = new[] { "zh-CN" }
+        });
 
     private async Task<BsonDocument> UserAsync(bool admin = false)
     {

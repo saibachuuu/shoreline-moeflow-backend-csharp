@@ -50,6 +50,7 @@ public sealed partial class ThumbnailService : IThumbnailScheduler
 
     private readonly MongoStore _store;
     private readonly ObjectStorage _storage;
+    private readonly ProjectStorageRouter? _router;
     private readonly JobQueue _queue;
     private readonly ProjectLabelLock _labels;
     private readonly LabelRequestContext _labelContext;
@@ -67,10 +68,12 @@ public sealed partial class ThumbnailService : IThumbnailScheduler
         TimeProvider clock,
         IConfiguration configuration,
         ImageProcessor processor,
-        ILogger<ThumbnailService>? logger = null)
+        ILogger<ThumbnailService>? logger = null,
+        ProjectStorageRouter? router = null)
     {
         _store = store;
         _storage = storage;
+        _router = router;
         _queue = queue;
         _labels = labels;
         _labelContext = labelContext;
@@ -155,7 +158,10 @@ public sealed partial class ThumbnailService : IThumbnailScheduler
         await using var session = await _labels.EnterAsync(
             _labelContext, projectId, recovery: false, expectedLabelRevision, ct);
 
-        EnsureLocalStorage(session.Project);
+        // Validate the pool source before the durable job is enqueued. A
+        // non-pool project keeps the legacy default path; an unknown/disabled
+        // source fails closed instead of queueing a job that can only fail.
+        await using var storageLease = await LeaseForProjectAsync(session.Project, ct);
 
         var file = await Files.Find(new BsonDocument
         {
@@ -217,7 +223,7 @@ public sealed partial class ThumbnailService : IThumbnailScheduler
         // project would enqueue a prefix of its images and then throw.
         var project = await Projects.Find(new BsonDocument("_id", projectId)).FirstOrDefaultAsync(ct)
             ?? throw new ApiError("ProjectNotExistError", 4001, "项目不存在");
-        EnsureLocalStorage(project);
+        await using var storageLease = await LeaseForProjectAsync(project, ct);
 
         var filter = new BsonDocument
         {
@@ -251,9 +257,13 @@ public sealed partial class ThumbnailService : IThumbnailScheduler
     public async Task RunAsync(BsonDocument payload, int attempt, CancellationToken ct) =>
         await RunCoreAsync(payload, attempt, ct);
 
-    private static void EnsureLocalStorage(BsonDocument project)
+    private async Task<StorageBackendLease?> LeaseForProjectAsync(
+        BsonDocument? project,
+        CancellationToken ct)
     {
-        if (HasStoragePool(project)) throw StoragePoolUnsupported();
+        if (project is null || !HasStoragePool(project)) return null;
+        if (_router is null) throw ProjectStorageRouter.SourceUnavailable();
+        return await _router.ForProjectAsync(project, ct);
     }
 
     private static bool HasStoragePool(BsonDocument project) =>

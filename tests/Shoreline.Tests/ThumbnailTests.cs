@@ -154,6 +154,40 @@ public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDispo
     }
 
     [Fact]
+    public async Task Run_PooledProject_ReadsSourceAndPublishesToPoolBackend()
+    {
+        var sourceId = await InsertStorageSourceAsync();
+        var project = await ProjectAsync(csid: sourceId.ToString());
+        var save = Save("pooled-generated.jpg");
+        var file = await FileAsync(project, save);
+        var router = services.App.Services.GetRequiredService<ProjectStorageRouter>();
+        var projectDocument = new BsonDocument { ["_id"] = project, ["csid"] = sourceId };
+
+        await using (var lease = await router.ForOriginalAsync(projectDocument, ct))
+        {
+            await PutAsync(lease.Backend, $"files/{save}",
+                ImageBytes(2400, 1200, MagickFormat.Jpeg));
+        }
+
+        var service = Service(Storage());
+        var payload = await ScheduleAndPayloadAsync(service, file, project);
+        await service.RunAsync(payload, 1, ct);
+
+        Assert.Equal(ThumbnailService.ThumbnailSucceeded, (await LoadFileAsync(file)).Integer("th"));
+        var coverKey = CoverKey(save);
+        var resampleKey = ResampleKey(save);
+        Assert.Null(await Storage().HeadAsync(coverKey, ct));
+        Assert.Null(await Storage().HeadAsync(resampleKey, ct));
+        await using (var lease = await router.ForOriginalAsync(projectDocument, ct))
+        {
+            Assert.NotNull(await lease.Backend.HeadAsync(coverKey, ct));
+            Assert.NotNull(await lease.Backend.HeadAsync(resampleKey, ct));
+            Assert.Null(await lease.Backend.HeadAsync(
+                $"files/.thumbnail-staging/{payload.Text("run_id")}/cover.webp", ct));
+        }
+    }
+
+    [Fact]
     public async Task Run_SmallImage_LeavesResampleAtOriginalSize()
     {
         var project = await ProjectAsync();
@@ -276,7 +310,7 @@ public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDispo
     }
 
     [Fact]
-    public async Task Schedule_StoragePool_FailsClosedWithoutQueuing()
+    public async Task Schedule_UnknownStorageSource_FailsClosedWithoutQueuing()
     {
         var project = await ProjectAsync(csid: "pool-1");
         var file = await FileAsync(project, "pool.jpg");
@@ -284,11 +318,9 @@ public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDispo
 
         var error = await Assert.ThrowsAsync<ApiError>(
             () => service.ScheduleAsync(file, project, null, ct));
-        Assert.Equal(2, error.Code);
+        Assert.Equal(6, error.Code);
         Assert.Equal(409, error.Status);
-        Assert.Equal(
-            "当前切片尚未接线存储池路由，无法在迁移后的存储池项目上执行文件操作",
-            error.Message);
+        Assert.Equal("Storage source is unavailable", error.Message);
         Assert.Equal(ThumbnailService.ThumbnailUnknown, (await LoadFileAsync(file)).Integer("th"));
     }
 
@@ -447,7 +479,8 @@ public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDispo
             new LabelRequestContext(),
             clock,
             configuration,
-            new ImageProcessor());
+            new ImageProcessor(),
+            router: services.App.Services.GetRequiredService<ProjectStorageRouter>());
     }
 
     private ObjectStorage Storage() => services.App.Services.GetRequiredService<ObjectStorage>();
@@ -536,6 +569,40 @@ public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDispo
     {
         await using var stream = new MemoryStream(bytes);
         await storage.PutAsync(key, stream, "application/octet-stream", CancellationToken.None);
+    }
+
+    private static async Task PutAsync(IStorageBackend storage, string key, byte[] bytes)
+    {
+        await using var stream = new MemoryStream(bytes);
+        await storage.PutAsync(key, stream, "application/octet-stream", CancellationToken.None);
+    }
+
+    private async Task<ObjectId> InsertStorageSourceAsync()
+    {
+        var id = ObjectId.GenerateNewId();
+        var now = DateTime.UtcNow;
+        await services.Store.Collection("storage_pool_source").InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = id,
+            ["n"] = "thumbnail-source-" + id,
+            ["e"] = true,
+            ["ep"] = services.Configuration["Storage:Endpoint"] ?? "http://127.0.0.1:29128",
+            ["b"] = services.Configuration["Storage:Bucket"] ?? "shoreline-test",
+            ["sp"] = "thumbnail-pool/" + Guid.NewGuid().ToString("N") + "/",
+            ["r"] = "us-east-1",
+            ["as"] = "path",
+            ["vs"] = true,
+            ["ak"] = services.Configuration["Storage:AccessKey"] ?? "local-test-only",
+            ["sk"] = services.Configuration["Storage:SecretKey"] ?? "local-disposable-test-secret",
+            ["pd"] = "",
+            ["rm"] = "",
+            ["iad"] = 90,
+            ["mo"] = 2000,
+            ["hd"] = false,
+            ["ct"] = now,
+            ["ut"] = now,
+        }, cancellationToken: ct);
+        return id;
     }
 
     private string TempRoot()

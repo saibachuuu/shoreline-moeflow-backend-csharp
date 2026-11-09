@@ -1,17 +1,11 @@
 # Storage pool compatibility (D2)
 
-Status: **implemented as new, unwired code; build and integration tests pass in an
-isolated snapshot, but it is not wired into the shared Program or deployed.**
-The D2 files were added on top of the D0 commit
-`33c93ea17beea6398df5c497f030cd498f031d6a` and intentionally do not modify
-`Program.cs`, `MongoStore`, the D0 storage files, `FileService`, `OutputService`,
-`ProjectService`, project lifecycle, label locking, or the API project file.
-Verification used a throwaway snapshot made from repository commit `3edd683` with
-only the D2 files copied in. It built with 0 warnings and 0 errors and passed all
-34 D2 facts. A full-suite run on the preceding 33-fact snapshot passed 419/419;
-the full rerun after adding the 34th fact was blocked by local MongoDB connection
-loss and is not claimed as a clean full-suite pass. The shared working tree was not
-built or committed by this work.
+Status: **wired into the shared host; File/Output/Thumbnail/cleanup now resolve
+their object backend through `ProjectStorageRouter`.** `Program.cs` already calls
+`AddStoragePoolServices()`, `InitializeStoragePoolAsync()`, and `MapStoragePool()`;
+this change does not modify it. The router is the gray-rollout key: a project
+with no `csid` keeps the legacy default-storage path byte-for-byte, while only a
+project whose `csid` is set resolves a pool lease.
 
 No real R2 or other production credentials were used. The only exercised storage
 target available to this work is the local S3Mock service. S3Mock does not
@@ -46,10 +40,16 @@ the storage-pool module is disabled.
   `ObjectStorage`; the router never disposes that shared client.
 - `ForOriginalAsync`, `ForResampleAsync`, and `ForOutputAsync` select storage
   from the project's `csid` (`storage_source_id`).
-- A project with no `csid` uses the default storage.
-- A non-empty `csid` with no registered resolver, a disabled source, or a missing
-  source fails closed with HTTP 409 and error code 6. It never silently falls
-  back to the default bucket.
+- `ForProjectOrNullAsync(project)` is the caller-facing gray key used by
+  File/Output/Thumbnail/cleanup: it returns `null` for a project without a
+  `csid` (caller keeps using the legacy `ObjectStorage` instance) and otherwise
+  resolves a pool lease. No caller silently falls back to the default bucket.
+- A project with no `csid` (missing, `null`, or empty string) uses the default
+  storage.
+- A non-empty `csid` with no registered resolver, a disabled source, a missing
+  source, or an unparsable id fails closed with HTTP 409 and error code 6
+  (`StorageSourceUnavailable`). The fail-closed condition is therefore "the
+  storage pool has no usable record for this id", not "the project has a csid".
 - Resolvers are registered through `ProjectStorageResolverRegistry`; the
   storage-pool module registers `StoragePoolSourceResolver`.
 - Every operation should hold the returned `StorageBackendLease` for its
@@ -68,6 +68,40 @@ source prefix** for `CopySource`. A destination bucket containing an object with
 the same relative key is not allowed to become the copy source. When descriptors
 differ in endpoint, or the source is local, the transfer engine falls back to
 streamed download/upload rather than buffering a business object in memory.
+
+## Caller routing (D2.1)
+
+Callers use `ForProjectOrNullAsync` and keep the returned lease for the
+operation. A `null` lease means "this project is not pooled"; the caller then
+uses the exact same `ObjectStorage` instance as before, so non-pool project
+behaviour is byte-for-byte unchanged.
+
+| Caller | Routed operations | Legacy default path |
+|---|---|---|
+| `FileService.UploadAsync` | original `PutAsync`, old-object cleanup after pointer switch | no `csid` → `_storage` |
+| `FileService.DeleteAsync` / folder and revision batches | all `DeleteStoredObjectsAsync` keys | no `csid` → `_storage` |
+| `FileService` API projection | `SignGetAsync` original/cover/resample, `HeadAsync` derived probe | no `csid` → `_storage` |
+| `OutputService.CreateAsync` / `CreateAllAsync` / `CreateTeamAsync` | pre-flight source resolution; unknown source aborts before inserting a row | no `csid` → no lease |
+| `OutputService.PruneAsync` | strict delete of the pruned output objects | no `csid` → `_storage` |
+| `OutputService.ViewsAsync` | successful output download `SignGetAsync` | no `csid` → `_storage` |
+| `OutputExportService` | source-image download, staging upload, staging→final copy, staging cleanup | no `csid` → `_storage` |
+| `ThumbnailService.Schedule*` | fail-closed source validation before the durable job is enqueued | no `csid` → no lease |
+| `ThumbnailService` run/publish | source download, staging upload, final cover/resample copies, staging cleanup | no `csid` → `_storage` |
+| `ProjectContentCleanup` / `OutputObjectCleanup` through project lifecycle, team dissolution, target delete | every object delete of file originals, covers, resamples, and output artifacts | no `csid` → `_storage` |
+
+Consistency argument: for a project without `csid`, no router resolver runs and
+every call site uses the pre-existing `ObjectStorage` singleton with the same
+key, so keys, headers, URL signing, and error surfaces are unchanged. A
+`ForDefaultAsync()` borrow wraps that same instance and is asserted by
+`RouterForProjectOrNullKeepsNonPoolProjectOnLegacyDefaultPath`. For a pooled
+project every key is relative and the pool descriptor supplies only the
+per-source `sub_path` plus `Storage:KeyPrefix` normalization, so the logical key
+(`files/<save_name>`, `outputs/<id>/<file_name>`) is identical on both backends.
+
+The default-only static cleanup overloads still call
+`EnsureDefaultStorageSource` and throw when `csid` is set; production callers
+pass the router-aware overload instead. This keeps an accidental default-bucket
+delete from a caller that forgot the router impossible.
 
 ## HTTP surface
 
@@ -160,6 +194,11 @@ same transfer. Copy is resumable:
   `FAILED`.
 - `COPIED -> VERIFIED` requires destination size to match the recorded source
   size (again including zero); cross-provider ETag equality is not required.
+  **There is no content checksum and no byte-for-byte comparison.** An
+  equal-length corruption at the destination is therefore not detected; this is
+  locked by `EqualLengthCorruptionIsNotDetectedBecauseVerificationIsSizeOnly`.
+  `et` is diagnostic only. Adding checksum verification is future work, not an
+  existing capability.
 - The project pointer is switched only after all expected objects are verified.
 - Pointer switch runs under the existing project label lock and the storage-pool
   project lock. It re-checks working status, `cip`, `csid`, edit-time snapshot,
@@ -205,28 +244,44 @@ not update the last scan timestamp.
 `AddStoragePoolServices`; the core application remains runnable without the
 module.
 
-## Wiring required (not done in this change)
+## Dirty-data pre-flight
 
-The shared host still needs to opt in:
+`InitializeStoragePoolAsync` runs
+`EnsureNoDuplicateActiveTransfersAsync` before creating
+`storage_transfer_one_active_project`. It aggregates `storage_transfer` rows in
+status `0..3` by project and throws a safe `InvalidOperationException` if any
+project has more than one active row. This turns a deployment-time duplicate-key
+failure into an explicit cleanup instruction and never deletes or rewrites
+historical rows automatically. The check is locked by
+`DirtyActiveTransferRowsBlockUniqueIndexPreflight`.
 
-1. Call `builder.Services.AddStoragePoolServices();`.
-2. After `MongoStore.InitializeAsync`, call
-   `await app.Services.InitializeStoragePoolAsync();` so the resolver is
-   registered and indexes/settings are created.
-3. Call `app.MapStoragePool();`.
-4. Optionally set `StoragePool:WorkerEnabled=false` when an external worker will
-   drive transfers and scans.
-5. Route File/Output/cleanup reads and writes through
-   `ProjectStorageRouter` in a later, separately reviewed change. The existing
-   File/Output/cleanup code paths intentionally still use the default storage.
+## Host wiring
+
+The shared host already opts in:
+
+1. `builder.Services.AddStoragePoolServices();` registers the router, factory,
+   resolver, and optional worker.
+2. `app.Services.InitializeStoragePoolAsync()` registers the resolver, runs the
+   dirty-data check, and creates indexes/settings.
+3. `app.MapStoragePool()` exposes the admin routes.
+4. `StoragePool:WorkerEnabled=false` remains the default when an external worker
+   drives transfers and scans.
+5. File/Output/Thumbnail/cleanup reads and writes use
+   `ProjectStorageRouter.ForProjectOrNullAsync` as described above.
 
 The module also exposes the generic router and factory separately through
-`AddProjectStorageCore` for a future storage-pool router without requiring the
-admin module.
+`AddProjectStorageCore` to hosts that do not need the admin module.
 
-## Tests added (isolated execution passed)
+## Tests added (focused execution passed)
 
-`tests/Shoreline.Tests/StoragePoolTests.cs` contains 34 direct facts covering:
+`tests/Shoreline.Tests/StoragePoolTests.cs` contains 39 direct facts. The five
+new facts cover: non-pool projects staying on the borrowed default path;
+one-active-transfer reuse under four concurrent identical preparations; pooled
+cleanup deleting only the resolved source objects while default decoys remain;
+the equal-length-corruption limitation of size-only verification; and the
+active-transfer dirty-data preflight.
+
+The existing 34 facts still cover:
 
 - source probe-before-persist, `verify_ssl=false` rejection, blank credential
   preservation, location lock, and active MOVE target delete rejection;
@@ -248,10 +303,11 @@ admin module.
 - scan disabled, global budget, presence skip, run-disabled checkpoint;
 - move validation, settings audit/defaults, Python-shaped stats/usage aggregation.
 
-These tests used an isolated snapshot with the existing local MongoDB and S3Mock
-services. No shared build, shared database reset, or shared tree test execution was
-performed by this work. Production R2/OSS connectivity and authorization remain
-outside this evidence.
+These tests used an isolated snapshot of the shared working tree with the
+existing local MongoDB and S3Mock services: build 0 warnings/0 errors, focused
+StoragePool/File/Output/Thumbnail/ProjectCleanup run 140/140, and the full suite
+801/801. Production R2/OSS connectivity and authorization remain outside this
+evidence.
 
 ## Remaining limitations
 
@@ -259,11 +315,10 @@ outside this evidence.
 - S3Mock does not authenticate requests; D0's independent SigV4 verifier is the
   only signature-level evidence.
 - Aliyun native OSS signing and its CDN authorization are not ported.
-- The module is not wired into `Program.cs`, and File/Output/cleanup are not yet
-  routed through the new project router.
+- Transfer verification is size-only. Equal-length corruption is not detected
+  (locked by a test); no checksum or byte comparison exists.
 - No multipart, ACL, tagging, versioning, or object-lock support.
 - The local filesystem storage root is an owned deployment root, not a
   multi-tenant security sandbox.
-- `IStorageBackend` and the pooled-client lifecycle are ready for a storage-pool
-  router, but a bounded shared S3-client cache and D2 integration remain future
-  work.
+- A bounded shared S3-client cache remains future work; each pooled lease
+  currently owns one client for the duration of its operation/job.

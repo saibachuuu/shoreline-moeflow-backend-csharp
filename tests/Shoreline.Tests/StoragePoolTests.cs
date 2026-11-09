@@ -4,6 +4,7 @@ using Amazon.S3.Model;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Shoreline.Api.Features;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Modules.StoragePool;
 using Shoreline.Api.Storage;
@@ -119,6 +120,26 @@ public sealed class StoragePoolTests(LocalServices services)
     }
 
     [Fact]
+    public async Task RouterForProjectOrNullKeepsNonPoolProjectOnLegacyDefaultPath()
+    {
+        using var runtime = Runtime();
+        var project = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["csid"] = BsonNull.Value };
+        Assert.Null(await runtime.Router.ForProjectOrNullAsync(project));
+        var empty = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["csid"] = "" };
+        Assert.Null(await runtime.Router.ForProjectOrNullAsync(empty));
+        var key = "router/non-pool-" + Guid.NewGuid().ToString("N");
+        await using (var direct = await runtime.Router.ForDefaultAsync())
+        {
+            await direct.Backend.PutAsync(key, new MemoryStream(Encoding.UTF8.GetBytes("default")),
+                "text/plain", CancellationToken.None);
+        }
+        using var download = await runtime.Default.GetAsync(key, CancellationToken.None);
+        using var buffer = new MemoryStream();
+        await download.Content.CopyToAsync(buffer);
+        Assert.Equal("default", Encoding.UTF8.GetString(buffer.ToArray()));
+    }
+
+    [Fact]
     public async Task RouterFailsClosedForNonEmptyUnknownSource()
     {
         using var runtime = Runtime();
@@ -182,6 +203,29 @@ public sealed class StoragePoolTests(LocalServices services)
         Assert.Contains(rows, row => row["kd"].AsString == "original");
         Assert.Contains(rows, row => row["kd"].AsString == "resample");
         Assert.Contains(rows, row => row["kd"].AsString == "output");
+    }
+
+    [Fact]
+    public async Task ConcurrentSameRequestReusesOneActiveTransfer()
+    {
+        using var runtime = Runtime();
+        var sourceId = await runtime.InsertSourceAsync();
+        var projectId = await runtime.InsertProjectAsync();
+        await runtime.InsertImageFileAsync(projectId, ObjectId.GenerateNewId(),
+            Guid.NewGuid().ToString("N") + ".png");
+
+        var tasks = Enumerable.Range(0, 4).Select(_ =>
+            runtime.Engine.PrepareAsync(projectId, sourceId, StoragePoolConstants.DirectionIn,
+                null, CancellationToken.None));
+        var transfers = await Task.WhenAll(tasks);
+
+        Assert.Single(transfers.Select(row => row["_id"]).Distinct());
+        Assert.Equal(1, await runtime.Store.Collection("storage_transfer")
+            .CountDocumentsAsync(new BsonDocument
+            {
+                ["p"] = projectId,
+                ["st"] = new BsonDocument { ["$gte"] = 0, ["$lt"] = 4 },
+            }, cancellationToken: CancellationToken.None));
     }
 
     [Fact]
@@ -459,6 +503,35 @@ public sealed class StoragePoolTests(LocalServices services)
     }
 
     [Fact]
+    public async Task DirtyActiveTransferRowsBlockUniqueIndexPreflight()
+    {
+        var baseUri = services.Configuration["Mongo:Uri"]!;
+        var database = "shoreline_storage_pool_dirty_" + Guid.NewGuid().ToString("N");
+        var uri = new MongoUrlBuilder(baseUri) { DatabaseName = database }.ToMongoUrl().ToString();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Mongo:Uri"] = uri })
+            .Build();
+        var store = new MongoStore(configuration);
+        var projectId = ObjectId.GenerateNewId();
+        await store.Collection(StoragePoolConstants.TransferCollection).InsertManyAsync(new[]
+        {
+            new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["p"] = projectId, ["st"] = 0 },
+            new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["p"] = projectId, ["st"] = 2 },
+        }, cancellationToken: CancellationToken.None);
+        try
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                StoragePoolRegistration.EnsureNoDuplicateActiveTransfersAsync(
+                    store, CancellationToken.None));
+            Assert.Contains("more than one active transfer", error.Message);
+        }
+        finally
+        {
+            await new MongoClient(baseUri).DropDatabaseAsync(database);
+        }
+    }
+
+    [Fact]
     public async Task LockServiceAllowsExpiredTakeoverAndOwnerOnlyRelease()
     {
         using var runtime = Runtime();
@@ -639,6 +712,51 @@ public sealed class StoragePoolTests(LocalServices services)
     }
 
     [Fact]
+    public async Task EqualLengthCorruptionIsNotDetectedBecauseVerificationIsSizeOnly()
+    {
+        using var runtime = Runtime();
+        var sourceId = await runtime.InsertSourceAsync("src/");
+        var targetId = await runtime.InsertSourceAsync("dst/");
+        var projectId = await runtime.InsertProjectAsync(csid: sourceId, fs: 1);
+        await runtime.InsertImageFileAsync(projectId, ObjectId.GenerateNewId(), "equal.png");
+        var sourceBackend = new MemoryBackend();
+        sourceBackend.Seed("files/equal.png", [9, 9, 9, 9]);
+        var originalBytes = sourceBackend.Bytes("files/equal.png");
+        var targetBackend = new MemoryBackend();
+        var engine = FaultEngine(runtime, sourceBackend, targetBackend);
+        var transfer = await engine.PrepareAsync(projectId, sourceId, StoragePoolConstants.DirectionMove,
+            targetId, CancellationToken.None);
+        var transferId = transfer["_id"].AsObjectId;
+        // Put the transfer in the verify phase with a same-length but corrupted
+        // destination object. The engine's contract is size-only, so this must
+        // be reported as verified and the pointer switched.
+        targetBackend.Seed("files/equal.png", [1, 2, 3, 4]);
+        await runtime.Store.Collection("storage_transfer_object").UpdateManyAsync(
+            new BsonDocument { ["t"] = transferId, ["kd"] = StoragePoolConstants.KindOriginal },
+            new BsonDocument("$set", new BsonDocument
+            {
+                ["st"] = StoragePoolConstants.ObjectCopied,
+                ["sz"] = 4L,
+            }), cancellationToken: CancellationToken.None);
+        await runtime.Store.Collection("storage_transfer_object").UpdateManyAsync(
+            new BsonDocument { ["t"] = transferId, ["kd"] = StoragePoolConstants.KindResample },
+            new BsonDocument("$set", new BsonDocument("st", StoragePoolConstants.ObjectSkipped)),
+            cancellationToken: CancellationToken.None);
+        await runtime.Store.Collection("storage_transfer").UpdateOneAsync(
+            new BsonDocument("_id", transferId),
+            new BsonDocument("$set", new BsonDocument("st", StoragePoolConstants.Verified)),
+            cancellationToken: CancellationToken.None);
+
+        await engine.RunAsync(transferId, CancellationToken.None);
+
+        Assert.Equal(StoragePoolConstants.Done,
+            (await runtime.GetTransferAsync(transferId))["st"].ToInt32());
+        Assert.Equal(targetId, (await runtime.GetProjectAsync(projectId))["csid"].AsObjectId);
+        Assert.Equal(4, targetBackend.Bytes("files/equal.png").Length);
+        Assert.False(originalBytes.SequenceEqual(targetBackend.Bytes("files/equal.png")));
+    }
+
+    [Fact]
     public async Task AlreadySwitchedPointerResumesWithoutReverseCopy()
     {
         using var runtime = Runtime();
@@ -706,6 +824,43 @@ public sealed class StoragePoolTests(LocalServices services)
         Assert.Equal(targetId, project["csid"].AsObjectId);
         Assert.True(targetBackend.Contains("files/empty.png"));
         Assert.Empty(targetBackend.Bytes("files/empty.png"));
+    }
+
+    [Fact]
+    public async Task CleanupOfPooledProjectDeletesOnlyResolvedSourceObjects()
+    {
+        using var runtime = Runtime();
+        var sourceId = await runtime.InsertSourceAsync();
+        var projectId = await runtime.InsertProjectAsync(csid: sourceId);
+        var saveName = Guid.NewGuid().ToString("N") + ".png";
+        await runtime.InsertImageFileAsync(projectId, ObjectId.GenerateNewId(), saveName);
+        var outputId = ObjectId.GenerateNewId();
+        await runtime.Store.Collection("output").InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = outputId, ["p"] = projectId, ["file_name"] = "out.png", ["sb"] = 4L,
+        }, cancellationToken: CancellationToken.None);
+        await runtime.PutSourceAsync(sourceId, "files/" + saveName, [1, 2, 3]);
+        await runtime.PutSourceAsync(sourceId, "outputs/" + outputId + "/out.png", [4, 5, 6]);
+        await runtime.Default.PutAsync("files/" + saveName, new MemoryStream([9, 9, 9]),
+            "image/png", CancellationToken.None);
+        await runtime.Default.PutAsync("outputs/" + outputId + "/out.png",
+            new MemoryStream([8, 8, 8]), "image/png", CancellationToken.None);
+        var project = await runtime.GetProjectAsync(projectId);
+
+        runtime.Registry.Register(new StoragePoolSourceResolver(runtime.Store, runtime.Factory));
+        await ProjectContentCleanup.ClearProjectContentsAsync(
+            runtime.Store, runtime.Router, runtime.Default, services.Configuration, project,
+            CancellationToken.None);
+
+        await using (var lease = await runtime.Router.ForSourceAsync(sourceId, CancellationToken.None))
+        {
+            Assert.Null(await lease.Backend.HeadAsync("files/" + saveName, CancellationToken.None));
+            Assert.Null(await lease.Backend.HeadAsync(
+                "outputs/" + outputId + "/out.png", CancellationToken.None));
+        }
+        Assert.NotNull(await runtime.Default.HeadAsync("files/" + saveName, CancellationToken.None));
+        Assert.NotNull(await runtime.Default.HeadAsync(
+            "outputs/" + outputId + "/out.png", CancellationToken.None));
     }
 
     private StoragePoolTransferEngine FaultEngine(StoragePoolRuntime runtime, MemoryBackend source,

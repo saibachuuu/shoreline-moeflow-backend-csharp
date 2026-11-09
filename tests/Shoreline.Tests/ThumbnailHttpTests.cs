@@ -111,7 +111,7 @@ public sealed class ThumbnailHttpTests(LocalServices services)
     }
 
     [Fact]
-    public async Task FileThumbnail_StoragePool_FailsClosedWith409()
+    public async Task FileThumbnail_UnknownStorageSource_FailsClosedWith409()
     {
         var project = await ProjectAsync(csid: "pool-http");
         var image = await FileAsync(project, "pool-http.jpg");
@@ -122,10 +122,8 @@ public sealed class ThumbnailHttpTests(LocalServices services)
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
-        Assert.Equal(2, body.GetProperty("code").GetInt32());
-        Assert.Equal(
-            "当前切片尚未接线存储池路由，无法在迁移后的存储池项目上执行文件操作",
-            body.GetProperty("message").GetString());
+        Assert.Equal(6, body.GetProperty("code").GetInt32());
+        Assert.Equal("Storage source is unavailable", body.GetProperty("message").GetString());
         Assert.Equal(0, await services.Store.Collection("csharp_job").CountDocumentsAsync(
             new BsonDocument
             {

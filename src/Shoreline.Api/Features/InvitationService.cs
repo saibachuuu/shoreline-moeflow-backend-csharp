@@ -21,7 +21,8 @@ public sealed class InvitationService(
     TeamMemberService teamMembers,
     InvitationMutationGate gate,
     LegacyTypes legacy,
-    UserView userView)
+    UserView userView,
+    TeamLifecycleLock lifecycle)
 {
     private IMongoCollection<BsonDocument> Invitations => store.Collection("invitation");
     private IMongoCollection<BsonDocument> TeamMembers => store.Collection("team_member");
@@ -496,6 +497,11 @@ public sealed class InvitationService(
     /// capability-checked slot. Capacity breaches raise TargetIsFullError.</summary>
     internal async Task<BsonDocument> JoinTeamAsync(BsonDocument team, BsonDocument user, string roleCode, string requestId, CancellationToken ct)
     {
+        // K1: every current caller (PostInviteAsync, PatchInvitationAsync via
+        // AcceptInvitationCoreAsync) holds the invitation mutation gate for this
+        // team id. The guard is checked inside that gate before the member row
+        // or base_tag is written; JoinTrustedAsync re-enters the team gate.
+        await lifecycle.EnsureWritableAsync(team["_id"].AsObjectId, ct);
         var userId = user["_id"].AsObjectId;
         var member = await TeamActiveMemberAsync(userId, team["_id"].AsObjectId, ct);
         if (member is not null)

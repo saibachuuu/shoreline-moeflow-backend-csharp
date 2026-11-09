@@ -75,10 +75,10 @@ strict and follows the required order:
 If a physical delete fails, the rows and byte counters are left intact. This is
 stricter than Python's best-effort `delete_real_files` (which could delete
 metadata after a swallowed object failure) and matches the cleanup module's
-strict mode. A non-default project storage source (`csid`) fail-closes with
-error 9003 (`项目使用的存储来源暂不支持导出，请稍后重试`, HTTP 503); the C#
-storage-pool router is not wired yet, so the code never silently reads a
-different provider.
+strict mode. A project with a non-empty `csid` resolves its backend through the
+storage-pool router; if the pool has no usable record for that id, the call
+fails closed with error code 6 (`StorageSourceUnavailable`, HTTP 409) and never
+silently reads a different provider.
 
 The output row is inserted under the lock, then the job is enqueued after
 release. Enqueue failure marks the row `s=5` with `job_error` and never
@@ -101,9 +101,10 @@ Differences / unverified:
   like the existing project output routes.
 - Content is produced per project, so the team call creates N independent
   archives, never a combined team archive.
-- A project with non-empty `csid` fails the whole call closed with 9003/503
-  before its row is inserted. Python's storage router would resolve that
-  project's backend; real R2/storage-pool export remains unverified in C#.
+- A project whose `csid` has no usable pool record fails the whole call closed
+  with 409/code 6 before its row is inserted; a valid pooled project resolves
+  that project's backend through the router. Real R2/storage-pool export remains
+  unverified in C#.
 - The Python task has no per-project exception handling; the first failure
   aborts the remaining loop. C# propagates the same way, leaving earlier
   queued outputs intact.
@@ -313,10 +314,11 @@ races remain a later cross-module integration item.
 `AddOutputServices()` registers the scoped services and the singleton job
 handler; `MapOutputs()` maps the routes. The integrator must call both.
 
-## Direct-service facts (28)
+## Direct-service facts (31)
 
-`tests/Shoreline.Tests/OutputTests.cs` contains 30 `[Fact]` tests covering:
-canonical BSON/job payload; pooled storage fail-closed 9003; cooldown 9002 and
+`tests/Shoreline.Tests/OutputTests.cs` contains 31 `[Fact]` tests covering:
+canonical BSON/job payload; unknown storage source fail-closed 409/code 6 and
+pooled export reading/writing through the resolved backend; cooldown 9002 and
 all-target skip; prune keeps two and deletes objects before rows;
 physical-delete failure preserves rows/bytes; foreign target 4024; status
 details; exact LabelPlus header/CRLF behavior;
@@ -342,16 +344,18 @@ only the touched feature/endpoint/registration/test files. `dotnet build
 -warnaserror` completed with 0 warnings/0 errors, the focused
 `Output|AdminUser|OcrHttp` run passed 51/51, and the full isolated suite passed
 783/783 with 6 skipped (789 total). The new direct facts are
-`CreateTeam_CreatesWorkingProjectTargetsOnly` and
-`CreateTeam_PooledStorageFailsClosedWithoutPartialOutput`.
+`CreateTeam_UnknownStorageSourceFailsClosedWithoutPartialOutput` and
+`Export_PooledProjectReadsAndWritesThroughSourceBackend`.
 
 ## Open boundaries / integration notes
 
 - `Program.cs` is untouched; `AddOutputServices()` and `MapOutputs()` still need
   to be wired by the integrator, after the label service registration is in
   place.
-- Output storage pool `csid` is fail-closed (9003) until the router exists and
-  the snapshot can provide the matching backend. Default storage only.
+- Output storage resolves a non-empty `csid` through
+  `ProjectStorageRouter.ForProjectOrNullAsync`; a missing/disabled pool record
+  fails closed with 409/code 6. Default storage keeps the legacy path.
+  Real pooled-provider export still lacks production credentials.
 - `storage.CopyAsync` (server-side copy) must be supported by the configured S3
   provider; a provider without copy will fail publish rather than fall back to
   a non-atomic byte copy.

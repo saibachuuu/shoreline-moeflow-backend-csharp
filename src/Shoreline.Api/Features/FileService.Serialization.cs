@@ -1,6 +1,7 @@
 using System.Text;
 using MongoDB.Bson;
 using Shoreline.Api.Infrastructure;
+using Shoreline.Api.Storage;
 
 namespace Shoreline.Api.Features;
 
@@ -84,10 +85,12 @@ public sealed partial class FileService
         {
             var saveName = file.Text("sa");
             var thumbnailStatus = file.Integer("th");
+            await using var storageLease = await LeaseForProjectAsync(project, ct);
+            var storage = storageLease?.Backend ?? _storage;
             data["parse_status_detail_name"] = DetailName(ImageParseStatusNames, parseStatus);
-            data["url"] = await OriginalUrlAsync(saveName, project, ct);
-            data["cover_url"] = await ProcessedUrlAsync(file, project, "cover", thumbnailStatus, ct);
-            data["resample_url"] = await ProcessedUrlAsync(file, project, "resample", thumbnailStatus, ct);
+            data["url"] = await OriginalUrlAsync(saveName, storage, ct);
+            data["cover_url"] = await ProcessedUrlAsync(file, storage, "cover", thumbnailStatus, ct);
+            data["resample_url"] = await ProcessedUrlAsync(file, storage, "resample", thumbnailStatus, ct);
             data["thumbnail_status"] = thumbnailStatus;
             data["thumbnail_error"] = file.Text("the");
             var ocrPercent = file.Integer("op");
@@ -108,26 +111,20 @@ public sealed partial class FileService
            && !project["csid"].IsBsonNull
            && project["csid"].ToJson().Trim('"').Length > 0;
 
-    private async Task<string> OriginalUrlAsync(string saveName, BsonDocument? project, CancellationToken ct)
+    private async Task<string> OriginalUrlAsync(string saveName, IStorageBackend storage,
+        CancellationToken ct)
     {
         if (string.IsNullOrEmpty(saveName))
         {
             return "";
         }
 
-        // D1 has no storage-pool resolver.  Signing the default backend would point
-        // byte-for-byte at the wrong object for pooled projects, so fail closed.
-        if (HasStoragePool(project))
-        {
-            return "";
-        }
-
-        return await _storage.SignGetAsync(FilePrefix + saveName, UrlValidity);
+        return await storage.SignGetAsync(FilePrefix + saveName, UrlValidity);
     }
 
     private async Task<string> ProcessedUrlAsync(
         BsonDocument file,
-        BsonDocument? project,
+        IStorageBackend storage,
         string processName,
         long thumbnailStatus,
         CancellationToken ct)
@@ -136,13 +133,6 @@ public sealed partial class FileService
         if (string.IsNullOrEmpty(saveName))
         {
             return "";
-        }
-
-        var isCover = processName == "cover";
-        if (!isCover && HasStoragePool(project))
-        {
-            // Cannot address pooled resample copies without the storage router.
-            return "generating";
         }
 
         var stem = saveName;
@@ -156,8 +146,8 @@ public sealed partial class FileService
         // Probe even for SUCCEEDED rows: an overwrite can remove the old derived
         // object before a new thumbnail exists, and this slice must not return a
         // fabricated success URL for an object that is not there.
-        var exists = await _storage.HeadAsync(key, ct);
-        return exists is null ? "generating" : await _storage.SignGetAsync(key, UrlValidity);
+        var exists = await storage.HeadAsync(key, ct);
+        return exists is null ? "generating" : await storage.SignGetAsync(key, UrlValidity);
     }
 
     private Dictionary<string, object?> CacheApi(BsonDocument cache) => new(StringComparer.Ordinal)

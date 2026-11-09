@@ -13,7 +13,7 @@ namespace Shoreline.Api.Storage;
 /// application. Relative keys are the only key space exposed to callers; the
 /// configured <c>Storage:KeyPrefix</c> is applied once inside the S3 backend.
 /// </summary>
-public sealed class ObjectStorage : IDisposable
+public sealed class ObjectStorage : IStorageBackend
 {
     private readonly IStorageBackend backend;
 

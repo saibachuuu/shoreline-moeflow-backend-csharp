@@ -42,6 +42,7 @@ public static class StoragePoolRegistration
         registry.Register(scope.ServiceProvider.GetRequiredService<StoragePoolSourceResolver>());
 
         var store = scope.ServiceProvider.GetRequiredService<MongoStore>();
+        await EnsureNoDuplicateActiveTransfersAsync(store, cancellationToken).ConfigureAwait(false);
         await store.Collection(StoragePoolConstants.SourceCollection).Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("e"),
                 new CreateIndexOptions { Name = "storage_pool_source_enabled" }),
@@ -96,5 +97,40 @@ public static class StoragePoolRegistration
 
         var settings = scope.ServiceProvider.GetRequiredService<StoragePoolSettingsService>();
         await settings.ReadAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Pre-flight dirty-data check required before creating the unique partial
+    /// index on active transfers. Historical rows may contain more than one
+    /// active transfer for the same project; creating the index would then fail
+    /// with a duplicate-key error. Fail startup with a safe message instead and
+    /// let the operator resolve the rows first.
+    /// </summary>
+    internal static async Task EnsureNoDuplicateActiveTransfersAsync(MongoStore store,
+        CancellationToken cancellationToken)
+    {
+        var pipeline = PipelineDefinition<BsonDocument, BsonDocument>.Create(new[]
+        {
+            new BsonDocument("$match", new BsonDocument
+            {
+                ["st"] = new BsonDocument { ["$gte"] = 0, ["$lt"] = 4 },
+            }),
+            new BsonDocument("$group", new BsonDocument
+            {
+                ["_id"] = "$p",
+                ["count"] = new BsonDocument("$sum", 1),
+            }),
+            new BsonDocument("$match", new BsonDocument("count", new BsonDocument("$gt", 1))),
+            new BsonDocument("$limit", 20),
+        });
+        var duplicates = await store.Collection(StoragePoolConstants.TransferCollection)
+            .Aggregate(pipeline, cancellationToken: cancellationToken)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        if (duplicates.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "storage_transfer has projects with more than one active transfer; " +
+                "clean up those rows before creating storage_transfer_one_active_project.");
+        }
     }
 }

@@ -71,7 +71,7 @@ public sealed class OutputTests(LocalServices services)
     }
 
     [Fact]
-    public async Task Create_PooledStorageFailsClosedWith9003()
+    public async Task Create_UnknownStorageSourceFailsClosedWithoutOutput()
     {
         var clock = new TestClock(BaseTime);
         var service = Outputs(clock);
@@ -83,8 +83,8 @@ public sealed class OutputTests(LocalServices services)
 
         var error = await Assert.ThrowsAsync<ApiError>(() => service.CreateAsync(
             project, target, Actor(), OutputTypes.All, null, null, CancellationToken.None));
-        Assert.Equal(9003, error.Code);
-        Assert.Equal(503, error.Status);
+        Assert.Equal(6, error.Code);
+        Assert.Equal(409, error.Status);
         Assert.Equal(0, await services.Store.Collection("output")
             .CountDocumentsAsync(new BsonDocument("t", target["_id"])));
         Assert.Equal(0, await services.Store.Collection("csharp_job")
@@ -146,7 +146,7 @@ public sealed class OutputTests(LocalServices services)
     }
 
     [Fact]
-    public async Task CreateTeam_PooledStorageFailsClosedWithoutPartialOutput()
+    public async Task CreateTeam_UnknownStorageSourceFailsClosedWithoutPartialOutput()
     {
         var clock = new TestClock(BaseTime);
         var service = Outputs(clock);
@@ -160,7 +160,7 @@ public sealed class OutputTests(LocalServices services)
         var error = await Assert.ThrowsAsync<ApiError>(() =>
             service.CreateTeamAsync(new BsonDocument("_id", teamId), Actor(), CancellationToken.None));
 
-        Assert.Equal(9003, error.Code);
+        Assert.Equal(6, error.Code);
         Assert.Equal(0, await services.Store.Collection("output")
             .CountDocumentsAsync(new BsonDocument("p", project["_id"].AsObjectId)));
         Assert.Equal(0, await services.Store.Collection("csharp_job")
@@ -493,6 +493,41 @@ public sealed class OutputTests(LocalServices services)
     }
 
     [Fact]
+    public async Task Export_PooledProjectReadsAndWritesThroughSourceBackend()
+    {
+        var clock = new TestClock(BaseTime);
+        var fixture = await ExportFixtureAsync(clock, putImage: false);
+        var sourceId = await InsertStorageSourceAsync();
+        await services.Store.Collection("project").UpdateOneAsync(
+            new BsonDocument("_id", fixture.ProjectId),
+            new BsonDocument("$set", new BsonDocument("csid", sourceId)));
+        var file = await services.Store.Collection("file")
+            .Find(new BsonDocument("_id", fixture.FileId)).FirstAsync();
+        var saveName = file.Text("sa");
+        var router = services.App.Services.GetRequiredService<ProjectStorageRouter>();
+        await using (var lease = await router.ForSourceAsync(sourceId, CancellationToken.None))
+        {
+            await using var stream = new MemoryStream([9, 8, 7]);
+            await lease.Backend.PutAsync("files/" + saveName, stream, "image/png",
+                CancellationToken.None);
+        }
+
+        await ExportService(clock).RunAsync(fixture.Payload, CancellationToken.None);
+
+        var output = await LoadOutputAsync(fixture.OutputId);
+        Assert.Equal(OutputStatus.Succeeded, output.Integer("s"));
+        var outputKey = "outputs/" + fixture.OutputId + "/" + output.Text("file_name");
+        Assert.Null(await Storage().HeadAsync(outputKey, CancellationToken.None));
+        await using (var lease = await router.ForSourceAsync(sourceId, CancellationToken.None))
+        {
+            Assert.NotNull(await lease.Backend.HeadAsync(outputKey, CancellationToken.None));
+            var staging = await lease.Backend.ListAsync(
+                "outputs/" + fixture.OutputId + "/.work/", null, 100, CancellationToken.None);
+            Assert.Empty(staging.Objects);
+        }
+    }
+
+    [Fact]
     public async Task Export_MissingImageWritesErrorsTxtAndStillSucceeds()
     {
         var clock = new TestClock(BaseTime);
@@ -772,7 +807,8 @@ public sealed class OutputTests(LocalServices services)
         new JobQueue(services.Store, clock),
         services.Configuration,
         clock,
-        NullLogger<OutputService>.Instance);
+        NullLogger<OutputService>.Instance,
+        services.App.Services.GetRequiredService<ProjectStorageRouter>());
 
     private OutputExportService ExportService(TestClock clock) => new(
         services.Store,
@@ -781,9 +817,38 @@ public sealed class OutputTests(LocalServices services)
         Storage(),
         services.Configuration,
         clock,
-        NullLogger<OutputExportService>.Instance);
+        NullLogger<OutputExportService>.Instance,
+        services.App.Services.GetRequiredService<ProjectStorageRouter>());
 
     private ObjectStorage Storage() => services.App.Services.GetRequiredService<ObjectStorage>();
+
+    private async Task<ObjectId> InsertStorageSourceAsync()
+    {
+        var id = ObjectId.GenerateNewId();
+        var now = DateTime.UtcNow;
+        await services.Store.Collection("storage_pool_source").InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = id,
+            ["n"] = "output-source-" + id,
+            ["e"] = true,
+            ["ep"] = services.Configuration["Storage:Endpoint"] ?? "http://127.0.0.1:29128",
+            ["b"] = services.Configuration["Storage:Bucket"] ?? "shoreline-test",
+            ["sp"] = "output-pool/" + Guid.NewGuid().ToString("N") + "/",
+            ["r"] = "us-east-1",
+            ["as"] = "path",
+            ["vs"] = true,
+            ["ak"] = services.Configuration["Storage:AccessKey"] ?? "local-test-only",
+            ["sk"] = services.Configuration["Storage:SecretKey"] ?? "local-disposable-test-secret",
+            ["pd"] = "",
+            ["rm"] = "",
+            ["iad"] = 90,
+            ["mo"] = 2000,
+            ["hd"] = false,
+            ["ct"] = now,
+            ["ut"] = now,
+        }, cancellationToken: CancellationToken.None);
+        return id;
+    }
 
     private static BsonDocument Actor() => new("_id", ObjectId.GenerateNewId());
 

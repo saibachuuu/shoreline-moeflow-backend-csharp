@@ -24,13 +24,24 @@ public sealed class OutputService(
     JobQueue jobs,
     IConfiguration configuration,
     TimeProvider clock,
-    ILogger<OutputService> logger)
+    ILogger<OutputService> logger,
+    ProjectStorageRouter? router = null)
 {
     public const string JobKind = "output_project";
 
     private readonly ProjectCleanupOptions cleanup = ProjectCleanupOptions.FromConfiguration(configuration);
     private IMongoCollection<BsonDocument> Outputs => store.Collection("output");
     private IMongoCollection<BsonDocument> Targets => store.Collection("target");
+
+    private async Task<StorageBackendLease?> LeaseForProjectAsync(
+        BsonDocument? project,
+        CancellationToken ct)
+    {
+        if (project is null) return null;
+        if (ProjectStorageRouter.ReadSourceId(project) is null) return null;
+        if (router is null) throw ProjectStorageRouter.SourceUnavailable();
+        return await router.ForProjectAsync(project, ct);
+    }
 
     public static ApiError TargetNotExist() =>
         new("TargetNotExistError", 4024, "项目目标语言不存在");
@@ -86,7 +97,7 @@ public sealed class OutputService(
         await using (var session = await labels.EnterAsync(labelContext, projectId, recovery: false,
                          expectedRevision: null, ct))
         {
-            OutputObjectCleanup.EnsureDefaultStorageSource(session.Project);
+            await using var storageLease = await LeaseForProjectAsync(session.Project, ct);
             var last = await Outputs.Find(new BsonDocument { ["p"] = projectId, ["t"] = targetId })
                 .Sort(new BsonDocument { ["ct"] = -1, ["_id"] = -1 })
                 .FirstOrDefaultAsync(ct);
@@ -117,7 +128,7 @@ public sealed class OutputService(
         await using (var session = await labels.EnterAsync(labelContext, projectId, recovery: false,
                          expectedRevision: null, ct))
         {
-            OutputObjectCleanup.EnsureDefaultStorageSource(session.Project);
+            await using var storageLease = await LeaseForProjectAsync(session.Project, ct);
             var targets = await ListTargetsAsync(projectId, ct);
             var wait = OutputPolicy.WaitSeconds(configuration);
             var now = clock.GetUtcNow().UtcDateTime;
@@ -169,9 +180,9 @@ public sealed class OutputService(
             .ToListAsync(ct);
         foreach (var project in projects)
             // Python has no per-project catch: the first failure aborts the
-            // task, leaving already-queued outputs intact. Pooled storage
-            // fail-closed (9003) surfaces the same way instead of silently
-            // reading a different backend.
+            // task, leaving already-queued outputs intact. An unavailable pool
+            // source surfaces the same way instead of silently reading a
+            // different backend.
             await CreateAllAsync(project, actor, ct);
     }
 
@@ -184,8 +195,10 @@ public sealed class OutputService(
         if (rows.Count <= 2) return;
 
         var old = rows.Skip(2).ToList();
+        await using var storageLease = await LeaseForProjectAsync(project, ct);
+        var objectStorage = storageLease?.Backend ?? storage;
         await OutputObjectCleanup.DeleteObjectsStrictAsync(
-            store, cleanup, storage.DeleteAsync, project, old, ct);
+            store, cleanup, objectStorage.DeleteAsync, project, old, ct);
 
         var ids = new BsonArray(old.Select(row => row["_id"]));
         await Outputs.DeleteManyAsync(new BsonDocument
@@ -313,12 +326,15 @@ public sealed class OutputService(
             string? link = null;
             if (status == OutputStatus.Succeeded)
             {
-                OutputObjectCleanup.EnsureDefaultStorageSource(project);
                 var fileName = output.Text("file_name");
                 if (fileName.Length > 0)
-                    link = await storage.SignGetAsync(
+                {
+                    await using var storageLease = await LeaseForProjectAsync(project, ct);
+                    var objectStorage = storageLease?.Backend ?? storage;
+                    link = await objectStorage.SignGetAsync(
                         cleanup.OutputPrefix + output["_id"].AsObjectId + "/" + fileName,
                         TimeSpan.FromDays(7));
+                }
             }
 
             var item = new Dictionary<string, object?>

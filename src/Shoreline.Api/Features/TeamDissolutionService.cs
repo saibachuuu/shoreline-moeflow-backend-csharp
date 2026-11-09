@@ -22,7 +22,8 @@ public sealed class TeamDissolutionService(
     LabelRequestContext labelContext,
     ObjectStorage storage,
     IConfiguration configuration,
-    ILogger<TeamDissolutionService> logger)
+    ILogger<TeamDissolutionService> logger,
+    ProjectStorageRouter? router = null)
 {
     private const int ProjectBatchSize = 100;
     private const int TermBatchSize = 200;
@@ -174,8 +175,16 @@ public sealed class TeamDissolutionService(
             teamRef.BsonType != BsonType.ObjectId || teamRef.AsObjectId != lease.TeamId)
             throw TeamLifecycleErrors.Busy("项目归属已改变，请重试");
 
-        await ProjectContentCleanup.ClearProjectContentsAsync(
-            store, storage, configuration, project, ct);
+        if (router is not null)
+        {
+            await ProjectContentCleanup.ClearProjectContentsAsync(
+                store, router, storage, configuration, project, ct);
+        }
+        else
+        {
+            await ProjectContentCleanup.ClearProjectContentsAsync(
+                store, storage, configuration, project, ct);
+        }
         await DeleteProjectTargetsAsync(project, ct);
         await DeleteProjectRowsAsync(projectId, lease.TeamId, ct);
     }
@@ -199,8 +208,16 @@ public sealed class TeamDissolutionService(
 
             foreach (var target in batch)
             {
-                await ProjectContentCleanup.DeleteTargetCascadesAsync(
-                    store, storage, configuration, project, target, ct);
+                if (router is not null)
+                {
+                    await ProjectContentCleanup.DeleteTargetCascadesAsync(
+                        store, router, storage, configuration, project, target, ct);
+                }
+                else
+                {
+                    await ProjectContentCleanup.DeleteTargetCascadesAsync(
+                        store, storage, configuration, project, target, ct);
+                }
                 lastId = target["_id"];
             }
         }

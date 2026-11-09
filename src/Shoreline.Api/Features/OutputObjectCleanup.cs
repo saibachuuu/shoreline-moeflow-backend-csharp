@@ -14,9 +14,10 @@ namespace Shoreline.Api.Features;
 public static class OutputObjectCleanup
 {
     /// <summary>
-    /// Storage-pool routing is not available in this port. Refuse to read or
-    /// write the default bucket for a project whose <c>csid</c> points at a
-    /// pool source instead of silently using the wrong backend.
+    /// Guard for the legacy default-only overloads. Callers that have a
+    /// <see cref="ProjectStorageRouter"/> must use the pool-aware overload
+    /// instead; this guard keeps an accidental default-bucket delete
+    /// impossible for calls that forgot the router.
     /// </summary>
     public static void EnsureDefaultStorageSource(BsonDocument project)
     {
@@ -63,7 +64,6 @@ public static class OutputObjectCleanup
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(deleteObject);
-        EnsureDefaultStorageSource(project);
 
         foreach (var output in outputs)
         {

@@ -25,10 +25,21 @@ public sealed class OutputExportService(
     ObjectStorage storage,
     IConfiguration configuration,
     TimeProvider clock,
-    ILogger<OutputExportService> logger)
+    ILogger<OutputExportService> logger,
+    ProjectStorageRouter? router = null)
 {
     private const int BatchSize = 200;
     private static readonly TimeSpan CleanupBudget = TimeSpan.FromSeconds(5);
+
+    private async Task<StorageBackendLease?> LeaseForProjectAsync(
+        BsonDocument? project,
+        CancellationToken ct)
+    {
+        if (project is null) return null;
+        if (ProjectStorageRouter.ReadSourceId(project) is null) return null;
+        if (router is null) throw ProjectStorageRouter.SourceUnavailable();
+        return await router.ForProjectAsync(project, ct);
+    }
 
     /// <summary>Test seam: runs while the publish lock is held, before the
     /// frozen pointer check. Production leaves this null.</summary>
@@ -70,6 +81,13 @@ public sealed class OutputExportService(
         if (initial is null || initial.Integer("s") == OutputStatus.Succeeded) return;
         if (!TryObjectId(initial.GetValue("p", BsonNull.Value), out var projectId)) return;
         if (payloadProject.IsObjectId && payloadProject.AsObjectId != projectId) return;
+
+        var projectRow = await store.Collection("project")
+            .Find(new BsonDocument("_id", projectId)).FirstOrDefaultAsync(ct);
+        if (projectRow is null) return;
+        await using var projectStorageLease = await LeaseForProjectAsync(projectRow, ct);
+        var projectStorage = projectStorageLease?.Backend ?? storage;
+        var projectSourceId = ProjectStorageRouter.ReadSourceId(projectRow);
 
         string owner;
         try
@@ -126,7 +144,8 @@ public sealed class OutputExportService(
         try
         {
             runDirectory = CreateRunDirectory(outputId, owner);
-            var frozen = await FreezeAsync(outputId, owner, projectId, expectedRevision, runDirectory, leaseCts.Token);
+            var frozen = await FreezeAsync(outputId, owner, projectId, expectedRevision,
+                projectSourceId, runDirectory, leaseCts.Token);
 
             string artifactPath;
             string extension;
@@ -142,7 +161,8 @@ public sealed class OutputExportService(
                 if (!await OutputLease.SetStatusAsync(Outputs, outputId, owner,
                         OutputStatus.Downloading, Now, leaseCts.Token))
                     throw LostOwnership();
-                var errors = await DownloadImagesAsync(frozen.Manifest, runDirectory, leaseCts.Token);
+                var errors = await DownloadImagesAsync(
+                    projectStorage, frozen.Manifest, runDirectory, leaseCts.Token);
 
                 if (!await OutputLease.SetStatusAsync(Outputs, outputId, owner,
                         OutputStatus.Ziping, Now, leaseCts.Token))
@@ -159,9 +179,10 @@ public sealed class OutputExportService(
 
             var fileName = frozen.DownloadName + extension;
             stagingKey = cleanup.OutputPrefix + outputId + "/.work/" + owner + extension;
-            var bytes = await UploadAsync(stagingKey, artifactPath, contentType, leaseCts.Token);
+            var bytes = await UploadAsync(projectStorage, stagingKey, artifactPath, contentType, leaseCts.Token);
 
-            await PublishAsync(outputId, owner, projectId, frozen, stagingKey, fileName, bytes, leaseCts.Token);
+            await PublishAsync(outputId, owner, projectId, frozen, projectStorage, stagingKey, fileName, bytes,
+                leaseCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -211,7 +232,7 @@ public sealed class OutputExportService(
             {
                 try
                 {
-                    await storage.DeleteAsync(stagingKey, cleanup.Token)
+                    await projectStorage.DeleteAsync(stagingKey, cleanup.Token)
                         .WaitAsync(CleanupBudget, CancellationToken.None);
                 }
                 catch (Exception) { }
@@ -262,6 +283,7 @@ public sealed class OutputExportService(
         string owner,
         ObjectId projectId,
         long? expectedRevision,
+        ObjectId? expectedSourceId,
         string runDirectory,
         CancellationToken ct)
     {
@@ -269,7 +291,8 @@ public sealed class OutputExportService(
             labelContext, projectId, recovery: false, expectedRevision, ct);
         var project = session.Project;
         if (project.Flag("cip")) throw new InvalidOperationException("Project clear is in progress.");
-        OutputObjectCleanup.EnsureDefaultStorageSource(project);
+        if (ProjectStorageRouter.ReadSourceId(project) != expectedSourceId)
+            throw OutputStale();
 
         var output = await Outputs.Find(new BsonDocument("_id", outputId)).FirstOrDefaultAsync(ct)
                      ?? throw new InvalidOperationException("Output disappeared.");
@@ -280,7 +303,7 @@ public sealed class OutputExportService(
             throw LostOwnership();
 
         var frozen = await BuildSnapshotAsync(project, target, output, runDirectory, ct);
-        return frozen with { Revision = session.Revision };
+        return frozen with { Revision = session.Revision, SourceId = expectedSourceId };
     }
 
     private async Task PublishAsync(
@@ -288,6 +311,7 @@ public sealed class OutputExportService(
         string owner,
         ObjectId projectId,
         FreezeResult frozen,
+        IStorageBackend projectStorage,
         string stagingKey,
         string fileName,
         long bytes,
@@ -297,7 +321,8 @@ public sealed class OutputExportService(
             labelContext, projectId, recovery: false, frozen.Revision, ct);
         var project = session.Project;
         if (project.Flag("cip")) throw new InvalidOperationException("Project clear is in progress.");
-        OutputObjectCleanup.EnsureDefaultStorageSource(project);
+        if (ProjectStorageRouter.ReadSourceId(project) != frozen.SourceId)
+            throw OutputStale();
 
         var output = await Outputs.Find(new BsonDocument("_id", outputId)).FirstOrDefaultAsync(ct)
                      ?? throw new InvalidOperationException("Output disappeared.");
@@ -311,7 +336,7 @@ public sealed class OutputExportService(
         await VerifyFrozenPointersAsync(projectId, frozen.Manifest, ct);
 
         var finalKey = cleanup.OutputPrefix + outputId + "/" + fileName;
-        await storage.CopyAsync(stagingKey, finalKey, ct);
+        await projectStorage.CopyAsync(stagingKey, finalKey, ct);
 
         var guard = OutputLease.PublishFilter(outputId, owner, Now);
         if (!await OutputAccounting.RecordArtifactAsync(
@@ -651,6 +676,7 @@ public sealed class OutputExportService(
     }
 
     private async Task<List<string>> DownloadImagesAsync(
+        IStorageBackend projectStorage,
         BsonDocument manifest,
         string runDirectory,
         CancellationToken ct)
@@ -674,7 +700,7 @@ public sealed class OutputExportService(
 
             try
             {
-                using var download = await storage.GetAsync(
+                using var download = await projectStorage.GetAsync(
                     cleanup.FilePrefix + document.Text("save_name"), ct);
                 await using var target = new FileStream(local, FileMode.Create, FileAccess.Write,
                     FileShare.None, 81920, useAsync: true);
@@ -755,12 +781,13 @@ public sealed class OutputExportService(
         await OutputArchive.CreateAsync(runDirectory, zipPath, entries, ct);
     }
 
-    private async Task<long> UploadAsync(string key, string path, string contentType, CancellationToken ct)
+    private async Task<long> UploadAsync(IStorageBackend projectStorage, string key, string path,
+        string contentType, CancellationToken ct)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
             FileShare.Read, 81920, useAsync: true);
-        await storage.PutAsync(key, stream, contentType, ct);
-        var info = await storage.HeadAsync(key, ct);
+        await projectStorage.PutAsync(key, stream, contentType, ct);
+        var info = await projectStorage.HeadAsync(key, ct);
         return info?.Size ?? new FileInfo(path).Length;
     }
 
@@ -824,6 +851,9 @@ public sealed class OutputExportService(
 
     private static InvalidOperationException LostOwnership() =>
         new("Output execution lease was lost.");
+
+    private static ApiError OutputStale() =>
+        new("OutputStale", 1, "导出期间项目存储来源已变化，请重试导出", 409);
 
     private static bool TryObjectId(BsonValue value, out ObjectId id)
     {

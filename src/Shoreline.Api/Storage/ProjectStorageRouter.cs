@@ -55,6 +55,21 @@ public sealed class ProjectStorageRouter
     public ValueTask<StorageBackendLease> ForDefaultAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(factory.BorrowDefault(defaultStorage));
 
+    /// <summary>
+    /// Gray-rollout routing key used by File/Output/Thumbnail/cleanup callers:
+    /// a project without a storage source keeps the legacy default-backend path
+    /// and gets <c>null</c>; only a project whose <c>csid</c> is set resolves a
+    /// pool lease. An unknown/disabled source still throws fail-closed 409.
+    /// </summary>
+    public async ValueTask<StorageBackendLease?> ForProjectOrNullAsync(BsonDocument project,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        var sourceId = ReadSourceId(project);
+        if (sourceId is null) return null;
+        return await ForSourceAsync(sourceId.Value, cancellationToken).ConfigureAwait(false);
+    }
+
     public ValueTask<StorageBackendLease> ForOriginalAsync(BsonDocument project,
         CancellationToken cancellationToken = default) => ForProjectAsync(project, cancellationToken);
 
@@ -88,7 +103,11 @@ public sealed class ProjectStorageRouter
     {
         if (!project.TryGetValue("csid", out var value) || value.IsBsonNull) return null;
         if (value.IsObjectId) return value.AsObjectId;
-        if (value.IsString && ObjectId.TryParse(value.AsString, out var parsed)) return parsed;
+        if (value.IsString)
+        {
+            if (value.AsString.Length == 0) return null;
+            if (ObjectId.TryParse(value.AsString, out var parsed)) return parsed;
+        }
         throw SourceUnavailable();
     }
 

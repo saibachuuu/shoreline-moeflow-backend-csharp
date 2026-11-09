@@ -209,9 +209,10 @@ public interface IStorageBackend : IDisposable
 }
 ```
 
-This interface is intended to let a later storage-pool router compose backends.
-No pool, descriptor/client-factory, or Program registration change is made in
-this phase.
+This interface is what the storage-pool router composes: a pooled lease exposes
+the same backend contract as the default `ObjectStorage` instance (which now
+implements `IStorageBackend` directly). See
+`docs/storage-pool-compatibility.md` for caller routing.
 
 ## Semantics
 
@@ -369,7 +370,8 @@ tests do not prove that R2 would accept the credentials.
   real R2 credentials and has made no live connection.
 - Local static-file serving is not wired. Local `SignGetAsync` returns a URL
   only; an authenticated/static server route must be added in a later phase.
-- File CRUD (`files/<sa>`) and the storage-pool module are not implemented here.
+- File CRUD and the storage-pool module live in their feature docs; this layer
+  only provides the backend and router primitives.
 - Aliyun OSS native signing, multipart upload, object ACL/tag/versioning
   operations, and conditional requests remain out of scope.
 - The unknown-provider fallback is intentional compatibility behavior, but it

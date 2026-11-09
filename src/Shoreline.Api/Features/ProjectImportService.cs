@@ -25,7 +25,8 @@ public sealed partial class ProjectImportService(
     ProjectLabelLock labelLock,
     LabelRequestContext labelContext,
     LabelService labelService,
-    TimeProvider clock)
+    TimeProvider clock,
+    TeamLifecycleLock? lifecycle = null)
 {
     public const string JobKind = "import_from_labelplus";
 
@@ -61,10 +62,14 @@ public sealed partial class ProjectImportService(
 
     /// <summary>Parses LabelPlus text and maps every failure to legacy 4029.</summary>
     /// <remarks>
-    /// K1 reservation: when team dissolution fencing is wired, this pre-create
-    /// hook must call <c>TeamLifecycleLock.EnsureWritableAsync(teamId)</c> before
-    /// parsing/writing anything. It is intentionally not called yet because K1
-    /// write-side wiring is a separate slice and this method has no team id.
+    /// This hook is intentionally pure: it parses but never writes, so it has no
+    /// team id and does not call <c>TeamLifecycleLock.EnsureWritableAsync</c>.
+    /// Python's <c>Project.create</c> likewise parses the text before its first
+    /// save and has no dissolution guard. The first real write is the project
+    /// insert in <c>ProjectService.CreateProjectAsync</c>, which now calls the
+    /// guard with the team context; <see cref="InitializeAfterCreateAsync"/> also
+    /// calls it while holding the project label lock. Moving the guard here would
+    /// require a fake team id or an unlocked check.
     /// </remarks>
     public List<LabelPlusFile> ValidateBeforeCreate(string? labelplusText)
     {
@@ -95,12 +100,9 @@ public sealed partial class ProjectImportService(
         string requestId,
         CancellationToken ct)
     {
-        // K1 reservation: before the first write below, the final integration
-        // must call TeamLifecycleLock.EnsureWritableAsync(project["t"]) while it
-        // still holds the project lock. This slice only reserves the call site;
-        // it must not add a second, unlocked check that gives a false guarantee.
         // Parse again defensively: this hook is public and must never enqueue an
-        // unparseable legacy file.
+        // unparseable legacy file. The team guard is called below while the
+        // project label lock is held, immediately before the first flag write.
         if (string.IsNullOrEmpty(labelplusText)) return null;
         ValidateBeforeCreate(labelplusText);
 
@@ -115,6 +117,13 @@ public sealed partial class ProjectImportService(
         var current = session.Project;
         var revision = current.Integer("label_revision", 0);
         if (revision != expectedRevision) return null;
+
+        // K1: the team guard runs inside the project label lock. Team
+        // dissolution holds the team lifecycle claim and then enters this same
+        // project lock before deleting the project, so an initialize racing a
+        // delete either sees the marker here or is deleted as a whole project.
+        if (lifecycle is not null)
+            await lifecycle.EnsureWritableAsync(current["t"].AsObjectId, ct);
 
         var targetCount = await Targets.CountDocumentsAsync(new BsonDocument("t", projectId), cancellationToken: ct);
         var creator = await FindCreatorAsync(projectId, ct);
@@ -191,10 +200,12 @@ public sealed partial class ProjectImportService(
     /// durable per-file/per-label checkpoint after a partial failure.
     /// </summary>
     /// <remarks>
-    /// K1 reservation: the run-side call site for
-    /// <c>TeamLifecycleLock.EnsureWritableAsync(project["t"])</c> belongs at the
-    /// top of this method, after the project lock and before the first flag
-    /// write. It is intentionally not wired in this slice.
+    /// K1: after the project label lock is held (and after the terminal replay
+    /// guards below), the run calls
+    /// <c>TeamLifecycleLock.EnsureWritableAsync(project["t"])</c> before the
+    /// first flag write. Team dissolution takes the same project lock before
+    /// deleting the project, so the run cannot start writing into a project
+    /// that the delete pass has claimed.
     /// </remarks>
     public async Task RunImportAsync(BsonDocument payload, CancellationToken ct)
     {
@@ -216,6 +227,10 @@ public sealed partial class ProjectImportService(
         var status = (int)project.Integer("is", Pending);
         if (status == Succeeded) return; // replay guard
         if (status == Error && project.Text("it", "").Length == 0) return;
+
+        // K1: guard the first flag write while still inside the project lock.
+        if (lifecycle is not null)
+            await lifecycle.EnsureWritableAsync(project["t"].AsObjectId, ct);
 
         var target = await Targets.Find(new BsonDocument("t", projectId))
             .Sort(new BsonDocument("_id", 1)).FirstOrDefaultAsync(ct);

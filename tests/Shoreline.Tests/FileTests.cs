@@ -286,7 +286,8 @@ public sealed class FileTests(LocalServices services)
         var pooled = await InsertProjectAsync(storageSourceId: ObjectId.Parse("658888888888888888888888"));
         var unsupported = await Assert.ThrowsAsync<ApiError>(() => files.UploadAsync(
             pooled, "x.png", Form("x.png", [1]), null, CancellationToken.None));
-        Assert.Equal("StoragePoolUnsupported", unsupported.Error);
+        Assert.Equal("StorageSourceUnavailable", unsupported.Error);
+        Assert.Equal(6, unsupported.Code);
         Assert.Equal(409, unsupported.Status);
     }
 
@@ -887,7 +888,8 @@ public sealed class FileTests(LocalServices services)
             new FileMutationGate(),
             NullLogger<FileService>.Instance,
             labels,
-            context);
+            context,
+            services.App.Services.GetRequiredService<ProjectStorageRouter>());
         var project = await InsertProjectAsync();
 
         await using var middlewareSession = await labels.EnterAsync(
@@ -897,6 +899,43 @@ public sealed class FileTests(LocalServices services)
 
         Assert.Equal("borrowed.png", data["name"]);
         Assert.Equal(1, (await LoadProjectAsync(project["_id"].AsObjectId)).Integer("fc"));
+    }
+
+    [Fact]
+    public async Task PooledProject_UploadReadAndDeleteUseResolvedSourceBackend()
+    {
+        var sourceId = await InsertStorageSourceAsync();
+        var project = await InsertProjectAsync(storageSourceId: sourceId);
+        var files = Service(new TestClock(BaseTime));
+        var router = services.App.Services.GetRequiredService<ProjectStorageRouter>();
+
+        var data = await files.UploadAsync(
+            project, "pooled.png", Form("pooled.png", [4, 3, 2, 1]), null, CancellationToken.None);
+        var saveName = data["save_name"]!.ToString()!;
+        var key = FileService.FilePrefix + saveName;
+
+        Assert.Null(await Storage().HeadAsync(key, CancellationToken.None));
+        await using (var lease = await router.ForOriginalAsync(project, CancellationToken.None))
+        {
+            var stored = await lease.Backend.HeadAsync(key, CancellationToken.None);
+            Assert.NotNull(stored);
+            Assert.Equal(4L, stored!.Size);
+            using var download = await lease.Backend.GetAsync(key, CancellationToken.None);
+            using var buffer = new MemoryStream();
+            await download.Content.CopyToAsync(buffer, CancellationToken.None);
+            Assert.Equal(new byte[] { 4, 3, 2, 1 }, buffer.ToArray());
+        }
+
+        var file = await LoadFileAsync(ObjectId.Parse(data["id"]!.ToString()!));
+        var view = await files.GetAsync(file, project, null, CancellationToken.None);
+        Assert.False(string.IsNullOrEmpty(view["url"]?.ToString()));
+
+        await files.DeleteAsync(file, project, CancellationToken.None);
+        await using (var lease = await router.ForOriginalAsync(project, CancellationToken.None))
+        {
+            Assert.Null(await lease.Backend.HeadAsync(key, CancellationToken.None));
+        }
+        Assert.Null(await Storage().HeadAsync(key, CancellationToken.None));
     }
 
     // ---------------------------------------------------------------- fixtures
@@ -909,7 +948,8 @@ public sealed class FileTests(LocalServices services)
         services.Configuration,
         clock,
         new FileMutationGate(),
-        NullLogger<FileService>.Instance);
+        NullLogger<FileService>.Instance,
+        router: services.App.Services.GetRequiredService<ProjectStorageRouter>());
 
     private ObjectStorage Storage() => services.App.Services.GetRequiredService<ObjectStorage>();
 
@@ -943,6 +983,34 @@ public sealed class FileTests(LocalServices services)
 
         await services.Store.Collection("project").InsertOneAsync(document);
         return document;
+    }
+
+    private async Task<ObjectId> InsertStorageSourceAsync()
+    {
+        var id = ObjectId.GenerateNewId();
+        var now = DateTime.UtcNow;
+        await services.Store.Collection("storage_pool_source").InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = id,
+            ["n"] = "file-source-" + id,
+            ["e"] = true,
+            ["ep"] = services.Configuration["Storage:Endpoint"] ?? "http://127.0.0.1:29128",
+            ["b"] = services.Configuration["Storage:Bucket"] ?? "shoreline-test",
+            ["sp"] = "file-pool/" + Guid.NewGuid().ToString("N") + "/",
+            ["r"] = "us-east-1",
+            ["as"] = "path",
+            ["vs"] = true,
+            ["ak"] = services.Configuration["Storage:AccessKey"] ?? "local-test-only",
+            ["sk"] = services.Configuration["Storage:SecretKey"] ?? "local-disposable-test-secret",
+            ["pd"] = "",
+            ["rm"] = "",
+            ["iad"] = 90,
+            ["mo"] = 2000,
+            ["hd"] = false,
+            ["ct"] = now,
+            ["ut"] = now,
+        }, cancellationToken: CancellationToken.None);
+        return id;
     }
 
     private async Task<BsonDocument> InsertFileAsync(BsonDocument document)

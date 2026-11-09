@@ -8,7 +8,8 @@ using Shoreline.Api.Security;
 namespace Shoreline.Api.Features;
 
 public sealed class TeamMemberService(MongoStore store, IdentityPermissions permissions, TeamMutationGate gates,
-    IdentityAuditWriter audit, IConfiguration configuration, TimeProvider clock)
+    IdentityAuditWriter audit, IConfiguration configuration, TimeProvider clock,
+    TeamLifecycleLock lifecycle)
 {
     private IMongoCollection<BsonDocument> Members => store.Collection("team_member");
 
@@ -59,6 +60,9 @@ public sealed class TeamMemberService(MongoStore store, IdentityPermissions perm
     {
         using var held = await gates.EnterAsync(team["_id"].AsObjectId, ct);
         team = await GetTeamAsync(team["_id"].ToString()!, ct);
+        // K1: team-scoped write. The guard runs inside the team mutation gate
+        // and immediately before the first member/count write.
+        await lifecycle.EnsureWritableAsync(team["_id"].AsObjectId, ct);
         var relation = await RequireManagerAsync(team, actor, ct);
         IdentityErrors.RequireObject(data);
         var key = IdentityErrors.Value(data, "user_id");
@@ -84,6 +88,9 @@ public sealed class TeamMemberService(MongoStore store, IdentityPermissions perm
         if (baseTag is not ("creator" or "admin" or "member")) throw IdentityErrors.InvalidTag();
         using var held = await gates.EnterAsync(team["_id"].AsObjectId, ct);
         team = await GetTeamAsync(team["_id"].ToString()!, ct);
+        // K1: trusted creation/registration joins share the same team gate and
+        // guard as AddAsync (JoinApplicationRoleAsync delegates here).
+        await lifecycle.EnsureWritableAsync(team["_id"].AsObjectId, ct);
         var member = await ForUserAsync(team, user, false, ct);
         if (member?.Text("status", "active") == "active") return member;
         var tags = member?.GetValue("tags", new BsonArray()).AsBsonArray.Where(value => value.IsString).Select(value => value.AsString).ToArray() ?? [];

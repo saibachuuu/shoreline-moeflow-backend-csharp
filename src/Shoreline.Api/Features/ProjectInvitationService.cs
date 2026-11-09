@@ -11,7 +11,8 @@ namespace Shoreline.Api.Features;
 public sealed class ProjectInvitationService(
     MongoStore store,
     IdentityPermissions permissions,
-    IdentityAuditWriter audit)
+    IdentityAuditWriter audit,
+    TeamLifecycleLock lifecycle)
 {
     public const int PendingStatus = 1;
     public const int AllowStatus = 2;
@@ -159,6 +160,14 @@ public sealed class ProjectInvitationService(
     public async Task<BsonDocument> CreatePendingInvitationAsync(BsonDocument project, BsonDocument operatorUser,
         ObjectId userId, BsonValue roleRef, string message, CancellationToken ct)
     {
+        // K1: every caller (InvitationService.PostInviteAsync and the
+        // ProjectMemberService invitation adapter) holds the per-project
+        // InvitationMutationGate. The guard is checked inside that gate before
+        // the invitation row is inserted. We deliberately do not acquire the
+        // project label lock here: HTTP project routes already hold it outside
+        // the invitation gate, and taking it after the gate would invert that
+        // order (label -> invitation gate elsewhere) and could deadlock.
+        await lifecycle.EnsureWritableAsync(project["t"].AsObjectId, ct);
         var now = DateTime.UtcNow;
         var doc = new BsonDocument
         {
@@ -586,6 +595,10 @@ public sealed class ProjectInvitationService(
     /// adapter's projection step records the identity change.</summary>
     internal async Task<BsonDocument> JoinProjectAsync(BsonDocument project, BsonDocument user, string roleCode, CancellationToken ct)
     {
+        // K1: all callers hold the per-project InvitationMutationGate (see
+        // CreatePendingInvitationAsync for why the label lock is not acquired
+        // here). The guard runs before the membership row/count writes.
+        await lifecycle.EnsureWritableAsync(project["t"].AsObjectId, ct);
         var userId = user["_id"].AsObjectId;
         var isOwner = project.GetValue("ou", BsonNull.Value) is { IsObjectId: true } ownerId &&
             ownerId.AsObjectId == userId;

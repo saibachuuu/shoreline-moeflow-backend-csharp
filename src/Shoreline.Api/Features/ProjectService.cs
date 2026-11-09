@@ -12,7 +12,9 @@ namespace Shoreline.Api.Features;
 // backends can read the same database while the port is in progress.
 public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyTypes types,
     IdentityPermissions permissions, TeamService teams, TeamMemberService members,
-    ObjectStorage? storage = null, IConfiguration? configuration = null)
+    ObjectStorage? storage = null, IConfiguration? configuration = null,
+    TeamLifecycleLock? lifecycle = null, ProjectLabelLock? labels = null,
+    LabelRequestContext? labelContext = null, ProjectStorageRouter? router = null)
 {
     private IMongoCollection<BsonDocument> Projects => store.Collection("project");
     private IMongoCollection<BsonDocument> Sets => store.Collection("project_set");
@@ -75,6 +77,11 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
     public async Task<BsonDocument> CreateProjectSetAsync(BsonDocument actor, BsonDocument team, string name, CancellationToken ct)
     {
         await RequireTeamAsync(actor, team, "team:CREATE_PROJECT_SET", ct);
+        // K1: team-scoped write. No project/label lock exists for a new set, so
+        // the distributed team guard is the only fence; it rejects a team whose
+        // deletion claim is being held or whose durable deleting marker exists.
+        if (lifecycle is not null)
+            await lifecycle.EnsureWritableAsync(team["_id"].AsObjectId, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var document = new BsonDocument
         {
@@ -123,6 +130,12 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
     public async Task<BsonDocument> CreateProjectAsync(BsonDocument actor, BsonDocument team, System.Text.Json.JsonElement data, CancellationToken ct)
     {
         await RequireTeamAsync(actor, team, "team:CREATE_PROJECT", ct);
+        // K1: the project row does not exist yet, so there is no project label
+        // lock to hold. The team guard is checked before the first write; the
+        // dissolution pass additionally re-counts projects before deleting the
+        // team row, so a create that raced a delete cannot leave an orphan row.
+        if (lifecycle is not null)
+            await lifecycle.EnsureWritableAsync(team["_id"].AsObjectId, ct);
         if (data.ValueKind != System.Text.Json.JsonValueKind.Object) throw ApiError.Invalid("Invalid request");
         var name = data.RequiredText("name", 40);
         if (name.Length == 0) throw ApiError.Invalid("Invalid request");
@@ -333,6 +346,26 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
     {
         if (data.ValueKind != System.Text.Json.JsonValueKind.Object || data.EnumerateObject().Count() == 0)
             throw new ApiError("RequestDataEmptyError", 110, "请求数据为空");
+        // K1: project-scoped writes run inside the project label lock, the same
+        // lock TeamDissolutionService acquires before deleting a project. The
+        // HTTP label guard may already hold it for this request; the scoped
+        // LabelRequestContext then reuses that exact lease. The optional
+        // dependencies exist only for direct unit construction (cleanup tests);
+        // the application container always supplies them.
+        if (labels is not null && labelContext is not null)
+        {
+            await using var session = await labels.EnterAsync(labelContext, project["_id"].AsObjectId,
+                recovery: false, expectedRevision: null, ct);
+            return await UpdateProjectLockedAsync(actor, session.Project, data, ct);
+        }
+        return await UpdateProjectLockedAsync(actor, project, data, ct);
+    }
+
+    private async Task<BsonDocument> UpdateProjectLockedAsync(BsonDocument actor, BsonDocument project,
+        System.Text.Json.JsonElement data, CancellationToken ct)
+    {
+        if (lifecycle is not null)
+            await lifecycle.EnsureWritableAsync(project["t"].AsObjectId, ct);
         if (project.Integer("st", 0) != 0) throw new ApiError("ProjectFinishedError", 4002, "项目已完结，无法修改");
         await RequireProjectAsync(actor, project, "project:CHANGE", ct);
         var changes = new BsonDocument();
@@ -425,8 +458,16 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
             // Python Target.clear: output objects best-effort, then ORM CASCADE
             // for output/translation/tip/file_target_cache, target delete, and
             // target_count decrement only when that delete actually matched.
-            await ProjectContentCleanup.DeleteTargetCascadesAsync(
-                store, storage, configuration, project, target, ct);
+            if (router is not null)
+            {
+                await ProjectContentCleanup.DeleteTargetCascadesAsync(
+                    store, router, storage, configuration, project, target, ct);
+            }
+            else
+            {
+                await ProjectContentCleanup.DeleteTargetCascadesAsync(
+                    store, storage, configuration, project, target, ct);
+            }
         }
         catch (InvalidOperationException)
         {

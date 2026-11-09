@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
+using Shoreline.Api.Storage;
 
 namespace Shoreline.Api.Features;
 
@@ -224,13 +225,14 @@ public sealed partial class FileService
         BsonDocument project,
         CancellationToken ct)
     {
-        EnsureDefaultStorage(project);
         var projectId = project["_id"].AsObjectId;
         await using var labelSession = await EnterLabelAsync(projectId, ct);
         using var _ = await _gate.EnterAsync(projectId, ct);
         file = await GetFileAsync(file["_id"].AsObjectId.ToString(), ct);
         EnsureActivated(file);
         labelSession.AssertReferenceEpoch(file);
+        await using var storageLease = await LeaseForProjectAsync(project, ct);
+        var storage = storageLease?.Backend ?? _storage;
 
         var fileId = file["_id"].AsObjectId;
         var parentValue = file.GetValue("f", BsonNull.Value);
@@ -244,7 +246,7 @@ public sealed partial class FileService
         {
             var filter = Builders<BsonDocument>.Filter.Eq("p", projectId)
                          & Builders<BsonDocument>.Filter.Eq("a", fileId);
-            await DeleteFilesInBatchesAsync(filter, deleteObjects: true, ct);
+            await DeleteFilesInBatchesAsync(filter, storage, deleteObjects: true, ct);
         }
         else
         {
@@ -254,10 +256,10 @@ public sealed partial class FileService
                                  & Builders<BsonDocument>.Filter.Regex(
                                      "n", new BsonRegularExpression("^" + Regex.Escape(file.Text("n")) + "$", "i"))
                                  & Builders<BsonDocument>.Filter.Ne("_id", fileId);
-            await DeleteFilesInBatchesAsync(revisionFilter, deleteObjects: true, ct);
+            await DeleteFilesInBatchesAsync(revisionFilter, storage, deleteObjects: true, ct);
         }
 
-        await DeleteStoredObjectsAsync(file.Text("sa"), ct);
+        await DeleteStoredObjectsAsync(file.Text("sa"), storage, ct);
         await DeleteRelatedAsync([fileId], ct);
         await _files.DeleteOneAsync(Builders<BsonDocument>.Filter.Eq("_id", fileId), ct);
 
@@ -280,6 +282,7 @@ public sealed partial class FileService
 
     private async Task DeleteFilesInBatchesAsync(
         FilterDefinition<BsonDocument> filter,
+        IStorageBackend storage,
         bool deleteObjects,
         CancellationToken ct)
     {
@@ -301,7 +304,7 @@ public sealed partial class FileService
                 ids.Add(document["_id"].AsObjectId);
                 if (deleteObjects && document.Integer("t") != TypeFolder)
                 {
-                    await DeleteStoredObjectsAsync(document.Text("sa"), ct);
+                    await DeleteStoredObjectsAsync(document.Text("sa"), storage, ct);
                 }
             }
 
@@ -348,7 +351,8 @@ public sealed partial class FileService
             Builders<BsonDocument>.Filter.In("f", fileIds), ct);
     }
 
-    private async Task DeleteStoredObjectsAsync(string saveName, CancellationToken ct)
+    private async Task DeleteStoredObjectsAsync(string saveName, IStorageBackend storage,
+        CancellationToken ct)
     {
         if (string.IsNullOrEmpty(saveName))
         {
@@ -357,7 +361,7 @@ public sealed partial class FileService
 
         foreach (var key in StoredObjectKeys(saveName))
         {
-            await _storage.DeleteAsync(key, ct);
+            await storage.DeleteAsync(key, ct);
         }
     }
 

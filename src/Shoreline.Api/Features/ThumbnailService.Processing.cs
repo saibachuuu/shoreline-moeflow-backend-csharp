@@ -22,26 +22,32 @@ public sealed partial class ThumbnailService
         }
 
         var tempDirectory = Path.Combine(_tempRoot, runId);
+        StorageBackendLease? storageLease = null;
         try
         {
             ct.ThrowIfCancellationRequested();
 
-            if (!await MarkGeneratingAsync(fileId, projectId, saveName, runId, revision, ct))
+            var project = await MarkGeneratingAsync(fileId, projectId, saveName, runId, revision, ct);
+            if (project is null)
             {
                 return;
             }
 
+            storageLease = await LeaseForProjectAsync(project, ct);
+            var storage = storageLease?.Backend ?? _storage;
+            var sourceId = ProjectStorageRouter.ReadSourceId(project);
+
             Directory.CreateDirectory(tempDirectory);
             var sourcePath = Path.Combine(tempDirectory, "source");
-            await DownloadSourceAsync(saveName, sourcePath, ct);
+            await DownloadSourceAsync(storage, saveName, sourcePath, ct);
             ct.ThrowIfCancellationRequested();
 
             var processed = _processor.Process(sourcePath, tempDirectory, ct);
-            await UploadStagingAsync(processed, runId, ct);
+            await UploadStagingAsync(storage, processed, runId, ct);
             ct.ThrowIfCancellationRequested();
 
             if (!await PublishAsync(
-                    fileId, projectId, saveName, runId, revision,
+                    fileId, projectId, saveName, runId, revision, sourceId,
                     processed.CoverBytes, processed.ResampleBytes, ct))
             {
                 return;
@@ -71,7 +77,14 @@ public sealed partial class ThumbnailService
         }
         finally
         {
-            await CleanupAsync(runId, tempDirectory);
+            try
+            {
+                await CleanupAsync(runId, tempDirectory, storageLease?.Backend ?? _storage);
+            }
+            finally
+            {
+                if (storageLease is not null) await storageLease.DisposeAsync();
+            }
         }
     }
 
@@ -110,7 +123,7 @@ public sealed partial class ThumbnailService
     /// GENERATING. Downloads and image decoding happen after this lease is
     /// released.
     /// </summary>
-    private async Task<bool> MarkGeneratingAsync(
+    private async Task<BsonDocument?> MarkGeneratingAsync(
         ObjectId fileId,
         ObjectId projectId,
         string saveName,
@@ -122,20 +135,15 @@ public sealed partial class ThumbnailService
             new LabelRequestContext(), projectId, recovery: false, expectedRevision: null, ct);
 
         var project = session.Project;
-        if (project.Integer("label_revision", 0) != revision) return false;
-        if (session.Recovery) return false;
-        if (HasStoragePool(project))
-        {
-            await FailUnderLockAsync(fileId, projectId, saveName, string.Empty, StoragePoolError, ct);
-            return false;
-        }
+        if (project.Integer("label_revision", 0) != revision) return null;
+        if (session.Recovery) return null;
 
         var file = await Files.Find(new BsonDocument
         {
             ["_id"] = fileId,
             ["p"] = projectId
         }).FirstOrDefaultAsync(ct);
-        if (file is null || file.Text("sa") != saveName) return false;
+        if (file is null || file.Text("sa") != saveName) return null;
 
         try
         {
@@ -143,10 +151,10 @@ public sealed partial class ThumbnailService
         }
         catch (ApiError)
         {
-            return false;
+            return null;
         }
 
-        if (file.Integer("th") == ThumbnailSucceeded) return false;
+        if (file.Integer("th") == ThumbnailSucceeded) return null;
 
         var now = _clock.GetUtcNow().UtcDateTime;
         var currentRun = file.Text("thumbnail_run");
@@ -157,7 +165,7 @@ public sealed partial class ThumbnailService
             && !string.Equals(currentRun, runId, StringComparison.Ordinal)
             && currentRunAt is not null
             && currentRunAt.Value > now - _runLease;
-        if (anotherRunIsActive) return false;
+        if (anotherRunIsActive) return null;
 
         var filter = new BsonDocument
         {
@@ -172,15 +180,16 @@ public sealed partial class ThumbnailService
             .Set("thumbnail_run", runId)
             .Set("thumbnail_run_at", now);
         var result = await Files.UpdateOneAsync(filter, update, cancellationToken: ct);
-        return result.MatchedCount == 1;
+        return result.MatchedCount == 1 ? project : null;
     }
 
-    private async Task DownloadSourceAsync(string saveName, string destination, CancellationToken ct)
+    private async Task DownloadSourceAsync(IStorageBackend storage, string saveName, string destination,
+        CancellationToken ct)
     {
         if (saveName.Length == 0) throw new SourceMissingException();
 
         var key = $"files/{saveName}";
-        var info = await _storage.HeadAsync(key, ct);
+        var info = await storage.HeadAsync(key, ct);
         if (info is null) throw new SourceMissingException();
         if (info.Size > _maxSourceBytes)
         {
@@ -191,7 +200,7 @@ public sealed partial class ThumbnailService
 
         try
         {
-            using var download = await _storage.GetAsync(key, ct);
+            using var download = await storage.GetAsync(key, ct);
             await using var output = new FileStream(
                 destination, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                 bufferSize: 81920, FileOptions.Asynchronous);
@@ -212,20 +221,21 @@ public sealed partial class ThumbnailService
     }
 
     private async Task UploadStagingAsync(
+        IStorageBackend storage,
         ImageProcessingResult processed,
         string runId,
         CancellationToken ct)
     {
-        await PutFileAsync(StagingCoverKey(runId), processed.CoverPath, ct);
-        await PutFileAsync(StagingResampleKey(runId), processed.ResamplePath, ct);
+        await PutFileAsync(storage, StagingCoverKey(runId), processed.CoverPath, ct);
+        await PutFileAsync(storage, StagingResampleKey(runId), processed.ResamplePath, ct);
     }
 
-    private async Task PutFileAsync(string key, string path, CancellationToken ct)
+    private async Task PutFileAsync(IStorageBackend storage, string key, string path, CancellationToken ct)
     {
         await using var stream = new FileStream(
             path, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 81920, FileOptions.Asynchronous);
-        await _storage.PutAsync(key, stream, "image/webp", ct);
+        await storage.PutAsync(key, stream, "image/webp", ct);
     }
 
     /// <summary>
@@ -240,6 +250,7 @@ public sealed partial class ThumbnailService
         string saveName,
         string runId,
         long revision,
+        ObjectId? expectedSourceId,
         long coverBytes,
         long resampleBytes,
         CancellationToken ct)
@@ -250,7 +261,18 @@ public sealed partial class ThumbnailService
         var project = session.Project;
         if (project.Integer("label_revision", 0) != revision) return false;
         if (session.Recovery) return false;
-        if (HasStoragePool(project)) return false;
+        if (ProjectStorageRouter.ReadSourceId(project) != expectedSourceId)
+        {
+            // A storage transfer switched the project between the source
+            // download and publish. Staging lives on the old source; never
+            // copy it into a different backend.
+            await FailUnderLockAsync(fileId, projectId, saveName, runId,
+                "storage source changed during thumbnail generation", ct);
+            return false;
+        }
+
+        await using var storageLease = await LeaseForProjectAsync(project, ct);
+        var storage = storageLease?.Backend ?? _storage;
 
         var file = await Files.Find(new BsonDocument
         {
@@ -274,8 +296,8 @@ public sealed partial class ThumbnailService
             return false;
         }
 
-        await _storage.CopyAsync(StagingCoverKey(runId), FinalCoverKey(saveName), ct);
-        await _storage.CopyAsync(StagingResampleKey(runId), FinalResampleKey(saveName), ct);
+        await storage.CopyAsync(StagingCoverKey(runId), FinalCoverKey(saveName), ct);
+        await storage.CopyAsync(StagingResampleKey(runId), FinalResampleKey(saveName), ct);
 
         var now = _clock.GetUtcNow().UtcDateTime;
         var runFilter = new BsonDocument
@@ -458,10 +480,10 @@ public sealed partial class ThumbnailService
         }
     }
 
-    private async Task CleanupAsync(string runId, string tempDirectory)
+    private async Task CleanupAsync(string runId, string tempDirectory, IStorageBackend storage)
     {
-        await TryDeleteStagingAsync(StagingCoverKey(runId));
-        await TryDeleteStagingAsync(StagingResampleKey(runId));
+        await TryDeleteStagingAsync(storage, StagingCoverKey(runId));
+        await TryDeleteStagingAsync(storage, StagingResampleKey(runId));
 
         try
         {
@@ -475,14 +497,14 @@ public sealed partial class ThumbnailService
         }
     }
 
-    private async Task TryDeleteStagingAsync(string key)
+    private async Task TryDeleteStagingAsync(IStorageBackend storage, string key)
     {
         for (var attempt = 0; attempt < 2; attempt++)
         {
             try
             {
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                await _storage.DeleteAsync(key, timeout.Token);
+                await storage.DeleteAsync(key, timeout.Token);
                 return;
             }
             catch
