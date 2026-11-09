@@ -14,11 +14,15 @@ enforce the base hierarchy, capacity and optimistic versions. Assignment validat
 covers qualification and open modes, protected identities, external invitations
 and custom policy tags; project mutations still need to be ported.
 
+Legacy `/v1/types/*` configuration options and team/project system roles are
+available too. Existing role collections remain untouched; empty-database role
+initialization is resumable and preserves IDs already written by a partial seed.
+
 Project/team business endpoints, translation workflows, files, snapshots, exports,
 storage transfers and other business modules still need to be ported and tested.
 No memory-saving claim applies to the complete backend yet.
 
-At the current checkpoint, 92 tests pass. The completed stages and remaining
+At the current checkpoint, 97 tests pass. The completed stages and remaining
 work are in [docs/refactor-checkpoint.md](docs/refactor-checkpoint.md).
 
 ## Local verification

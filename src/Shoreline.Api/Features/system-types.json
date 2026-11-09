@@ -1,0 +1,795 @@
+{
+  "team": {
+    "permissions": [
+      {
+        "code": "ACCESS",
+        "id": 1,
+        "name": "访问团队",
+        "intro": "",
+        "localized_en": "View team",
+        "intro_en": ""
+      },
+      {
+        "code": "DELETE",
+        "id": 5,
+        "name": "解散团队",
+        "intro": "",
+        "localized_en": "Disband Team",
+        "intro_en": ""
+      },
+      {
+        "code": "CHANGE",
+        "id": 10,
+        "name": "设置团队",
+        "intro": "",
+        "localized_en": "Set Team",
+        "intro_en": ""
+      },
+      {
+        "code": "CREATE_ROLE",
+        "id": 15,
+        "name": "新建角色",
+        "intro": "",
+        "localized_en": "Create Role",
+        "intro_en": ""
+      },
+      {
+        "code": "DELETE_ROLE",
+        "id": 20,
+        "name": "删除角色",
+        "intro": "",
+        "localized_en": "Delete Role",
+        "intro_en": ""
+      },
+      {
+        "code": "CHECK_USER",
+        "id": 101,
+        "name": "审核用户加入申请",
+        "intro": "",
+        "localized_en": "Review user join request.",
+        "intro_en": ""
+      },
+      {
+        "code": "INVITE_USER",
+        "id": 105,
+        "name": "邀请用户",
+        "intro": "邀请时仅可设置比自己角色等级低的用户",
+        "localized_en": "Invite User",
+        "intro_en": "You can only invite users as less powerful role than your own."
+      },
+      {
+        "code": "DELETE_USER",
+        "id": 110,
+        "name": "删除用户",
+        "intro": "仅可删除比自己角色等级低的用户",
+        "localized_en": "Delete User",
+        "intro_en": "You can only remove users with less powerful role than your own."
+      },
+      {
+        "code": "CHANGE_USER_ROLE",
+        "id": 115,
+        "name": "修改用户角色",
+        "intro": "仅可修改比自己角色等级低的角色",
+        "localized_en": "Modify User Role",
+        "intro_en": "You can only modify users with less powerful role than your own."
+      },
+      {
+        "code": "CHANGE_USER_REMARK",
+        "id": 120,
+        "name": "修改用户备注",
+        "intro": "",
+        "localized_en": "Edit User Note",
+        "intro_en": ""
+      },
+      {
+        "code": "AUTO_BECOME_PROJECT_ADMIN",
+        "id": 1010,
+        "name": "管理项目",
+        "intro": "自动获得团队内所有项目的管理员权限",
+        "localized_en": "Manage Projects",
+        "intro_en": "Automatically gain admin access to all projects within the team."
+      },
+      {
+        "code": "CREATE_TERM_BANK",
+        "id": 1020,
+        "name": "创建术语库",
+        "intro": "在团队内创建术语库",
+        "localized_en": "Create a termbase.",
+        "intro_en": "Create a term base within the team."
+      },
+      {
+        "code": "ACCESS_TERM_BANK",
+        "id": 1030,
+        "name": "查看他人术语库",
+        "intro": "若无此权限只能查看自己创建的术语库中的术语",
+        "localized_en": "View others' termbase.",
+        "intro_en": "If you do not have this permission, you can only view the terms in the termbase you created."
+      },
+      {
+        "code": "CHANGE_TERM_BANK",
+        "id": 1040,
+        "name": "设置他人术语库",
+        "intro": "若无此权限只能修改自己创建的术语库设置",
+        "localized_en": "Set others' termbase.",
+        "intro_en": "Without this permission, you can only modify the settings of the termbase you created."
+      },
+      {
+        "code": "DELETE_TERM_BANK",
+        "id": 1050,
+        "name": "删除他人术语库",
+        "intro": "若无此权限只能删除自己创建的术语库",
+        "localized_en": "Delete others' termbase.",
+        "intro_en": "Without this permission, you can only delete the term base you created."
+      },
+      {
+        "code": "CREATE_TERM",
+        "id": 1060,
+        "name": "在他人术语库中增加术语",
+        "intro": "若无此权限只能在自己创建的术语库中增加术语",
+        "localized_en": "Add a term to another's terminology database.",
+        "intro_en": "If you do not have this permission, you can only add terms to the termbase you created."
+      },
+      {
+        "code": "CHANGE_TERM",
+        "id": 1070,
+        "name": "修改他人术语",
+        "intro": "若无此权限只能修改自己创建的术语或自己术语库中的术语",
+        "localized_en": "Modify others' terms.",
+        "intro_en": "If you do not have this permission, you can only modify terms you created or terms in your own termbase."
+      },
+      {
+        "code": "DELETE_TERM",
+        "id": 1080,
+        "name": "删除他人术语",
+        "intro": "若无此权限只能删除自己创建的术语或自己术语库中的术语",
+        "localized_en": "Delete others' terms.",
+        "intro_en": "If you do not have this permission, you can only delete terms you created or terms in your own termbase."
+      },
+      {
+        "code": "CREATE_PROJECT",
+        "id": 1090,
+        "name": "创建项目",
+        "intro": "在团队内创建项目",
+        "localized_en": "Create Project",
+        "intro_en": "Create a project within the team."
+      },
+      {
+        "code": "CREATE_PROJECT_SET",
+        "id": 1100,
+        "name": "创建项目集",
+        "intro": "在团队内创建项目集",
+        "localized_en": "Create Portfolio",
+        "intro_en": "Create a project set within the team."
+      },
+      {
+        "code": "CHANGE_PROJECT_SET",
+        "id": 1110,
+        "name": "设置项目集",
+        "intro": "修改团队内项目集的设置",
+        "localized_en": "Project set configuration",
+        "intro_en": "Modify the settings of the project sets within the team."
+      },
+      {
+        "code": "DELETE_PROJECT_SET",
+        "id": 1120,
+        "name": "删除项目集",
+        "intro": "删除团队内的项目集",
+        "localized_en": "Delete project set",
+        "intro_en": "Delete the project sets within the team."
+      },
+      {
+        "code": "USE_OCR_QUOTA",
+        "id": 1130,
+        "name": "使用自动标记额度",
+        "intro": "可以使用团队的自动标记额度",
+        "localized_en": "Use automatic tagging quota.",
+        "intro_en": "The team's automatic tagging quota can be used."
+      },
+      {
+        "code": "USE_MT_QUOTA",
+        "id": 1140,
+        "name": "使用机器翻译额度",
+        "intro": "可以使用团队的机器翻译额度",
+        "localized_en": "Use machine translation quota.",
+        "intro_en": "The team's machine translation quota can be used."
+      },
+      {
+        "code": "INSIGHT",
+        "id": 1150,
+        "name": "查看项目统计",
+        "intro": "可以查看团队项目统计",
+        "localized_en": "View project statistics",
+        "intro_en": "You can view team project statistics."
+      }
+    ],
+    "roles": [
+      {
+        "name": "创建人",
+        "localized_en": "Creator",
+        "system_code": "creator",
+        "level": 500,
+        "permissions": [
+          1,
+          5,
+          10,
+          15,
+          20,
+          101,
+          105,
+          110,
+          115,
+          120,
+          1010,
+          1020,
+          1030,
+          1040,
+          1050,
+          1060,
+          1070,
+          1080,
+          1090,
+          1100,
+          1110,
+          1120,
+          1130,
+          1140,
+          1150
+        ]
+      },
+      {
+        "name": "管理员",
+        "localized_en": "Admin",
+        "system_code": "admin",
+        "level": 400,
+        "permissions": [
+          1,
+          10,
+          15,
+          20,
+          101,
+          105,
+          110,
+          115,
+          120,
+          1010,
+          1020,
+          1030,
+          1040,
+          1050,
+          1060,
+          1070,
+          1080,
+          1090,
+          1100,
+          1110,
+          1120,
+          1130,
+          1140,
+          1150
+        ]
+      },
+      {
+        "name": "资深成员",
+        "localized_en": "Senior Member",
+        "system_code": "senior",
+        "level": 300,
+        "permissions": [
+          1,
+          1020,
+          1030,
+          1040,
+          1050,
+          1060,
+          1070,
+          1080,
+          1090,
+          1100,
+          1110,
+          1120,
+          1130,
+          1140
+        ]
+      },
+      {
+        "name": "成员",
+        "localized_en": "Member",
+        "system_code": "member",
+        "level": 200,
+        "permissions": [
+          1,
+          1020,
+          1030,
+          1040,
+          1050,
+          1060,
+          1070,
+          1080,
+          1090,
+          1100,
+          1110,
+          1120
+        ]
+      },
+      {
+        "name": "见习成员",
+        "localized_en": "Trainee",
+        "system_code": "beginner",
+        "level": 100,
+        "permissions": [
+          1
+        ]
+      }
+    ],
+    "allow_apply_types": [
+      {
+        "code": "NONE",
+        "id": 1,
+        "name": "关闭申请加入",
+        "intro": "只能通过邀请新增成员",
+        "localized_en": "Close join request.",
+        "intro_en": "Members can only be added by invitation."
+      },
+      {
+        "code": "ALL",
+        "id": 2,
+        "name": "所有人",
+        "intro": "所以用户都可以申请加入",
+        "localized_en": "Everyone",
+        "intro_en": "Therefore, all users can apply to join."
+      }
+    ],
+    "application_check_types": [
+      {
+        "code": "NO_NEED_CHECK",
+        "id": 1,
+        "name": "无需审核",
+        "intro": "用户申请后直接加入",
+        "localized_en": "Auto approve.",
+        "intro_en": "Users join directly after applying."
+      },
+      {
+        "code": "ADMIN_CHECK",
+        "id": 2,
+        "name": "管理员审核",
+        "intro": "管理员同意申请后加入",
+        "localized_en": "Need Admin Review",
+        "intro_en": "Join after the administrator approves the application."
+      }
+    ]
+  },
+  "project": {
+    "permissions": [
+      {
+        "code": "ACCESS",
+        "id": 1,
+        "name": "访问项目",
+        "intro": "",
+        "localized_en": "View project",
+        "intro_en": ""
+      },
+      {
+        "code": "DELETE",
+        "id": 5,
+        "name": "删除项目",
+        "intro": "",
+        "localized_en": "Delete project",
+        "intro_en": ""
+      },
+      {
+        "code": "CHANGE",
+        "id": 10,
+        "name": "设置项目",
+        "intro": "",
+        "localized_en": "Set Project",
+        "intro_en": ""
+      },
+      {
+        "code": "CREATE_ROLE",
+        "id": 15,
+        "name": "新建角色",
+        "intro": "",
+        "localized_en": "Create Role",
+        "intro_en": ""
+      },
+      {
+        "code": "DELETE_ROLE",
+        "id": 20,
+        "name": "删除角色",
+        "intro": "",
+        "localized_en": "Delete Role",
+        "intro_en": ""
+      },
+      {
+        "code": "CHECK_USER",
+        "id": 101,
+        "name": "审核用户加入申请",
+        "intro": "",
+        "localized_en": "Review user join request.",
+        "intro_en": ""
+      },
+      {
+        "code": "INVITE_USER",
+        "id": 105,
+        "name": "邀请用户",
+        "intro": "邀请时仅可设置比自己角色等级低的用户",
+        "localized_en": "Invite User",
+        "intro_en": "You can only invite users as less powerful role than your own."
+      },
+      {
+        "code": "DELETE_USER",
+        "id": 110,
+        "name": "删除用户",
+        "intro": "仅可删除比自己角色等级低的用户",
+        "localized_en": "Delete User",
+        "intro_en": "You can only remove users with less powerful role than your own."
+      },
+      {
+        "code": "CHANGE_USER_ROLE",
+        "id": 115,
+        "name": "修改用户角色",
+        "intro": "仅可修改比自己角色等级低的角色",
+        "localized_en": "Modify User Role",
+        "intro_en": "You can only modify users with less powerful role than your own."
+      },
+      {
+        "code": "CHANGE_USER_REMARK",
+        "id": 120,
+        "name": "修改用户备注",
+        "intro": "",
+        "localized_en": "Edit User Note",
+        "intro_en": ""
+      },
+      {
+        "code": "FINISH",
+        "id": 1010,
+        "name": "完结项目",
+        "intro": "",
+        "localized_en": "Completed Project",
+        "intro_en": ""
+      },
+      {
+        "code": "ADD_FILE",
+        "id": 1020,
+        "name": "上传图片",
+        "intro": "",
+        "localized_en": "Upload Image",
+        "intro_en": ""
+      },
+      {
+        "code": "MOVE_FILE",
+        "id": 1030,
+        "name": "移动文件",
+        "intro": "",
+        "localized_en": "Move file",
+        "intro_en": ""
+      },
+      {
+        "code": "RENAME_FILE",
+        "id": 1040,
+        "name": "修改图片名称",
+        "intro": "",
+        "localized_en": "Edit Image Name",
+        "intro_en": ""
+      },
+      {
+        "code": "DELETE_FILE",
+        "id": 1050,
+        "name": "删除图片",
+        "intro": "",
+        "localized_en": "Delete image",
+        "intro_en": ""
+      },
+      {
+        "code": "OUTPUT_TRA",
+        "id": 1060,
+        "name": "导出翻译",
+        "intro": "",
+        "localized_en": "Export Translation",
+        "intro_en": ""
+      },
+      {
+        "code": "ADD_LABEL",
+        "id": 1080,
+        "name": "新建图片标记",
+        "intro": "",
+        "localized_en": "New Image Tag",
+        "intro_en": ""
+      },
+      {
+        "code": "MOVE_LABEL",
+        "id": 1090,
+        "name": "移动图片标记",
+        "intro": "",
+        "localized_en": "Move Image Tag",
+        "intro_en": ""
+      },
+      {
+        "code": "DELETE_LABEL",
+        "id": 1100,
+        "name": "删除图片标记",
+        "intro": "",
+        "localized_en": "Delete image tag",
+        "intro_en": ""
+      },
+      {
+        "code": "ADD_TRA",
+        "id": 1110,
+        "name": "新增翻译",
+        "intro": "",
+        "localized_en": "Add Translation",
+        "intro_en": ""
+      },
+      {
+        "code": "DELETE_TRA",
+        "id": 1120,
+        "name": "删除他人翻译",
+        "intro": "",
+        "localized_en": "Delete others' translations.",
+        "intro_en": ""
+      },
+      {
+        "code": "PROOFREAD_TRA",
+        "id": 1130,
+        "name": "校对翻译",
+        "intro": "",
+        "localized_en": "Proofread translation.",
+        "intro_en": ""
+      },
+      {
+        "code": "CHECK_TRA",
+        "id": 1140,
+        "name": "选定翻译",
+        "intro": "将某条翻译指定导出项",
+        "localized_en": "Selected translation.",
+        "intro_en": "Specify an export item for a particular translation."
+      },
+      {
+        "code": "ADD_TARGET",
+        "id": 1150,
+        "name": "新增目标语言",
+        "intro": "",
+        "localized_en": "Add target language.",
+        "intro_en": ""
+      },
+      {
+        "code": "CHANGE_TARGET",
+        "id": 1160,
+        "name": "修改目标语言",
+        "intro": "",
+        "localized_en": "Modify target language.",
+        "intro_en": ""
+      },
+      {
+        "code": "DELETE_TARGET",
+        "id": 1170,
+        "name": "删除目标语言",
+        "intro": "",
+        "localized_en": "Delete target language.",
+        "intro_en": ""
+      }
+    ],
+    "roles": [
+      {
+        "name": "创建人",
+        "localized_en": "Creator",
+        "system_code": "creator",
+        "level": 500,
+        "permissions": [
+          1,
+          5,
+          10,
+          101,
+          105,
+          110,
+          115,
+          120,
+          1010,
+          1020,
+          1030,
+          1040,
+          1050,
+          1060,
+          1080,
+          1090,
+          1100,
+          1110,
+          1120,
+          1130,
+          1140,
+          1150,
+          1160,
+          1170
+        ]
+      },
+      {
+        "name": "管理员",
+        "localized_en": "Admin",
+        "system_code": "admin",
+        "level": 400,
+        "permissions": [
+          1,
+          5,
+          10,
+          101,
+          105,
+          110,
+          115,
+          120,
+          1010,
+          1020,
+          1030,
+          1040,
+          1050,
+          1060,
+          1080,
+          1090,
+          1100,
+          1110,
+          1120,
+          1130,
+          1140,
+          1150,
+          1160,
+          1170
+        ]
+      },
+      {
+        "name": "监理",
+        "localized_en": "Supervisor",
+        "system_code": "coordinator",
+        "level": 300,
+        "permissions": [
+          1,
+          101,
+          105,
+          110,
+          115,
+          120,
+          1020,
+          1030,
+          1040,
+          1050,
+          1060,
+          1080,
+          1090,
+          1100,
+          1110,
+          1120,
+          1130,
+          1140
+        ]
+      },
+      {
+        "name": "校对",
+        "localized_en": "Proofreader",
+        "system_code": "proofreader",
+        "level": 200,
+        "permissions": [
+          1,
+          1060,
+          1080,
+          1090,
+          1100,
+          1110,
+          1130,
+          1140
+        ]
+      },
+      {
+        "name": "翻译",
+        "localized_en": "Translator",
+        "system_code": "translator",
+        "level": 200,
+        "permissions": [
+          1,
+          1060,
+          1080,
+          1090,
+          1100,
+          1110
+        ]
+      },
+      {
+        "name": "嵌字",
+        "localized_en": "Inpainter",
+        "system_code": "picture_editor",
+        "level": 200,
+        "permissions": [
+          1,
+          1060,
+          1080,
+          1090,
+          1100
+        ]
+      },
+      {
+        "name": "见习翻译",
+        "localized_en": "Trainee Translator",
+        "system_code": "supporter",
+        "level": 100,
+        "permissions": [
+          1,
+          1110
+        ]
+      }
+    ],
+    "allow_apply_types": [
+      {
+        "code": "NONE",
+        "id": 1,
+        "name": "关闭申请加入",
+        "intro": "只能通过邀请新增成员",
+        "localized_en": "Close join request.",
+        "intro_en": "Members can only be added by invitation."
+      },
+      {
+        "code": "ALL",
+        "id": 2,
+        "name": "所有人",
+        "intro": "所以用户都可以申请加入",
+        "localized_en": "Everyone",
+        "intro_en": "Therefore, all users can apply to join."
+      },
+      {
+        "code": "TEAM_USER",
+        "id": 3,
+        "name": "仅团队成员",
+        "intro": "",
+        "localized_en": "Team members only.",
+        "intro_en": ""
+      }
+    ],
+    "application_check_types": [
+      {
+        "code": "NO_NEED_CHECK",
+        "id": 1,
+        "name": "无需审核",
+        "intro": "用户申请后直接加入",
+        "localized_en": "Auto approve.",
+        "intro_en": "Users join directly after applying."
+      },
+      {
+        "code": "ADMIN_CHECK",
+        "id": 2,
+        "name": "管理员审核",
+        "intro": "管理员同意申请后加入",
+        "localized_en": "Need Admin Review",
+        "intro_en": "Join after the administrator approves the application."
+      }
+    ]
+  },
+  "locales": [
+    {
+      "code": "AUTO",
+      "id": "auto",
+      "name": "自动",
+      "intro": "遵循浏览器设置",
+      "localized_en": "Auto",
+      "intro_en": "Follow browser settings."
+    },
+    {
+      "code": "EN",
+      "id": "en",
+      "name": "英文",
+      "intro": "",
+      "localized_en": "English",
+      "intro_en": ""
+    },
+    {
+      "code": "ZH_CN",
+      "id": "zh_CN",
+      "name": "中文（简体）",
+      "intro": "",
+      "localized_en": "Chinese (Simplified)",
+      "intro_en": ""
+    },
+    {
+      "code": "ZH_TW",
+      "id": "zh_TW",
+      "name": "中文（繁体）",
+      "intro": "",
+      "localized_en": "Chinese (Traditional)",
+      "intro_en": ""
+    }
+  ]
+}

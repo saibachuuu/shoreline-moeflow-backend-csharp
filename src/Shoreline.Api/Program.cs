@@ -19,6 +19,7 @@ builder.Services.AddScoped<UserView>();
 builder.Services.AddScoped<UserProfileService>();
 builder.Services.AddSingleton<SiteSettings>();
 builder.Services.AddSingleton<LanguageCatalog>();
+builder.Services.AddSingleton<LegacyTypes>();
 builder.Services.AddScoped<IdentityPermissions>();
 builder.Services.AddSingleton<TeamMutationGate>();
 builder.Services.AddSingleton<IdentityAuditWriter>();
@@ -79,6 +80,7 @@ app.MapEmail();
 app.MapSite();
 app.MapAdminUsers();
 app.MapLanguages();
+app.MapTypes();
 app.MapTeamIdentity();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
@@ -88,6 +90,7 @@ app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 });
 await app.Services.GetRequiredService<MongoStore>().InitializeAsync(CancellationToken.None);
 await app.Services.GetRequiredService<LanguageCatalog>().InitializeAsync(CancellationToken.None);
+await app.Services.GetRequiredService<LegacyTypes>().InitializeAsync(CancellationToken.None);
 app.Run();
 
 public partial class Program;

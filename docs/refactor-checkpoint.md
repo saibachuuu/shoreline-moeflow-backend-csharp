@@ -27,6 +27,9 @@ the Python deployment yet.
   remain intact. A persisted seed marker lets interrupted new installations resume;
   unique-code upserts permit concurrent initialization without replacing rows.
 - `/ping` now returns the legacy plain-text `pong`.
+- Public legacy type options and team/project system-role catalogs, with numeric
+  permission descriptions and existing-role-ID preservation. Public constants
+  are converted offline; the runtime never loads the Python app or configuration.
 - Team membership add/restore, soft removal, aliases and display names, worker
   qualifications, database-side joined pagination, capacity recounts and version
   fencing. Display-name synchronization uses bounded project-id batches.
@@ -35,7 +38,7 @@ the Python deployment yet.
   the original identity audit schema.
 
 Current verification: `dotnet test --no-restore --verbosity minimal` passes
-92 tests against disposable local MongoDB, S3Mock and Mailpit, including concurrent
+97 tests against disposable local MongoDB, S3Mock and Mailpit, including concurrent
 admission/edit tests and cross-team/hierarchy checks. The service builds with zero
 warnings. Its Docker image has not been
 rebuilt; the existing API container still runs the earlier foundation image.
