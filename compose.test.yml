@@ -1,5 +1,31 @@
 name: shoreline-csharp-test
 services:
+  api:
+    profiles: ["api"]
+    image: shoreline-csharp:dev
+    ports: ["127.0.0.1:25128:8080"]
+    environment:
+      Mongo__Uri: mongodb://mongo:27017/shoreline_csharp_container_test
+      Auth__Secret: local-test-secret-012345678901234567890
+      Auth__AdminEmail: owner@example.test
+      Storage__Endpoint: http://s3:9090
+      Storage__Bucket: shoreline-test
+      Storage__AccessKey: local-test-only
+      Storage__SecretKey: local-disposable-test-secret
+      Storage__ForcePathStyle: "true"
+      Mail__Enabled: "true"
+      Mail__Host: mailpit
+      Mail__Port: "1025"
+      Mail__StartTls: "false"
+      Mail__From: noreply@example.test
+    depends_on:
+      mongo:
+        condition: service_healthy
+      s3:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    mem_limit: 256m
   mongo:
     image: mongo:8.0
     ports: ["127.0.0.1:27128:27017"]

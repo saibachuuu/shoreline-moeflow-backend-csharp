@@ -26,5 +26,10 @@ configuration when object storage is used. It does not load dotenv files. See
 Do not point tests at existing deployment databases or services.
 
 At the first checkpoint, 33 tests pass on Windows with local WSL Docker services.
-The first Docker build exposed an SDK feature-band mismatch between global.json
-and the floating SDK image; container validation remains pending.
+The SDK may roll forward within .NET 10 feature bands so the floating SDK image
+works with global.json. `docker build -t shoreline-csharp:dev .` builds the service;
+`docker compose -f compose.test.yml --profile api up -d api` runs it on localhost
+port 25128. Its dedicated database is `shoreline_csharp_container_test`.
+The container readiness check passes and its process list contains one `dotnet`
+process. An initial idle sample was 52.77 MiB with only the currently ported
+features; this is not a measurement of the completed replacement.
