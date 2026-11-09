@@ -191,7 +191,7 @@ public sealed class PresenceService(MongoStore store, IConfiguration configurati
     {
         var avatar = user.Text("a");
         if (avatar.Length == 0) return configuration["Storage:DefaultUserAvatar"] ?? "";
-        var key = (configuration["Storage:AvatarPrefix"] ?? "avatar/") + avatar;
+        var key = AvatarStoragePrefixes.User(configuration) + avatar;
         return await storage.SignGetAsync(key, AvatarValidity);
     }
 

@@ -66,6 +66,8 @@ public static class SiteEndpoints
     {
         app.MapGet("/v1/homepage", async (SiteSettings settings, CancellationToken ct) =>
             SiteSettings.View(await settings.GetAsync(ct), homepageOnly: true));
+        app.MapGet("/v1/site/homepage", async (SiteSettings settings, CancellationToken ct) =>
+            SiteSettings.View(await settings.GetAsync(ct), homepageOnly: true));
         app.MapGet("/v1/admin/site-setting", async (HttpContext ctx, CurrentUser current, SiteSettings settings, CancellationToken ct) =>
         {
             await current.RequireAdminAsync(ctx, ct);

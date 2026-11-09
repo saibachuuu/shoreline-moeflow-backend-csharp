@@ -108,7 +108,7 @@ public sealed class UserView(IConfiguration configuration, IServiceProvider serv
             ["id"] = user["_id"].ToString(), ["name"] = user.Text("n"), ["default_display_name"] = user.Text("ddn"),
             ["signature"] = user.Text("s"), ["has_avatar"] = avatar.Length > 0,
             ["avatar"] = avatar.Length == 0 ? configuration["Storage:DefaultUserAvatar"] :
-                await services.GetRequiredService<ObjectStorage>().SignGetAsync((configuration["Storage:AvatarPrefix"] ?? "avatar/") + avatar, TimeSpan.FromHours(1)),
+                await services.GetRequiredService<ObjectStorage>().SignGetAsync(AvatarStoragePrefixes.User(configuration) + avatar, TimeSpan.FromHours(1)),
             ["locale"] = new { id = locale, name, intro = locale == "auto" ? "遵循浏览器设置" : "" },
             ["admin"] = user.Flag("admin"),
             ["aliases"] = user.GetValue("as", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray()
