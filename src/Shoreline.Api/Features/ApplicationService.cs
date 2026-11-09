@@ -32,8 +32,8 @@ public sealed class ApplicationService(
 
     private static string ScopeOf(string groupType) => groupType switch
     {
-        "project" => InvitationService.ProjectScope,
-        "team" => InvitationService.TeamScope,
+        "project" or "projects" => InvitationService.ProjectScope,
+        "team" or "teams" => InvitationService.TeamScope,
         _ => throw IdentityErrors.GroupTypeNotSupport()
     };
 
@@ -369,7 +369,7 @@ public sealed class ApplicationService(
         var group = await FetchGroupAsync(scope, groupId.ToString(), ct);
         var applicant = await store.Collection("user").Find(new BsonDocument("_id", application["u"]))
             .FirstOrDefaultAsync(ct) ?? throw new ApiError("UserNotExistError", 1005, "用户不存在");
-        var chinese = (ctx.Request.Headers.AcceptLanguage.ToString() ?? "").StartsWith("zh", StringComparison.Ordinal);
+        var chinese = Chinese(ctx);
 
         object? userRole = null;
         if ((int)application.Integer("s") == ProjectInvitationService.AllowStatus)
@@ -396,7 +396,8 @@ public sealed class ApplicationService(
                 ? await projects.ViewAsync(group, user, chinese, ct)
                 : await teams.ViewAsync(group, user, chinese, ct),
             ["group_type"] = scope,
-            ["group_roles"] = await legacy.SystemRolesAsync(scope, false, chinese, ct),
+            ["group_roles"] = (await legacy.SystemRolesAsync(scope, false, chinese, ct))
+                .OrderByDescending(RoleLevel).ToArray(),
             ["operator"] = operatorView,
             ["create_time"] = new DateTimeOffset(DateTime.SpecifyKind(creation, DateTimeKind.Utc))
                 .ToString("yyyy-MM-dd'T'HH:mm:ss'+00:00'", System.Globalization.CultureInfo.InvariantCulture),
@@ -433,7 +434,7 @@ public sealed class ApplicationService(
     private async Task<BsonDocument> GroupViewAsync(string scope, BsonDocument group, BsonDocument actor,
         HttpContext ctx, CancellationToken ct)
     {
-        var chinese = (ctx.Request.Headers.AcceptLanguage.ToString() ?? "").StartsWith("zh", StringComparison.Ordinal);
+        var chinese = Chinese(ctx);
         var view = scope == InvitationService.ProjectScope
             ? await projects.ViewAsync(group, actor, chinese, ct)
             : await teams.ViewAsync(group, actor, chinese, ct);
@@ -446,6 +447,16 @@ public sealed class ApplicationService(
         var cls = gref.GetValue("_cls", "").ToString();
         return cls == "Team" ? InvitationService.TeamScope : InvitationService.ProjectScope;
     }
+
+    private static bool Chinese(HttpContext context)
+    {
+        var value = context.Request.Headers.AcceptLanguage.ToString();
+        return string.IsNullOrWhiteSpace(value) ||
+               value.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int RoleLevel(object role) =>
+        JsonSerializer.SerializeToElement(role).GetProperty("level").GetInt32();
 
     private async Task<string> DefaultTeamRoleCodeAsync(BsonDocument team, CancellationToken ct)
     {

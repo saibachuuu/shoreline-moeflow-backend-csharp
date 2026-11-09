@@ -1,0 +1,52 @@
+using System.Net;
+using Microsoft.Extensions.DependencyInjection;
+using Shoreline.Api.Jobs;
+
+namespace Shoreline.Api.Modules.ZitengPartner;
+
+/// <summary>
+/// Add <c>AddZitengPartner()</c>, <c>MapZitengPartner()</c> and
+/// <c>InitializeZitengPartnerAsync()</c> to the host. The host intentionally owns
+/// those calls so this module does not edit shared Program/common files.
+/// </summary>
+public static class ZitengPartnerRegistration
+{
+    public static IServiceCollection AddZitengPartner(this IServiceCollection services)
+    {
+        services.AddSingleton(provider =>
+            ZitengPartnerSettings.FromConfiguration(provider.GetRequiredService<IConfiguration>()));
+        services.AddSingleton<ZitengPartnerStore>();
+        services.AddSingleton<IZitengPartnerDelay, ZitengPartnerSystemDelay>();
+        services.AddSingleton<IZitengPartnerApiGate, ZitengPartnerApiGate>();
+        services.AddHttpClient<ZitengPartnerClient>()
+            .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                AutomaticDecompression = DecompressionMethods.All,
+                ConnectTimeout = TimeSpan.FromSeconds(20),
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            });
+        services.AddTransient<ZitengPartnerService>();
+        services.AddTransient<ZitengPartnerProjectCreatedNotifier>();
+        // The generic Mongo-backed JobWorker already runs in the host; this adds
+        // the replacement for tasks.ziteng_partner.check_project.
+        services.AddSingleton<IJobHandler, ZitengCheckJobHandler>();
+        return services;
+    }
+
+    /// <summary>Create the module-owned indexes; index failure is not fatal.</summary>
+    public static async Task InitializeZitengPartnerAsync(this IServiceProvider services,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await services.GetRequiredService<ZitengPartnerStore>().EnsureIndexesAsync(ct);
+        }
+        catch (Exception exception)
+        {
+            var logger = services.GetService<ILoggerFactory>()?.CreateLogger("ZitengPartner");
+            logger?.LogError("建立紫藤查重索引失败: {Error}", exception.GetType().Name);
+        }
+    }
+}

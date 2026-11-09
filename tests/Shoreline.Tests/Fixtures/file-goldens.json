@@ -1,0 +1,188 @@
+{
+  "filename": [
+    {
+      "name": "作品 0012.PNG",
+      "folder": false,
+      "ok": true,
+      "prefix": "作品 0012",
+      "suffix": "PNG",
+      "type": 2,
+      "sort_name": "作品 000012"
+    },
+    {
+      "name": "0012.png",
+      "folder": false,
+      "ok": true,
+      "prefix": "0012",
+      "suffix": "png",
+      "type": 2,
+      "sort_name": "000012"
+    },
+    {
+      "name": "a000001b2.jpg",
+      "folder": false,
+      "ok": true,
+      "prefix": "a000001b2",
+      "suffix": "jpg",
+      "type": 2,
+      "sort_name": "a000001b000002"
+    },
+    {
+      "name": "１２３.png",
+      "folder": false,
+      "ok": true,
+      "prefix": "１２３",
+      "suffix": "png",
+      "type": 2,
+      "sort_name": "000１２３"
+    },
+    {
+      "name": "文件",
+      "folder": false,
+      "ok": true,
+      "prefix": "文件",
+      "suffix": "",
+      "type": 0,
+      "sort_name": "文件"
+    },
+    {
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+      "folder": false,
+      "ok": true,
+      "prefix": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "suffix": "png",
+      "type": 2,
+      "sort_name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+      "folder": false,
+      "ok": false,
+      "error": "文件名过长"
+    },
+    {
+      "name": "image.001.jpeg",
+      "folder": false,
+      "ok": true,
+      "prefix": "image.001",
+      "suffix": "jpeg",
+      "type": 2,
+      "sort_name": "image.000001"
+    },
+    {
+      "name": "版本2.0.webp",
+      "folder": false,
+      "ok": true,
+      "prefix": "版本2.0",
+      "suffix": "webp",
+      "type": 2,
+      "sort_name": "版本000002.000000"
+    },
+    {
+      "name": " spaces .png",
+      "folder": false,
+      "ok": true,
+      "prefix": " spaces ",
+      "suffix": "png",
+      "type": 2,
+      "sort_name": " spaces "
+    },
+    {
+      "name": "CON.txt",
+      "folder": false,
+      "ok": true,
+      "prefix": "CON",
+      "suffix": "txt",
+      "type": 3,
+      "sort_name": "CON"
+    },
+    {
+      "name": "case.PnG",
+      "folder": false,
+      "ok": true,
+      "prefix": "case",
+      "suffix": "PnG",
+      "type": 2,
+      "sort_name": "case"
+    },
+    {
+      "name": "   ",
+      "folder": false,
+      "ok": false,
+      "error": "文件名为空"
+    },
+    {
+      "name": "a/b.png",
+      "folder": false,
+      "ok": false,
+      "error": "文件名不能包含下列任何字符: \\ / : * ? \" < > |"
+    },
+    {
+      "name": ".png",
+      "folder": false,
+      "ok": false,
+      "error": "文件名前缀为空"
+    },
+    {
+      "name": "a.",
+      "folder": false,
+      "ok": false,
+      "error": "文件名不能以 . 结尾"
+    }
+  ],
+  "order": [
+    {
+      "rows": [],
+      "json": "[]",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "rows": [
+        [
+          "651111111111111111111111",
+          "001.png",
+          null
+        ],
+        [
+          "652222222222222222222222",
+          "作品 2.jpg",
+          3
+        ]
+      ],
+      "json": "[[\"651111111111111111111111\", \"001.png\", null], [\"652222222222222222222222\", \"作品 2.jpg\", 3]]",
+      "sha256": "141c271429d8e7a8aaef0ed105ff0e8cc0eeabad3b933520f9ab8ab50c554306"
+    },
+    {
+      "rows": [
+        [
+          "651111111111111111111111",
+          "\"quote\"\\tab\t",
+          1
+        ],
+        [
+          "652222222222222222222222",
+          "行\n换行",
+          null
+        ],
+        [
+          "653333333333333333333333",
+          "emoji😀.png",
+          2
+        ]
+      ],
+      "json": "[[\"651111111111111111111111\", \"\\\"quote\\\"\\\\tab\\t\", 1], [\"652222222222222222222222\", \"行\\n换行\", null], [\"653333333333333333333333\", \"emoji😀.png\", 2]]",
+      "sha256": "4fd231fdf840cee32757084b6707f766ae00700cfdaf7a87e7989bf484a78fff"
+    },
+    {
+      "rows": [
+        [
+          "654444444444444444444444",
+          "single.png",
+          42
+        ]
+      ],
+      "json": "[[\"654444444444444444444444\", \"single.png\", 42]]",
+      "sha256": "7512028c10bd9d27244237f5840d3272196c0f8d6b2c1259f8ee23f6f98a6752"
+    }
+  ]
+}

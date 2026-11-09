@@ -47,7 +47,7 @@ public static class TeamEndpoints
             // Legacy global discovery is test-only, not a production directory.
             if (!app.Environment.IsEnvironment("Testing")) return Results.NoContent();
             var word = context.Request.Query["word"].ToString();
-            if (word.Length == 0) throw new ApiError("RequestDataEmptyError", 110, "请求数据为空");
+            if (word.Length == 0) throw new ApiError("RequestDataEmptyError", 110, "请求参数不能为空或没有需要的值");
             var page = Pagination.From(context.Request);
             var (rows, count) = await teams.ListAsync(actor, word, page, false, ct);
             var data = await Task.WhenAll(rows.Select(async team =>

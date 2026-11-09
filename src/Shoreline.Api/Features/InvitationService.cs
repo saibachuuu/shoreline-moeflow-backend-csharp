@@ -52,8 +52,8 @@ public sealed class InvitationService(
 
     public async Task<(string Scope, BsonDocument Group)> FetchGroupAsync(string groupType, string groupId, CancellationToken ct) => groupType switch
     {
-        ProjectScope => (ProjectScope, await projects.GetProjectAsync(groupId, ct)),
-        TeamScope => (TeamScope, await projects.GetTeamAsync(groupId, ct)),
+        "project" or "projects" => (ProjectScope, await projects.GetProjectAsync(groupId, ct)),
+        "team" or "teams" => (TeamScope, await projects.GetTeamAsync(groupId, ct)),
         _ => throw IdentityErrors.GroupTypeNotSupport()
     };
 
@@ -339,7 +339,7 @@ public sealed class InvitationService(
             };
         }
 
-        var role = await FetchRoleByIdAsync(scope, ParseRoleId(groupType, body), ct);
+        var role = await FetchRoleByIdAsync(scope, ParseRoleId(scope, body), ct);
         return await InviteAsync(actor, scope, group, user, role, message, ctx, ct);
     }
 

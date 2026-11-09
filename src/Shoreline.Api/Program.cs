@@ -34,6 +34,7 @@ builder.Services.AddAdditionalListServices();
 builder.Services.AddTermServices();
 builder.Services.AddPresenceServices();
 builder.Services.AddLabelServices();
+builder.Services.AddLabelSnapshots();
 builder.Services.AddAvatarServices();
 builder.Services.AddAdminStorageOverviewServices();
 builder.Services.AddNotificationServices();
@@ -108,6 +109,7 @@ app.MapTeams();
 app.MapTeamIdentity();
 app.MapProjects();
 app.MapLabels();
+app.MapLabelSnapshots();
 app.MapTerms();
 app.MapPresence();
 app.MapAvatarEndpoints();
@@ -125,6 +127,7 @@ app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 });
 await app.Services.GetRequiredService<MongoStore>().InitializeAsync(CancellationToken.None);
 await app.Services.InitializeLabelIndexesAsync();
+await app.Services.InitializeLabelSnapshotIndexesAsync();
 await NotificationRegistration.InitializeAsync(
     app.Services.GetRequiredService<MongoStore>(), CancellationToken.None);
 await NotificationPublishRegistration.InitializeAsync(

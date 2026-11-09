@@ -79,21 +79,12 @@ public static class TermEndpoints
 
     private static string Word(HttpContext context) => context.Request.Query["word"].ToString();
 
-    // Public for direct compatibility tests while the endpoints are not wired in.
+    // Public for direct compatibility tests. The shared helper now owns the
+    // legacy default (30) and max (100), so term pages behave like other APIs.
     public static (int Page, int Limit, int Skip) ParsePage(HttpContext context)
     {
-        // The shared Pagination helper defaults to 20, while legacy
-        // APIKIT_PAGINATION_DEFAULT_LIMIT is 30. Keep the legacy contract here.
-        var page = 1;
-        if (int.TryParse(context.Request.Query["page"], NumberStyles.Integer,
-                CultureInfo.InvariantCulture, out var requestedPage) && requestedPage > 0)
-            page = requestedPage;
-
-        var limit = TermService.LegacyDefaultPageLimit;
-        if (int.TryParse(context.Request.Query["limit"], NumberStyles.Integer,
-                CultureInfo.InvariantCulture, out var requestedLimit) && requestedLimit > 0)
-            limit = Math.Min(requestedLimit, TermService.MaxPageLimit);
-        return (page, limit, (page - 1) * limit);
+        var pagination = Pagination.From(context.Request);
+        return (pagination.Page, pagination.Limit, pagination.Skip);
     }
 
     private static void Apply(HttpContext context, (int Page, int Limit, int Skip) page, long count)
