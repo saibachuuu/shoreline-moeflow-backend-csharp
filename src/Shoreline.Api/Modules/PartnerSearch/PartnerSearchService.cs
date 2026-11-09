@@ -150,7 +150,10 @@ public sealed class PartnerSearchService
         var rows = skip > int.MaxValue
             ? []
             : await Projects.Find(filter)
-                .Sort(Builders<BsonDocument>.Sort.Descending("et").Descending("_id"))
+                // Project edit time is m_e (GroupMixin.edit_time, db_field="m_e");
+                // Python sorts Project.objects by "-edit_time","-id". "et" belongs
+                // to project sets, not projects.
+                .Sort(Builders<BsonDocument>.Sort.Descending("m_e").Descending("_id"))
                 .Skip((int)skip)
                 .Limit(limit)
                 .ToListAsync(ct).ConfigureAwait(false);

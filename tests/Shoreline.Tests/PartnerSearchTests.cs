@@ -271,6 +271,55 @@ public sealed class PartnerSearchTests(LocalServices services)
     }
 
     [Fact]
+    public async Task Search_sorts_by_m_e_then_id_when_id_order_conflicts_with_time()
+    {
+        // Python: Project.objects.order_by("-edit_time", "-id"). Project.edit_time
+        // is GroupMixin.edit_time with db_field="m_e" (app/core/rbac.py:259), not
+        // the project-set field "et". Explicit ids make the two sort keys disagree:
+        // low id has the newest edit time, so time must win; the tie is then broken
+        // by _id descending.
+        using var runtime = new PartnerSearchRuntime(services);
+        var team = runtime.InsertTeam("order m_e");
+        await runtime.SetSettingsAsync(enabled: true, teams: [team], rateLimitSeconds: 0);
+        var now = DateTime.UtcNow;
+        var newestLowId = ObjectId.Parse("000000000000000000000010");
+        var olderHighId = ObjectId.Parse("000000000000000000000020");
+        var tieHigherId = ObjectId.Parse("000000000000000000000030");
+        runtime.InsertProject(team, "order keyword", editTime: now, id: newestLowId);
+        runtime.InsertProject(team, "order keyword", editTime: now.AddSeconds(-10), id: olderHighId);
+        runtime.InsertProject(team, "order keyword", editTime: now.AddSeconds(-10), id: tieHigherId);
+
+        var result = await runtime.Service.QueryAsync(Body("""{"keyword":"order"}"""),
+            null, "127.0.0.1", default);
+        var ids = result["projects"].AsBsonArray
+            .Select(value => value.AsBsonDocument["id"].AsString).ToArray();
+        Assert.Equal(new[] { newestLowId.ToString(), tieHigherId.ToString(), olderHighId.ToString() }, ids);
+    }
+
+    [Fact]
+    public async Task Search_ignores_project_set_et_timestamp()
+    {
+        // Regression for the old bug: the query used the project-set key "et"
+        // (ProjectSet.edit_time, db_field="et") instead of the project key "m_e".
+        // The synthetic "et" values below are reversed against m_e; sorting by
+        // "et" would move the older project to the front.
+        using var runtime = new PartnerSearchRuntime(services);
+        var team = runtime.InsertTeam("order et");
+        await runtime.SetSettingsAsync(enabled: true, teams: [team], rateLimitSeconds: 0);
+        var now = DateTime.UtcNow;
+        var newer = runtime.InsertProject(team, "order keyword", editTime: now,
+            setEditTime: now.AddSeconds(-100));
+        var older = runtime.InsertProject(team, "order keyword", editTime: now.AddSeconds(-10),
+            setEditTime: now.AddSeconds(100));
+
+        var result = await runtime.Service.QueryAsync(Body("""{"keyword":"order"}"""),
+            null, "127.0.0.1", default);
+        var ids = result["projects"].AsBsonArray
+            .Select(value => value.AsBsonDocument["id"].AsString).ToArray();
+        Assert.Equal(new[] { newer.ToString(), older.ToString() }, ids);
+    }
+
+    [Fact]
     public async Task Thumbnail_requires_succeeded_cover_and_first_page_images()
     {
         using var runtime = new PartnerSearchRuntime(services);
@@ -503,12 +552,13 @@ internal sealed class PartnerSearchRuntime : IDisposable
     }
 
     public ObjectId InsertProject(ObjectId team, string name, int status = 0,
-        DateTime? editTime = null, string? normalizedName = null, ObjectId? csid = null)
+        DateTime? editTime = null, string? normalizedName = null, ObjectId? csid = null,
+        ObjectId? id = null, DateTime? setEditTime = null)
     {
-        var id = ObjectId.GenerateNewId();
+        var projectId = id ?? ObjectId.GenerateNewId();
         var document = new BsonDocument
         {
-            ["_id"] = id,
+            ["_id"] = projectId,
             ["n"] = name,
             ["ns"] = normalizedName ?? SearchText.Normalize(name),
             ["i"] = "intro",
@@ -516,11 +566,17 @@ internal sealed class PartnerSearchRuntime : IDisposable
             ["tn"] = "target",
             ["t"] = team,
             ["st"] = status,
-            ["et"] = editTime ?? DateTime.UtcNow,
+            // Project edit time is m_e (GroupMixin), matching ProjectService.cs
+            // create (:227) and update (:395). The old fixture wrote "et", which
+            // masked the service sorting by the project-set key by accident.
+            ["m_e"] = editTime ?? DateTime.UtcNow,
         };
+        // Synthetic project-set timestamp, only used by the regression test that
+        // proves the query ignores "et". Real project documents do not have it.
+        if (setEditTime is not null) document["et"] = setEditTime.Value;
         if (csid is not null) document["csid"] = csid.Value;
         Store.Collection("project").InsertOne(document);
-        return id;
+        return projectId;
     }
 
     public ObjectId InsertImage(ObjectId project, string saveName, int thumbnailStatus = 3,

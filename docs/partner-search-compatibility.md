@@ -67,8 +67,10 @@
 6. 用 `SearchText.Normalize` 做 NFC、去首尾空白、完整 Unicode casefold（例如 `ß`→`ss`、`ς`/`Σ`→`σ`），不使用 NFKC，也不复用通知模块的归一化。
 7. 以规范化关键字做正则字面量搜索（`Regex.Escape` + `i`），匹配 `project.ns`。
 8. 只查 `project.t ∈ 配置队伍`、`st = 0`（WORKING）的文档；`st = 1`（CLEARED）和 `st = 5`（COMPLETED）自然被排除。
-9. 总数由数据库 `count` 得出；排序 `et` 降序、`_id` 降序；`skip = (page-1) * limit` 用 64 位安全计算，超出 Mongo 可接受范围时返回空页而不是溢出成负值。
+9. 总数由数据库 `count` 得出；排序 `m_e` 降序、`_id` 降序，与 Python `Project.objects(...).order_by("-edit_time", "-id")`（`app/modules/partner_search/api.py:153`）对齐；`skip = (page-1) * limit` 用 64 位安全计算，超出 Mongo 可接受范围时返回空页而不是溢出成负值。
 10. 批量查询当页的 team 和每个项目的首张图片，避免逐项目 N+1。
+
+**排序键修正（曾误排 `et`）**：本查询对象是 `Project`，不是 `ProjectSet`。Python 侧 `Project` 继承 `GroupMixin`，`edit_time` 的 `db_field` 是 `m_e`（`app/core/rbac.py:259`）；`et` 是 `ProjectSet.edit_time` 的字段（`app/models/project.py:294-296`），C# 也只在 `project_set` 视图里这样读（`src/Shoreline.Api/Features/ProjectService.cs:548`）。C# 写入 `Project` 时同样使用 `m_e`：创建见 `ProjectService.cs:227`，更新见 `ProjectService.cs:395`，项目视图 `edit_time = project.Timestamp("m_e")` 见 `ProjectService.cs:490`。修复前 `PartnerSearchService.cs:153` 误用了 `Descending("et")`，在真实项目文档上没有该字段，实际退化为仅按 `_id` 排序；现已改为 `Descending("m_e").Descending("_id")`。测试 fixture 也同步从 `et` 改为 `m_e`（`tests/Shoreline.Tests/PartnerSearchTests.cs` 的 `InsertProject`、`tests/Shoreline.Tests/PartnerSearchHttpTests.cs` 的 `InsertProjectAsync`），旧的“按 `et` 排序”期望随之修正。
 
 `limit` / `page` 对齐 Python 的宽松转换：
 
@@ -131,4 +133,4 @@
 - 直连测试使用 `LocalServices` 的随机数据库，每个 Fact 自己创建、自己删除，不删除非本 Fact 拥有的数据库。
 - HTTP 测试优先使用真实 `WebApplicationFactory<Program>`：临时兼容快照里会显式注册、映射本模块，从而覆盖真实中间件、CORS、鉴权和错误信封。共享工作树尚未接入模块时，测试会退回到用同一批服务、同一套 CORS/ApiError 管道和 `MapPartnerSearch` 构建的最小 HTTP 宿主，并在测试代码里明确标注；这不是共享主程序已经接线的证据。
 - 依赖仅限本地一次性 Mongo（127.0.0.1:27128）和 S3Mock（127.0.0.1:29128）；不访问真实合作方网络、不调用真实 SMTP、不使用 R2、不使用 SSH 或生产配置。
-- 覆盖点包括：默认值与部分更新保留核心字段、PUT 严格校验、旧文档不迁移、禁用优先于解析、空关键字/空队伍仍限流、limit/page 的布尔/浮点/字符串/溢出、NFC casefold 的 `ß`/`σ` 与正则字面量、队伍和状态过滤、`et`/`_id` 同时间排序、`th=3` 与对象存在性、手工排序、非激活图片、`csid` 不改变默认存储、限流窗口边界、24 路并发只放行一个、HTTP 的 IP/client_key 组合、并发首次写入站点设置、四个长字段精确输出。
+- 覆盖点包括：默认值与部分更新保留核心字段、PUT 严格校验、旧文档不迁移、禁用优先于解析、空关键字/空队伍仍限流、limit/page 的布尔/浮点/字符串/溢出、NFC casefold 的 `ß`/`σ` 与正则字面量、队伍和状态过滤、`m_e`/`_id` 同时间排序以及 `_id` 顺序与时间顺序冲突时以 `m_e` 为准、忽略项目集 `et`、`th=3` 与对象存在性、手工排序、非激活图片、`csid` 不改变默认存储、限流窗口边界、24 路并发只放行一个、HTTP 的 IP/client_key 组合、并发首次写入站点设置、四个长字段精确输出。
