@@ -1,8 +1,13 @@
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using Shoreline.Api;
 using Shoreline.Api.Features;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Jobs;
+using Shoreline.Api.Modules.ArchiveImport;
+using Shoreline.Api.Modules.PartnerSearch;
+using Shoreline.Api.Modules.StoragePool;
+using Shoreline.Api.Modules.ZitengPartner;
 using Shoreline.Api.Security;
 using Shoreline.Api.Storage;
 
@@ -30,6 +35,22 @@ builder.Services.AddSingleton<IdentityAuditWriter>();
 builder.Services.AddScoped<TeamMemberService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<ProjectService>();
+builder.Services.AddFileServices();
+builder.Services.AddOutputServices();
+builder.Services.AddNotificationManagementServices();
+builder.Services.AddTeamDissolutionServices();
+builder.Services.AddTeamInsightServices();
+builder.Services.AddProjectImports();
+builder.Services.AddProofreadFeedbackServices();
+builder.Services.AddMagickProofreadImageRenderer();
+builder.Services.AddThumbnailServices();
+builder.Services.AddArchiveImportServices();
+builder.Services.AddPartnerSearchServices();
+// The in-process StoragePool transfer worker is opt-in: keep it off unless an
+// operator explicitly sets StoragePool:WorkerEnabled=true.
+builder.Configuration["StoragePool:WorkerEnabled"] ??= "false";
+builder.Services.AddStoragePoolServices();
+builder.Services.AddZitengPartner();
 builder.Services.AddAdditionalListServices();
 builder.Services.AddTermServices();
 builder.Services.AddPresenceServices();
@@ -119,6 +140,18 @@ app.MapNotificationPublishEndpoints();
 app.MapProjectMembers();
 app.MapInvitations();
 app.MapApplications();
+app.MapFileEndpoints();
+OutputEndpoints.MapOutputs(app);
+NotificationManagementEndpoints.MapNotificationManagementEndpoints(app);
+app.MapTeamDissolution();
+TeamInsightEndpoints.MapTeamInsights(app);
+app.MapProjectImports();
+app.MapProofreadFeedbackEndpoints();
+app.MapThumbnailEndpoints();
+app.MapArchiveImports();
+app.MapPartnerSearch();
+app.MapStoragePool();
+app.MapZitengPartner();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {
@@ -126,6 +159,13 @@ app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
     return Results.Ok(new { status = "ok" });
 });
 await app.Services.GetRequiredService<MongoStore>().InitializeAsync(CancellationToken.None);
+await app.Services.InitializeFileIndexesAsync();
+await app.Services.InitializeTeamDissolutionAsync();
+await ProofreadFeedbackRegistration.InitializeAsync(
+    app.Services.GetRequiredService<MongoStore>(), CancellationToken.None);
+await app.Services.InitializeArchiveImportIndexesAsync();
+await app.Services.InitializeStoragePoolAsync();
+await app.Services.InitializeZitengPartnerAsync();
 await app.Services.InitializeLabelIndexesAsync();
 await app.Services.InitializeLabelSnapshotIndexesAsync();
 await NotificationRegistration.InitializeAsync(
