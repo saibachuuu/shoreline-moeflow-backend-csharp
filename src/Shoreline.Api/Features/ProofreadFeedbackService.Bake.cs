@@ -371,7 +371,7 @@ public sealed partial class ProofreadFeedbackService
     /// Python json.dumps(default=str, ensure_ascii=True) byte size estimate for
     /// the 8 MiB cap. Keys keep BSON insertion order like the legacy dict.
     /// </summary>
-    internal static long PythonJsonSize(BsonValue value)
+    public static long PythonJsonSize(BsonValue value)
     {
         var builder = new StringBuilder();
         AppendPythonJson(builder, value);

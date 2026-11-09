@@ -75,7 +75,7 @@ public sealed class ArchiveImportTaskStore(MongoStore store, TimeProvider clock)
                 Builders<BsonDocument>.Filter.Eq("_id", taskId),
                 Builders<BsonDocument>.Filter.Eq("s", ArchiveImportStatus.Queued)),
             update, cancellationToken: ct);
-        return result.ModifiedCount == 1;
+        return result.MatchedCount == 1;
     }
 
     public async Task<bool> TouchOwnerAsync(ObjectId taskId, ArchiveClaimOwner owner, CancellationToken ct)
@@ -107,7 +107,7 @@ public sealed class ArchiveImportTaskStore(MongoStore store, TimeProvider clock)
                 Builders<BsonDocument>.Filter.Eq("lo", owner.Token),
                 Builders<BsonDocument>.Filter.In("s", ArchiveImportStatus.Running)),
             new BsonDocument("$set", set), cancellationToken: ct);
-        return result.ModifiedCount == 1;
+        return result.MatchedCount == 1;
     }
 
     public async Task<bool> TryAdvanceAsync(ObjectId taskId, ArchiveClaimOwner owner, int completedPages,
@@ -127,7 +127,7 @@ public sealed class ArchiveImportTaskStore(MongoStore store, TimeProvider clock)
                 Builders<BsonDocument>.Filter.Eq("lo", owner.Token),
                 Builders<BsonDocument>.Filter.In("s", ArchiveImportStatus.Running)),
             update, cancellationToken: ct);
-        return result.ModifiedCount == 1;
+        return result.MatchedCount == 1;
     }
 
     public async Task<bool> TryFinishAsync(ObjectId taskId, ArchiveClaimOwner owner, int status, string stage,
@@ -149,7 +149,7 @@ public sealed class ArchiveImportTaskStore(MongoStore store, TimeProvider clock)
                 Builders<BsonDocument>.Filter.Eq("_id", taskId),
                 Builders<BsonDocument>.Filter.Eq("lo", owner.Token)),
             new BsonDocument("$set", set), cancellationToken: ct);
-        return result.ModifiedCount == 1;
+        return result.MatchedCount == 1;
     }
 
     public async Task TryFailNewAsync(ObjectId taskId, string stage, string error, CancellationToken ct)
@@ -188,14 +188,14 @@ public sealed class ArchiveImportTaskStore(MongoStore store, TimeProvider clock)
         return result.ModifiedCount == 1;
     }
 
-    public Task DismissAsync(ObjectId projectId, CancellationToken ct)
+    public async Task DismissAsync(ObjectId projectId, CancellationToken ct)
     {
         var update = new BsonDocument("$set", new BsonDocument
         {
             ["d"] = true,
             ["ut"] = Now,
         });
-        return _tasks.UpdateManyAsync(Builders<BsonDocument>.Filter.And(
+        await _tasks.UpdateManyAsync(Builders<BsonDocument>.Filter.And(
                 Builders<BsonDocument>.Filter.Eq("p", projectId),
                 Builders<BsonDocument>.Filter.Nin("s", ArchiveImportStatus.Running)),
             update, cancellationToken: ct);
@@ -300,20 +300,20 @@ public sealed class ArchiveImportClaimStore(MongoStore store, TimeProvider clock
         return result.MatchedCount == 1;
     }
 
-    public Task ReleaseAsync(ObjectId projectId, ObjectId taskId, string owner, CancellationToken ct) =>
-        _claims.DeleteOneAsync(Builders<BsonDocument>.Filter.And(
+    public async Task ReleaseAsync(ObjectId projectId, ObjectId taskId, string owner, CancellationToken ct) =>
+        await _claims.DeleteOneAsync(Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("_id", projectId),
             Builders<BsonDocument>.Filter.Eq("task_id", taskId),
             Builders<BsonDocument>.Filter.Eq("owner", owner)), ct);
 
-    public Task ReleaseUnownedAsync(ObjectId projectId, ObjectId taskId, CancellationToken ct) =>
-        _claims.DeleteOneAsync(Builders<BsonDocument>.Filter.And(
+    public async Task ReleaseUnownedAsync(ObjectId projectId, ObjectId taskId, CancellationToken ct) =>
+        await _claims.DeleteOneAsync(Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("_id", projectId),
             Builders<BsonDocument>.Filter.Eq("task_id", taskId),
             Builders<BsonDocument>.Filter.Eq("owner", BsonNull.Value)), ct);
 
-    public Task DeleteAsync(ObjectId projectId, ObjectId taskId, CancellationToken ct) =>
-        _claims.DeleteOneAsync(Builders<BsonDocument>.Filter.And(
+    public async Task DeleteAsync(ObjectId projectId, ObjectId taskId, CancellationToken ct) =>
+        await _claims.DeleteOneAsync(Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("_id", projectId),
             Builders<BsonDocument>.Filter.Eq("task_id", taskId)), ct);
 }

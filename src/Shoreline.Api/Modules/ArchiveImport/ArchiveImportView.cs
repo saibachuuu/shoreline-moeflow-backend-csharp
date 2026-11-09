@@ -1,4 +1,5 @@
 using MongoDB.Bson;
+using Shoreline.Api.Infrastructure;
 
 namespace Shoreline.Api.Modules.ArchiveImport;
 

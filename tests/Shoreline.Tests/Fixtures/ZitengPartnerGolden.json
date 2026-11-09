@@ -1,0 +1,340 @@
+{
+  "provenance": {
+    "generator": "tests helper: AST-selected pure functions from the Python source; no app import",
+    "python": "3.10.11",
+    "title": {
+      "file": "app/modules/ziteng_partner/title.py",
+      "sha256": "3fad076ff107e20c5cb43a1992baca0ed3a866166ac2847d9c315a9c2c9f7956",
+      "functions": {
+        "extract_title": 38,
+        "is_searchable": 58
+      }
+    },
+    "matching": {
+      "file": "app/modules/ziteng_partner/matching.py",
+      "sha256": "91910037d880f5f3b32ec8229225c6370c09ffb97aabc7fa4052982015b53de9",
+      "functions": {
+        "_normalize": 43,
+        "_core": 57,
+        "score": 67,
+        "find_suspects": 86
+      }
+    }
+  },
+  "title_cases": [
+    {
+      "input": "【385】[ShiBoo! (Ixy)] 魔法少女敗北実現委員会 (ブルーアーカイブ) [DL版]",
+      "expected": "魔法少女敗北実現委員会 (ブルーアーカイブ)",
+      "searchable": true
+    },
+    {
+      "input": "[263]作品 (シリーズ) [DL版]",
+      "expected": "作品 (シリーズ)",
+      "searchable": true
+    },
+    {
+      "input": "【No.42】 [Circle] タイトル （中国翻訳）",
+      "expected": "タイトル",
+      "searchable": true
+    },
+    {
+      "input": "#385 [A] 作品 (Blue Archive) (カラー)",
+      "expected": "#385 作品 (Blue Archive)",
+      "searchable": true
+    },
+    {
+      "input": "  　 [12]  作品  (シリーズ)  [漢化]  ",
+      "expected": "作品 (シリーズ)",
+      "searchable": true
+    },
+    {
+      "input": "（no. 7） 作品 [無修正]",
+      "expected": "作品",
+      "searchable": true
+    },
+    {
+      "input": "[長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長] 作品",
+      "expected": "[長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長] 作品",
+      "searchable": true
+    },
+    {
+      "input": "[385]",
+      "expected": "",
+      "searchable": true
+    },
+    {
+      "input": "作品名 (シリーズ)",
+      "expected": "作品名 (シリーズ)",
+      "searchable": true
+    },
+    {
+      "input": "作品名 [社团]",
+      "expected": "作品名",
+      "searchable": true
+    },
+    {
+      "input": "",
+      "expected": "",
+      "searchable": false
+    },
+    {
+      "input": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+      "expected": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+      "searchable": true
+    },
+    {
+      "input": "あああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+      "expected": "あああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+      "searchable": false
+    },
+    {
+      "input": "！！！",
+      "expected": "！！！",
+      "searchable": false
+    },
+    {
+      "input": "😀😀",
+      "expected": "😀😀",
+      "searchable": false
+    }
+  ],
+  "score_cases": [
+    {
+      "project_title": "【12】[社团] 魔法少女敗北実現委員会 (ブルーアーカイブ) [DL版]",
+      "candidate": {
+        "id": "exact",
+        "reference": "REF-exact",
+        "display_title": "魔法少女敗北実現委員会（ブルーアーカイブ）",
+        "original_title": "魔法少女敗北実現委員会（ブルーアーカイブ）",
+        "author": "作者",
+        "circle": "社团",
+        "state": "published",
+        "stage": "final"
+      },
+      "level": "exact",
+      "score": 1.0,
+      "round3": 1.0
+    },
+    {
+      "project_title": "魔法少女敗北実現委員会",
+      "candidate": {
+        "id": "contains",
+        "reference": "REF-contains",
+        "display_title": "魔法少女敗北実現委員会 総集編",
+        "original_title": "魔法少女敗北実現委員会 総集編",
+        "author": "作者",
+        "circle": "社团",
+        "state": "published",
+        "stage": "final"
+      },
+      "level": "contains",
+      "score": 0.7857142857142857,
+      "round3": 0.786
+    },
+    {
+      "project_title": "ABC",
+      "candidate": {
+        "id": "short",
+        "reference": "REF-short",
+        "display_title": "ABC作品",
+        "original_title": "ABC作品",
+        "author": "作者",
+        "circle": "社团",
+        "state": "published",
+        "stage": "final"
+      },
+      "level": "none",
+      "score": 0.0,
+      "round3": 0.0
+    },
+    {
+      "project_title": "ΟΣ",
+      "candidate": {
+        "id": "sigma",
+        "reference": "REF-sigma",
+        "display_title": "ος",
+        "original_title": "ος",
+        "author": "作者",
+        "circle": "社团",
+        "state": "published",
+        "stage": "final"
+      },
+      "level": "exact",
+      "score": 1.0,
+      "round3": 1.0
+    },
+    {
+      "project_title": "İSTANBUL",
+      "candidate": {
+        "id": "dotted",
+        "reference": "REF-dotted",
+        "display_title": "i̇stanbul",
+        "original_title": "i̇stanbul",
+        "author": "作者",
+        "circle": "社团",
+        "state": "published",
+        "stage": "final"
+      },
+      "level": "exact",
+      "score": 1.0,
+      "round3": 1.0
+    },
+    {
+      "project_title": "作 品 名！",
+      "candidate": {
+        "id": "decor",
+        "reference": "REF-decor",
+        "display_title": "作品名。",
+        "original_title": "作品名。",
+        "author": "作者",
+        "circle": "社团",
+        "state": "published",
+        "stage": "final"
+      },
+      "level": "exact",
+      "score": 1.0,
+      "round3": 1.0
+    },
+    {
+      "project_title": "作品名 (シリーズ)",
+      "candidate": {
+        "id": "series",
+        "reference": "REF-series",
+        "display_title": "作品名",
+        "original_title": "作品名",
+        "author": "作者",
+        "circle": "社团",
+        "state": "published",
+        "stage": "final"
+      },
+      "level": "exact",
+      "score": 1.0,
+      "round3": 1.0
+    }
+  ],
+  "find_suspects_cases": [
+    {
+      "project_title": "長い作品名 (シリーズ)",
+      "limit": 5,
+      "candidates": [
+        {
+          "id": "unknown-exact",
+          "reference": "REF-unknown-exact",
+          "display_title": "長い作品名",
+          "original_title": "長い作品名",
+          "author": "作者",
+          "circle": "社团",
+          "state": "other",
+          "stage": "final"
+        },
+        {
+          "id": "withdrawn-contains",
+          "reference": "REF-withdrawn-contains",
+          "display_title": "長い作品名 第一話",
+          "original_title": "長い作品名 第一話",
+          "author": "作者",
+          "circle": "社团",
+          "state": "withdrawn",
+          "stage": "final"
+        },
+        {
+          "id": "published-contains-a",
+          "reference": "REF-published-contains-a",
+          "display_title": "長い作品名 第二話",
+          "original_title": "長い作品名 第二話",
+          "author": "作者",
+          "circle": "社团",
+          "state": "published",
+          "stage": "final"
+        },
+        {
+          "id": "in-progress-exact",
+          "reference": "REF-in-progress-exact",
+          "display_title": "長い作品名",
+          "original_title": "長い作品名",
+          "author": "作者",
+          "circle": "社团",
+          "state": "in_progress",
+          "stage": "final"
+        },
+        {
+          "id": "published-contains-b",
+          "reference": "REF-published-contains-b",
+          "display_title": "長い作品名 第三話",
+          "original_title": "長い作品名 第三話",
+          "author": "作者",
+          "circle": "社团",
+          "state": "published",
+          "stage": "final"
+        },
+        {
+          "id": "none",
+          "reference": "REF-none",
+          "display_title": "別作品",
+          "original_title": "別作品",
+          "author": "作者",
+          "circle": "社团",
+          "state": "in_progress",
+          "stage": "final"
+        },
+        {
+          "id": "published-exact",
+          "reference": "REF-published-exact",
+          "display_title": "長い作品名",
+          "original_title": "長い作品名",
+          "author": "作者",
+          "circle": "社团",
+          "state": "published",
+          "stage": "final"
+        },
+        {
+          "id": "too-short",
+          "reference": "REF-too-short",
+          "display_title": "長い作",
+          "original_title": "長い作",
+          "author": "作者",
+          "circle": "社团",
+          "state": "in_progress",
+          "stage": "final"
+        }
+      ],
+      "expected": [
+        {
+          "id": "in-progress-exact",
+          "level": "exact",
+          "score": 1.0,
+          "round3": 1.0,
+          "state_rank": 0
+        },
+        {
+          "id": "published-exact",
+          "level": "exact",
+          "score": 1.0,
+          "round3": 1.0,
+          "state_rank": 1
+        },
+        {
+          "id": "published-contains-a",
+          "level": "contains",
+          "score": 0.625,
+          "round3": 0.625,
+          "state_rank": 1
+        },
+        {
+          "id": "published-contains-b",
+          "level": "contains",
+          "score": 0.625,
+          "round3": 0.625,
+          "state_rank": 1
+        },
+        {
+          "id": "withdrawn-contains",
+          "level": "contains",
+          "score": 0.625,
+          "round3": 0.625,
+          "state_rank": 2
+        }
+      ]
+    }
+  ]
+}

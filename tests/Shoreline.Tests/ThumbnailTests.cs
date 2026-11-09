@@ -142,8 +142,8 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
                 MidpointRounding.ToEven),
             projectRow.Integer("fs"));
 
-        var coverKey = "files/cover-generated.webp";
-        var resampleKey = "files/resample-generated.webp";
+        var coverKey = CoverKey(save);
+        var resampleKey = ResampleKey(save);
         Assert.NotNull(await storage.HeadAsync(coverKey, ct));
         Assert.NotNull(await storage.HeadAsync(resampleKey, ct));
         using var downloaded = await storage.GetAsync(coverKey, ct);
@@ -157,15 +157,16 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
     public async Task Run_SmallImage_LeavesResampleAtOriginalSize()
     {
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "small.jpg");
+        var save = Save("small.jpg");
+        var file = await FileAsync(project, save);
         var storage = Storage();
-        await PutAsync(storage, "files/small.jpg", ImageBytes(800, 600, MagickFormat.Jpeg));
+        await PutAsync(storage, $"files/{save}", ImageBytes(800, 600, MagickFormat.Jpeg));
         var service = Service(storage);
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
         await service.RunAsync(payload, 1, ct);
 
-        using var downloaded = await storage.GetAsync("files/resample-small.webp", ct);
+        using var downloaded = await storage.GetAsync(ResampleKey(save), ct);
         using var resample = new MagickImage(downloaded.Content);
         Assert.Equal(800u, resample.Width);
         Assert.Equal(600u, resample.Height);
@@ -191,9 +192,10 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
     public async Task Run_StaleRevision_DoesNotPublish()
     {
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "stale.jpg");
+        var save = Save("stale.jpg");
+        var file = await FileAsync(project, save);
         var storage = Storage();
-        await PutAsync(storage, "files/stale.jpg", ImageBytes(300, 200, MagickFormat.Jpeg));
+        await PutAsync(storage, $"files/{save}", ImageBytes(300, 200, MagickFormat.Jpeg));
         var service = Service(storage);
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
@@ -204,36 +206,38 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
         await service.RunAsync(payload, 1, ct);
 
         Assert.Equal(ThumbnailService.ThumbnailQueuing, (await LoadFileAsync(file)).Integer("th"));
-        Assert.Null(await storage.HeadAsync("files/cover-stale.webp", ct));
+        Assert.Null(await storage.HeadAsync(CoverKey(save), ct));
     }
 
     [Fact]
     public async Task Run_ReuploadedSaveName_DoesNotPublishOldObjects()
     {
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "reupload.jpg");
+        var save = Save("reupload.jpg");
+        var file = await FileAsync(project, save);
         var storage = Storage();
-        await PutAsync(storage, "files/reupload.jpg", ImageBytes(300, 200, MagickFormat.Jpeg));
+        await PutAsync(storage, $"files/{save}", ImageBytes(300, 200, MagickFormat.Jpeg));
         var service = Service(storage);
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
         await services.Store.Collection("file").UpdateOneAsync(
             Builders<BsonDocument>.Filter.Eq("_id", file),
-            Builders<BsonDocument>.Update.Set("sa", "reupload-v2.jpg"),
+            Builders<BsonDocument>.Update.Set("sa", Save("reupload-v2.jpg")),
             cancellationToken: ct);
         await service.RunAsync(payload, 1, ct);
 
         Assert.Equal(ThumbnailService.ThumbnailQueuing, (await LoadFileAsync(file)).Integer("th"));
-        Assert.Null(await storage.HeadAsync("files/cover-reupload.webp", ct));
+        Assert.Null(await storage.HeadAsync(CoverKey(save), ct));
     }
 
     [Fact]
     public async Task Run_DuplicateWorker_SkipsSucceededRun()
     {
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "duplicate.jpg");
+        var save = Save("duplicate.jpg");
+        var file = await FileAsync(project, save);
         var storage = Storage();
-        await PutAsync(storage, "files/duplicate.jpg", ImageBytes(300, 200, MagickFormat.Jpeg));
+        await PutAsync(storage, $"files/{save}", ImageBytes(300, 200, MagickFormat.Jpeg));
         var service = Service(storage);
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
@@ -251,9 +255,10 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
     public async Task Run_RecomputesProjectTotalsFromFilesInsteadOfDoubleCounting()
     {
         var project = await ProjectAsync(coverBytes: 900, resampleBytes: 1700, fs: 3);
-        var file = await FileAsync(project, "crash.jpg", coverBytes: 1000, resampleBytes: 2000);
+        var save = Save("crash.jpg");
+        var file = await FileAsync(project, save, coverBytes: 1000, resampleBytes: 2000);
         var storage = Storage();
-        await PutAsync(storage, "files/crash.jpg", ImageBytes(2400, 1000, MagickFormat.Jpeg));
+        await PutAsync(storage, $"files/{save}", ImageBytes(2400, 1000, MagickFormat.Jpeg));
         var service = Service(storage);
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
@@ -305,9 +310,9 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
     public async Task ScheduleProject_QueuesOnlyActivatedImages()
     {
         var project = await ProjectAsync();
-        var active = await FileAsync(project, "active.jpg");
-        var inactive = await FileAsync(project, "inactive.jpg", activated: false);
-        var text = await FileAsync(project, "note.txt", type: 3);
+        var active = await FileAsync(project, Save("active.jpg"));
+        var inactive = await FileAsync(project, Save("inactive.jpg"), activated: false);
+        var text = await FileAsync(project, Save("note.txt"), type: 3);
         var service = Service(Storage());
 
         var count = await service.ScheduleProjectAsync(project, ct);
@@ -330,23 +335,20 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
         var root = TempRoot();
         var config = LocalConfig(root);
         using var storage = new ObjectStorage(config);
-        await PutAsync(storage, "files/local.jpg", ImageBytes(2400, 1200, MagickFormat.Jpeg));
+        var save = Save("local.jpg");
+        await PutAsync(storage, $"files/{save}", ImageBytes(2400, 1200, MagickFormat.Jpeg));
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "local.jpg");
+        var file = await FileAsync(project, save);
         var service = Service(storage, config, TempRoot());
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
         await service.RunAsync(payload, 1, ct);
 
-        var localFiles = Directory.Exists(root)
-            ? string.Join(", ", Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-            : "<missing root>";
-        Assert.True(File.Exists(Path.Combine(root, "files", "cover-local.webp")), localFiles);
-        Assert.True(File.Exists(Path.Combine(root, "files", "resample-local.webp")), localFiles);
-        var stored = await LoadFileAsync(file);
-        Assert.True(
-            stored.Integer("th") == ThumbnailService.ThumbnailSucceeded,
-            $"th={stored.Integer("th")} the={stored.Text("the")} files={localFiles}");
+        var cover = Path.Combine(root, "files", $"cover-{Path.GetFileNameWithoutExtension(save)}.webp");
+        var resample = Path.Combine(root, "files", $"resample-{Path.GetFileNameWithoutExtension(save)}.webp");
+        Assert.True(File.Exists(cover));
+        Assert.True(File.Exists(resample));
+        Assert.Equal(ThumbnailService.ThumbnailSucceeded, (await LoadFileAsync(file)).Integer("th"));
     }
 
     [Fact]
@@ -355,10 +357,12 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
         var root = TempRoot();
         var config = LocalConfig(root);
         using var storage = new ObjectStorage(config);
-        await PutAsync(storage, "files/blocked.jpg", ImageBytes(300, 200, MagickFormat.Jpeg));
-        Directory.CreateDirectory(Path.Combine(root, "files", "cover-blocked.webp"));
+        var save = Save("blocked.jpg");
+        await PutAsync(storage, $"files/{save}", ImageBytes(300, 200, MagickFormat.Jpeg));
+        Directory.CreateDirectory(Path.Combine(root, "files",
+            $"cover-{Path.GetFileNameWithoutExtension(save)}.webp"));
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "blocked.jpg");
+        var file = await FileAsync(project, save);
         var service = Service(storage, config, TempRoot(), maxAttempts: 4);
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
@@ -375,11 +379,10 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
     public async Task CanceledRun_DoesNotPublish()
     {
         var project = await ProjectAsync();
-        var file = await FileAsync(project, "canceled.jpg");
+        var save = Save("canceled.jpg");
+        var file = await FileAsync(project, save);
         var storage = Storage();
-        await storage.DeleteAsync("files/cover-canceled.webp", ct);
-        await storage.DeleteAsync("files/resample-canceled.webp", ct);
-        await PutAsync(storage, "files/canceled.jpg", ImageBytes(300, 200, MagickFormat.Jpeg));
+        await PutAsync(storage, $"files/{save}", ImageBytes(300, 200, MagickFormat.Jpeg));
         var service = Service(storage);
 
         var payload = await ScheduleAndPayloadAsync(service, file, project);
@@ -389,7 +392,7 @@ public sealed class ThumbnailTests(LocalServices services) : IDisposable
             () => service.RunAsync(payload, 1, canceled.Token));
 
         Assert.Equal(ThumbnailService.ThumbnailQueuing, (await LoadFileAsync(file)).Integer("th"));
-        Assert.Null(await storage.HeadAsync("files/cover-canceled.webp", ct));
+        Assert.Null(await storage.HeadAsync(CoverKey(save), ct));
     }
 
     public void Dispose()

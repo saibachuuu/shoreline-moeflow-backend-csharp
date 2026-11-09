@@ -830,14 +830,14 @@ public sealed class ProofreadFeedbackTests
         using var renderedInside = new ImageMagick.MagickImage(inside!);
         Assert.Equal(640u, renderedInside.Width);
         Assert.Equal(320u, renderedInside.Height);
-        var pixel = renderedInside.GetPixels().GetPixel(320, 160).ToColor();
+        var pixel = renderedInside.GetPixels().GetPixel(320, 160).ToColor()!;
         Assert.InRange(pixel.R, 250, 255);
         Assert.InRange(pixel.G, 95, 110);
         Assert.InRange(pixel.B, 118, 130);
         Assert.Equal(235, pixel.A);
 
         using var renderedOutside = new ImageMagick.MagickImage(outside!);
-        var outPixel = renderedOutside.GetPixels().GetPixel(160, 80).ToColor();
+        var outPixel = renderedOutside.GetPixels().GetPixel(160, 80).ToColor()!;
         Assert.InRange(outPixel.R, 250, 255);
         Assert.InRange(outPixel.G, 208, 218);
         Assert.InRange(outPixel.B, 126, 136);
@@ -852,10 +852,10 @@ public sealed class ProofreadFeedbackTests
 
         using var zero = new ImageMagick.MagickImage(ProofreadImageProcessor.Render(source,
             [new ProofreadMarker(0.5, 0.5, 1, 1)], -5)!);
-        Assert.Equal(0, zero.GetPixels().GetPixel(50, 50).ToColor().A);
+        Assert.Equal(0, zero.GetPixels().GetPixel(50, 50).ToColor()!.A);
         using var hundred = new ImageMagick.MagickImage(ProofreadImageProcessor.Render(source,
             [new ProofreadMarker(0.5, 0.5, 1, 1)], 150)!);
-        Assert.Equal(255, hundred.GetPixels().GetPixel(50, 50).ToColor().A);
+        Assert.Equal(255, hundred.GetPixels().GetPixel(50, 50).ToColor()!.A);
         Assert.Null(ProofreadImageProcessor.Render([1, 2, 3], [new ProofreadMarker(0.5, 0.5, 1, 1)], 92));
         var copy = source.ToArray();
         ProofreadImageProcessor.Render(copy, [new ProofreadMarker(0.5, 0.5, 1, 1)], 92);
@@ -872,7 +872,7 @@ public sealed class ProofreadFeedbackTests
             [new ProofreadMarker(0.0, 0.0, 1, 1)], 92);
         Assert.NotNull(rendered);
         using var output = new ImageMagick.MagickImage(rendered!);
-        Assert.Equal(255, output.GetPixels().GetPixel(50, 50).ToColor().A);
+        Assert.Equal(255, output.GetPixels().GetPixel(50, 50).ToColor()!.A);
     }
 
     [Fact]
