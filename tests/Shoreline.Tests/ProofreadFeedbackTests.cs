@@ -294,7 +294,7 @@ public sealed class ProofreadFeedbackTests
         var project = await InsertProjectAsync(Oid(team["_id"]), Oid(actor["_id"]));
         var language = await InsertLanguageAsync("日语");
         var target = await InsertTargetAsync(Oid(project["_id"]), Oid(language["_id"]));
-        await InsertMemberAsync(Oid(project["_id"]), Oid(actor["_id"]), "translator", "proofreader");
+        await InsertMemberAsync(Oid(project["_id"]), Oid(actor["_id"]), "proofreader");
         await InsertMemberAsync(Oid(project["_id"]), Oid(translator["_id"]), "translator");
         var file = await InsertFileAsync(Oid(project["_id"]), "page.png", "page.png");
         var source = await InsertSourceAsync(Oid(file["_id"]), 0, "原文");
@@ -423,11 +423,7 @@ public sealed class ProofreadFeedbackTests
 
         Assert.Equal(200, result.StatusCode);
         Assert.Equal(1, result.Body["changed_pages_count"]);
-        var note = await _services.Store.Collection("notification")
-            .Find(Builders<BsonDocument>.Filter.Eq("_id",
-                ObjectId.Parse((string)result.Body["notification_id"]!))).FirstOrDefaultAsync();
-        // disabled path does not create a note; the result omitted notification_id.
-        Assert.Null(note);
+        Assert.False(result.Body.ContainsKey("notification_id"));
     }
 
     [Fact]

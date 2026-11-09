@@ -73,6 +73,7 @@ public sealed class ArchiveImportOptions
             MaxEntries = (int)Math.Min(int.MaxValue,
                 ReadLong(configuration, "Archive:MaxZipEntries", "ARCHIVE_MAX_ZIP_ENTRIES", DefaultMaxEntries)),
             MaxEntryBytes = ReadLong(configuration, "Archive:MaxEntryBytes", "ARCHIVE_MAX_ENTRY_BYTES", DefaultMaxEntryBytes),
+            TempRoot = archive["TempRoot"] ?? configuration["ARCHIVE_TEMP_ROOT"],
         };
     }
 

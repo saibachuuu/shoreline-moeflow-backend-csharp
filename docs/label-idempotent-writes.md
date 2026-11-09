@@ -204,6 +204,43 @@ This is a convergence guarantee **only for these import helpers**. It does not
 retroactively make arbitrary legacy label writes crash-safe, and it does not
 introduce a transaction. Standalone MongoDB is sufficient.
 
+## Tests and evidence
+
+`tests/Shoreline.Tests/LabelIdempotencyTests.cs` contains 17 direct-service
+facts. They use real MongoDB (the normal local test fixture) and cover:
+
+- source insert committed but acknowledgement lost; retry converges
+- failure after file, project, canonical cache and target counter writes;
+  retry twice and compare the rebuilt counts with primary rows
+- translation insert committed but acknowledgement lost; retry converges
+- translation failure after a reconcile stage; retry converges
+- empty translation content is a no-op (no row, no counter write)
+- a stable source id on another file is rejected without changes
+- a stable source id with different content/position intent is rejected
+- a stable source id with a stale `label_epoch` is rejected with `409`
+- a stale expected project revision is rejected with no writes
+- a rank collision with another source does not claim that source
+- a stable translation id on another source is rejected
+- folder rollup, inactive files, multiple targets, blank sources and selected
+  distinct-source counting
+- a service call borrowing an already-held request lease does not deadlock
+  and does not leave the owned lock row behind
+
+The implementation was verified only in an isolated `git archive 3edd683` tree
+with the three new files copied in:
+
+```text
+dotnet build tests/Shoreline.Tests/Shoreline.Tests.csproj -c Debug --artifacts-path .artifacts
+  -> 0 warnings, 0 errors
+dotnet test ... --filter FullyQualifiedName~LabelIdempotencyTests
+  -> 17 passed, 0 failed
+dotnet test ...
+  -> 403 passed, 0 failed
+```
+
+The previous E1 checkpoint baseline was `386` full tests; `403 = 386 + 17`.
+No shared working tree was used as evidence. No commit was created.
+
 ## Known boundaries
 
 - No TTL and no takeover of a non-expired project label lock; recovery follows
