@@ -36,6 +36,7 @@ builder.Services.AddPresenceServices();
 builder.Services.AddAvatarServices();
 builder.Services.AddAdminStorageOverviewServices();
 builder.Services.AddNotificationServices();
+builder.Services.AddNotificationPublishServices();
 builder.Services.AddScoped<ProjectMemberService>();
 builder.Services.AddScoped<ProjectLifecycleService>();
 builder.Services.AddScoped<ProjectInvitationService>();
@@ -108,6 +109,7 @@ app.MapPresence();
 app.MapAvatarEndpoints();
 app.MapAdminStorageOverviewEndpoints();
 app.MapNotificationEndpoints();
+app.MapNotificationPublishEndpoints();
 app.MapProjectMembers();
 app.MapInvitations();
 app.MapApplications();
@@ -119,6 +121,8 @@ app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 });
 await app.Services.GetRequiredService<MongoStore>().InitializeAsync(CancellationToken.None);
 await NotificationRegistration.InitializeAsync(
+    app.Services.GetRequiredService<MongoStore>(), CancellationToken.None);
+await NotificationPublishRegistration.InitializeAsync(
     app.Services.GetRequiredService<MongoStore>(), CancellationToken.None);
 using (var scope = app.Services.CreateScope())
 {
