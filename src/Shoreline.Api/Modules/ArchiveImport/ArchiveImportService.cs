@@ -264,6 +264,8 @@ public sealed class ArchiveImportService
         if (project is null) throw new ArchiveImportFailure("项目不存在", "项目不存在");
         if (project.Integer("st") != 0)
             throw new ArchiveImportFailure(ArchiveImportText.FailedStage, "项目已完结");
+        // TODO(archive-import): 此处 revision 复验与 D1 上传内部锁之间仍有 epoch 变更窗口，
+        // 尚未实现“把 expectedRevision 传进 D1 锁内做 CAS 对比”的严格 fencing + 并发竞争测试。
         if (expectedRevision is not null && project.Integer("label_revision", 0) != expectedRevision.Value)
             throw new ArchiveImportFailure(ArchiveImportText.FailedStage, "项目标签版本已变更，导入已取消");
 

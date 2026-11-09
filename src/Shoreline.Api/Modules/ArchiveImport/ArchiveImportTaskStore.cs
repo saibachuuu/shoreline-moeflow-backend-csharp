@@ -27,20 +27,20 @@ public sealed class ArchiveImportTaskStore(MongoStore store, TimeProvider clock)
     public Task<BsonDocument?> LatestAsync(ObjectId projectId, CancellationToken ct) =>
         _tasks.Find(Builders<BsonDocument>.Filter.Eq("p", projectId))
             .Sort(Builders<BsonDocument>.Sort.Descending("_id"))
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(ct)!;
 
     public Task<BsonDocument?> FindByIdAsync(ObjectId taskId, ObjectId projectId, CancellationToken ct) =>
         _tasks.Find(Builders<BsonDocument>.Filter.And(
                 Builders<BsonDocument>.Filter.Eq("_id", taskId),
                 Builders<BsonDocument>.Filter.Eq("p", projectId)))
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(ct)!;
 
     public Task<BsonDocument?> FindActiveAsync(ObjectId projectId, CancellationToken ct) =>
         _tasks.Find(Builders<BsonDocument>.Filter.And(
                 Builders<BsonDocument>.Filter.Eq("p", projectId),
                 Builders<BsonDocument>.Filter.In("s", ArchiveImportStatus.Running)))
             .Sort(Builders<BsonDocument>.Sort.Descending("_id"))
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(ct)!;
 
     public Task<BsonDocument?> FindLegacyAsync(ObjectId projectId, string gid, string token,
         CancellationToken ct)
@@ -54,7 +54,7 @@ public sealed class ArchiveImportTaskStore(MongoStore store, TimeProvider clock)
         if (token.Length != 0) filters.Add(Builders<BsonDocument>.Filter.Eq("t", token));
         return _tasks.Find(Builders<BsonDocument>.Filter.And(filters))
             .Sort(Builders<BsonDocument>.Sort.Descending("_id"))
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(ct)!;
     }
 
     public Task InsertAsync(BsonDocument task, CancellationToken ct) => _tasks.InsertOneAsync(task, cancellationToken: ct);
@@ -215,7 +215,7 @@ public sealed class ArchiveImportClaimStore(MongoStore store, TimeProvider clock
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
     public Task<BsonDocument?> GetAsync(ObjectId projectId, CancellationToken ct) =>
-        _claims.Find(Builders<BsonDocument>.Filter.Eq("_id", projectId)).FirstOrDefaultAsync(ct);
+        _claims.Find(Builders<BsonDocument>.Filter.Eq("_id", projectId)).FirstOrDefaultAsync(ct)!;
 
     public async Task<bool> TryInsertAsync(ObjectId projectId, ObjectId taskId, CancellationToken ct)
     {

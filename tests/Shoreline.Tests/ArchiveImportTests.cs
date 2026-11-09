@@ -280,7 +280,7 @@ public sealed class ArchiveImportTests(LocalServices services)
     {
         await using var harness = await Harness.CreateAsync(services, keys: ["key-one", "key-two"]);
         harness.Transport.Resolver = (call, gid, _, _) =>
-            call == 0 ? null : Harness.Canonical(gid);
+            call == 0 ? null : Canonical(gid);
         harness.Transport.Zip = Zip(("images/a.jpg", A));
         await harness.CreateTaskAsync();
 
@@ -698,6 +698,7 @@ public sealed class ArchiveImportTests(LocalServices services)
     internal sealed class Harness : IAsyncDisposable
     {
         public required LocalServices Services { get; init; }
+        public MongoStore Store => Services.Store;
         public required TestClock Clock { get; init; }
         public required ArchiveImportOptions Options { get; init; }
         public required ArchiveSecrets Secrets { get; init; }

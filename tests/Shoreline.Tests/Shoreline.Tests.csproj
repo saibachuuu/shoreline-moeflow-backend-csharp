@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Shoreline.Api\Shoreline.Api.csproj" />
+    <ProjectReference Include="..\..\src\Shoreline.Imaging\Shoreline.Imaging.csproj" />
   </ItemGroup>
 
   <ItemGroup>

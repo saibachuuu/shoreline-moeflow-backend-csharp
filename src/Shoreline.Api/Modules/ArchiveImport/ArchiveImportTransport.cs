@@ -52,6 +52,8 @@ public sealed class ArchiveImportTransport : IArchiveImportTransport, IDisposabl
         };
         request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + apiKey);
         request.Headers.TryAddWithoutValidation("X-Client", "");
+        // TODO(archive-import): 空 X-Client 头的服务端行为未验证（Python 侧是否同值未知），
+        // 后续按 Python 行为补真实 client-key/版本串或改为可配置项并加断言。当前仅保证编译通过。
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
@@ -160,7 +162,11 @@ public sealed class ArchiveImportTransport : IArchiveImportTransport, IDisposabl
         try
         {
             var normalized = ExternalApiUrl.Normalize(value, Array.Empty<string>(), requireAllowlist: false);
-            return Uri.TryCreate(normalized + "/", UriKind.Absolute, out uri) && uri.Scheme == "https";
+            if (!Uri.TryCreate(normalized + "/", UriKind.Absolute, out var candidate) ||
+                candidate.Scheme != "https")
+                return false;
+            uri = candidate;
+            return true;
         }
         catch (ArgumentException)
         {

@@ -15,5 +15,8 @@
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Shoreline.Imaging\Shoreline.Imaging.csproj" />
+  </ItemGroup>
 
 </Project>

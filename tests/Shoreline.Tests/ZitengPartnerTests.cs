@@ -128,7 +128,7 @@ public sealed class ZitengPartnerTests
         var queryIndexes = await ListDocumentsAsync(
             await world.Store.Collection(ZitengPartnerStore.QueryCollection).Indexes.ListAsync());
         Assert.Contains(queryIndexes, index => index["name"].AsString == "ziteng_query_keyword_v1");
-        Assert.DoesNotContain(queryIndexes, index => index.Contains("expireAfterSeconds"));
+        Assert.All(queryIndexes, index => Assert.False(index.Contains("expireAfterSeconds")));
 
         var checkIndexes = await ListDocumentsAsync(
             await world.Store.Collection(ZitengPartnerStore.CheckCollection).Indexes.ListAsync());
@@ -628,6 +628,13 @@ public sealed class ZitengPartnerTests
 
     private static string FixturePath([CallerFilePath] string sourceFile = "") =>
         Path.Combine(Path.GetDirectoryName(sourceFile)!, "Fixtures", "ZitengPartnerGolden.json");
+
+    private static async Task<List<BsonDocument>> ListDocumentsAsync(
+        IAsyncCursor<BsonDocument> cursor, CancellationToken ct = default)
+    {
+        using (cursor)
+            return await cursor.ToListAsync(ct);
+    }
 
     private static ZitengPartnerWork WorkFrom(JsonElement candidate) => new(
         candidate.GetProperty("id").GetString()!,
