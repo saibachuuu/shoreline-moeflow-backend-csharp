@@ -29,11 +29,14 @@ public sealed class ObjectStorage : IStorageBackend
 
         var configuredType = FirstNonEmpty(
             configuration["Storage:Type"],
+            LegacyStorageType(configuration),
             configuration["Storage:BucketStyle"],
             "S3");
 
         var provider = ResolveProvider(configuredType, logger);
-        var domain = ParseOptionalHttpUri(configuration["Storage:Domain"], "Storage:Domain");
+        var domain = ParseOptionalHttpUri(
+            FirstNonEmpty(configuration["Storage:Domain"], configuration["STORAGE_DOMAIN"]),
+            "Storage:Domain");
 
         if (provider == StorageProvider.Local)
         {
@@ -52,8 +55,10 @@ public sealed class ObjectStorage : IStorageBackend
             return;
         }
 
-        var bucket = Required(configuration, "Storage:Bucket");
-        var endpoint = ParseHttpUri(configuration["Storage:Endpoint"], "Storage:Endpoint");
+        var bucket = Required(configuration, "Storage:Bucket", "OSS_BUCKET_NAME");
+        var endpoint = ParseHttpUri(
+            FirstNonEmpty(configuration["Storage:Endpoint"], configuration["OSS_ENDPOINT"]),
+            "Storage:Endpoint");
 
         if (endpoint.Host.Contains("aliyuncs.com", StringComparison.OrdinalIgnoreCase))
         {
@@ -62,11 +67,18 @@ public sealed class ObjectStorage : IStorageBackend
                 + "Refusing to silently treat it as generic S3-compatible storage.");
         }
 
-        var accessKey = Required(configuration, "Storage:AccessKey");
-        var secretKey = Required(configuration, "Storage:SecretKey");
-        var region = FirstNonEmpty(configuration["Storage:Region"], "us-east-1");
-        var forcePathStyle = configuration.GetValue("Storage:ForcePathStyle", true);
-        var viaCdn = configuration.GetValue("Storage:ViaCdn", false);
+        var accessKey = Required(configuration, "Storage:AccessKey", "OSS_ACCESS_KEY_ID");
+        var secretKey = Required(configuration, "Storage:SecretKey", "OSS_ACCESS_KEY_SECRET");
+        var region = FirstNonEmpty(
+            configuration["Storage:Region"],
+            configuration["OSS_S3_REGION"],
+            "us-east-1");
+        var forcePathStyle = configuration.GetValue(
+            "Storage:ForcePathStyle",
+            LegacyPathStyle(configuration));
+        var viaCdn = configuration.GetValue(
+            "Storage:ViaCdn",
+            IsTrue(configuration["OSS_VIA_CDN"]));
 
         if (viaCdn && domain is null)
         {
@@ -96,7 +108,7 @@ public sealed class ObjectStorage : IStorageBackend
         backend = new S3StorageBackend(
             client,
             bucket,
-            configuration["Storage:KeyPrefix"] ?? string.Empty,
+            FirstNonEmpty(configuration["Storage:KeyPrefix"], LegacyKeyPrefix(configuration)),
             viaCdn,
             domain);
     }
@@ -185,12 +197,88 @@ public sealed class ObjectStorage : IStorageBackend
         return string.Empty;
     }
 
-    private static string Required(IConfiguration configuration, string key)
+    /// <summary>
+    /// Maps the Python deployment environment (<c>STORAGE_TYPE</c> plus
+    /// <c>OSS_BUCKET_STYLE</c>) onto the C# provider names. Python's
+    /// <c>OSS</c> value is ambiguous: with <c>OSS_BUCKET_STYLE=S3</c> it uses
+    /// the standard S3 client, while <c>ALI</c> selects the Aliyun native SDK.
+    /// </summary>
+    private static string? LegacyStorageType(IConfiguration configuration)
     {
-        var value = configuration[key];
+        var storageType = configuration["STORAGE_TYPE"];
+        if (string.IsNullOrWhiteSpace(storageType))
+        {
+            return null;
+        }
+
+        var normalized = storageType.Trim().ToUpperInvariant();
+        if (normalized == "LOCAL_STORAGE")
+        {
+            return "LOCAL";
+        }
+
+        if (normalized != "OSS")
+        {
+            return storageType;
+        }
+
+        var bucketStyle = configuration["OSS_BUCKET_STYLE"];
+        if (string.IsNullOrWhiteSpace(bucketStyle))
+        {
+            // Python defaults to S3 for the standard S3-compatible client.
+            return "S3";
+        }
+
+        return bucketStyle.Trim().ToUpperInvariant() switch
+        {
+            "ALI" or "ALIYUN" or "ALIYUN_OSS" => "ALI",
+            _ => "S3",
+        };
+    }
+
+    private static string? LegacyKeyPrefix(IConfiguration configuration)
+    {
+        if (string.IsNullOrWhiteSpace(configuration["STORAGE_TYPE"]))
+        {
+            return null;
+        }
+
+        // Python applies OSS_KEY_PREFIX only to the standard S3 branch and
+        // defaults it to storage/ to stay compatible with historical objects.
+        if (string.Equals(
+                configuration["STORAGE_TYPE"]?.Trim(),
+                "OSS",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return FirstNonEmpty(configuration["OSS_KEY_PREFIX"], "storage/");
+        }
+
+        return null;
+    }
+
+    private static bool LegacyPathStyle(IConfiguration configuration)
+    {
+        var addressingStyle = configuration["OSS_S3_ADDRESSING_STYLE"];
+        if (string.IsNullOrWhiteSpace(addressingStyle))
+        {
+            return true;
+        }
+
+        return !string.Equals(addressingStyle.Trim(), "virtual", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTrue(string? value) =>
+        bool.TryParse(value, out var parsed) && parsed;
+
+    private static string Required(IConfiguration configuration, string key, string? legacyKey = null)
+    {
+        var value = FirstNonEmpty(configuration[key], legacyKey is null ? null : configuration[legacyKey]);
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new InvalidOperationException($"{key} is required for S3 storage.");
+            throw new InvalidOperationException(
+                legacyKey is null
+                    ? $"{key} is required for S3 storage."
+                    : $"{key} (or {legacyKey}) is required for S3 storage.");
         }
 
         return value;

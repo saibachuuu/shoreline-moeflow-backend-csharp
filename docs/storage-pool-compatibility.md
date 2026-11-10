@@ -17,15 +17,22 @@ still not ported.
 
 | Python setting | Actual backend | C# setting |
 |---|---|---|
-| `STORAGE_TYPE=OSS` + `OSS_BUCKET_STYLE=R2/MINIO/GARAGE/AWS/unset` | standard S3-compatible | `Storage:Type=S3` or `Storage:Type=R2` |
-| `STORAGE_TYPE=OSS` + `OSS_BUCKET_STYLE=S3` | Aliyun OSS native (historical naming) | unsupported; fail closed |
+| `STORAGE_TYPE=OSS` + `OSS_BUCKET_STYLE=S3/R2/MINIO/GARAGE/AWS/unset` | standard S3-compatible | `Storage:Type=S3` or `Storage:Type=R2` (legacy env auto-mapped) |
 | `STORAGE_TYPE=OSS` + `OSS_BUCKET_STYLE=ALI/ALIYUN/ALIYUN_OSS/OSS` | Aliyun OSS native | unsupported; `Storage:Type=ALI` fails fast |
 | `STORAGE_TYPE=LOCAL_STORAGE` | local filesystem | `Storage:Type=Local` + `Storage:Root` |
 
-Python's old default key prefix is `storage/`; the C# D0 default is empty for
-existing C# API compatibility. A deployment that still has objects below
-`storage/` must set `Storage:KeyPrefix=storage/` explicitly. The per-source
-`sub_path` in this module is a separate, source-local prefix.
+> Corrected 2026-11-10: current Python (`app/constants/storage.py`) treats
+> `S3` as the standard S3-compatible client and `ALI` as Aliyun native. The
+> older reversed meaning (`S3` = Aliyun) only applies to historical
+> deployments that have not been migrated; production currently uses
+> `OSS_BUCKET_STYLE=S3` against a Cloudflare R2 endpoint.
+
+Python's old default key prefix is `storage/`. When the legacy
+`STORAGE_TYPE` environment is present and `Storage:KeyPrefix` is not set, C#
+now applies `OSS_KEY_PREFIX` (default `storage/`) automatically. A pure C#
+deployment that still has objects below `storage/` must set
+`Storage:KeyPrefix=storage/` explicitly. The per-source `sub_path` in this
+module is a separate, source-local prefix.
 
 `STORAGE_TYPE=OSS` alone is **not** enough to decide whether the old deployment
 was Aliyun or S3. `OSS_BUCKET_STYLE` is the deciding setting.
