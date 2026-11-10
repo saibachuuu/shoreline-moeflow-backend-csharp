@@ -26,7 +26,6 @@ public sealed class MongoSchemaReadinessTests : IAsyncLifetime
     [Theory]
     [InlineData(null)]
     [InlineData("asrch")]
-    [InlineData("aliases_search")]
     public async Task InitializationIsIdempotentAndPreservesConflictingLegacyIndex(string? existingKey)
     {
         var rows = store.Collection("team_member");
@@ -49,10 +48,23 @@ public sealed class MongoSchemaReadinessTests : IAsyncLifetime
         var indexes = await (await rows.Indexes.ListAsync()).ToListAsync();
         AssertIndex(indexes, "team_member_aliases_v1", new BsonDocument { ["team"] = 1, ["aliases"] = 1 });
         AssertIndex(indexes, "team_member_worker_qualifications_v1", new BsonDocument { ["team"] = 1, ["worker_qualifications"] = 1 });
-        if (existingKey is null)
-            Assert.DoesNotContain(indexes, index => index["name"] == "team_member_alias_search_v1");
-        else
-            AssertIndex(indexes, "team_member_alias_search_v1", new BsonDocument { ["team"] = 1, ["status"] = 1, [existingKey] = 1 });
+        AssertIndex(indexes, "team_member_alias_search_v1",
+            new BsonDocument { ["team"] = 1, ["status"] = 1, ["asrch"] = 1 });
+    }
+
+    [Fact]
+    public async Task InitializationRefusesToReplaceAConflictingAliasSearchIndex()
+    {
+        var rows = store.Collection("team_member");
+        await rows.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            new BsonDocument { ["team"] = 1, ["status"] = 1, ["aliases_search"] = 1 },
+            new CreateIndexOptions { Name = "team_member_alias_search_v1" }));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.InitializeAsync(CancellationToken.None));
+
+        var indexes = await (await rows.Indexes.ListAsync()).ToListAsync();
+        AssertIndex(indexes, "team_member_alias_search_v1",
+            new BsonDocument { ["team"] = 1, ["status"] = 1, ["aliases_search"] = 1 });
     }
 
     [Fact]

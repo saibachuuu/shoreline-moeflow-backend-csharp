@@ -59,8 +59,9 @@ public sealed class MongoStore
             new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("status"),
                 new CreateIndexOptions { Name = "team_member_status_v1" })
         ], ct);
-        await EnsureTeamMemberQueryIndexAsync("aliases", "team_member_aliases_v1", ct);
-        await EnsureTeamMemberQueryIndexAsync("worker_qualifications", "team_member_worker_qualifications_v1", ct);
+        await EnsureTeamMemberQueryIndexAsync(["team", "aliases"], "team_member_aliases_v1", ct);
+        await EnsureTeamMemberQueryIndexAsync(["team", "worker_qualifications"], "team_member_worker_qualifications_v1", ct);
+        await EnsureTeamMemberQueryIndexAsync(["team", "status", "asrch"], "team_member_alias_search_v1", ct);
         await Collection("identity_tag_policy").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("team"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
         await Collection("project_member").Indexes.CreateManyAsync([
@@ -87,10 +88,11 @@ public sealed class MongoStore
             new CreateIndexOptions { Unique = true, Name = "identity_operation_project_operation_v1" }), cancellationToken: ct);
     }
 
-    private async Task EnsureTeamMemberQueryIndexAsync(string field, string name, CancellationToken ct)
+    private async Task EnsureTeamMemberQueryIndexAsync(string[] fields, string name, CancellationToken ct)
     {
         var collection = Collection("team_member");
-        var keys = new BsonDocument { ["team"] = 1, [field] = 1 };
+        var keys = new BsonDocument();
+        foreach (var field in fields) keys[field] = 1;
 
         async Task<bool> HasEquivalentAsync()
         {

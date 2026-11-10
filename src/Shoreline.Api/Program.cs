@@ -47,9 +47,11 @@ builder.Services.AddMagickProofreadImageRenderer();
 builder.Services.AddThumbnailServices();
 builder.Services.AddArchiveImportServices();
 builder.Services.AddPartnerSearchServices();
-// The in-process StoragePool transfer worker is opt-in: keep it off unless an
-// operator explicitly sets StoragePool:WorkerEnabled=true.
-builder.Configuration["StoragePool:WorkerEnabled"] ??= "false";
+// The in-process StoragePool worker is enabled outside tests, matching Python's
+// always-registered beat entry. The database switches (se/re) remain the
+// runtime gate; StoragePool:WorkerEnabled is only an operator kill switch.
+if (builder.Configuration["StoragePool:WorkerEnabled"] is null)
+    builder.Configuration["StoragePool:WorkerEnabled"] = builder.Environment.IsEnvironment("Testing") ? "false" : "true";
 builder.Services.AddStoragePoolServices();
 builder.Services.AddZitengPartner();
 builder.Services.AddAdditionalListServices();

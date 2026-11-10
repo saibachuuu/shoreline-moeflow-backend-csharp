@@ -96,6 +96,21 @@ Test services for the run were disposable loopback containers:
 `sl-iso-mongo` (27241), `sl-iso-s3` (29241), `sl-iso-mailpit` (21241/28241);
 API port `25241`.
 
+## Parity follow-ups in the same change
+
+- `StoragePool:WorkerEnabled` now defaults to `true` outside `Testing` (and
+  `false` in tests), matching Python's always-registered beat entry. The
+  database switches `se` (scan, default false) and `re` (run, default true)
+  remain the runtime gate.
+- `MongoStore` now creates the third Python identity index
+  `team_member_alias_search_v1` on `(team, status, asrch)`, matching migration
+  `m0006_search_projections.py`; the existing conflict check still refuses to
+  replace an unequal index.
+- `Storage:KeyPrefix` remains an explicit deployment setting
+  (`Storage__KeyPrefix=storage/` for Python data); the code default was not
+  changed because the in-process storage-pool engine and tests use empty
+  prefixes deliberately.
+
 ## Remaining work
 
 - Build the release image from this tree and deploy it to the test server.
