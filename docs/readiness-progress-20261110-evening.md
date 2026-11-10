@@ -63,13 +63,22 @@ Mongo's 63-character limit; it was shortened before the 47/47 rerun.
 ## Differential and remaining blockers
 
 - An unmerged true Flask/C# differential branch has 16 requests including successful
-  `partner_search` writes/reads and a real Python token. Its test currently **fails**:
-  profile writes add BSON `csharp_profile_revision`, and CORS/HTTP headers differ.
+  `partner_search` writes/reads and a real Python token. Its latest rerun has 17
+  business differences, 3 expected-framework differences and 39 wire-format
+  differences; the test correctly **fails**. It compares same raw BSON seeds and
+  database before/after digests. Profile writes add BSON `csharp_profile_revision`,
+  and CORS/HTTP headers differ.
   The profile revision protects C# optimistic concurrency and must not simply be
   removed to match a digest. An isolated real Flask probe confirmed Python
   MongoEngine raises `FieldDoesNotExist` when loading a user with
   `csharp_profile_revision`. CORS synthetic defaults were corrected against Python
-  config and the real difference rerun; unresolved policy/wire differences remain.
+  config and the real difference rerun. The corrected actual Flask responses include
+  expose headers without Origin and wildcard CORS with Origin, while C# uses an
+  explicit localhost default; policy differences require an owner decision. The
+  differential also finds preflight 200 vs 204, 405 body/Allow differences, and
+  three requests without Flask's no-Origin expose header. The two set-derived method
+  headers are compared as token sets because Python's set iteration order varies;
+  missing/extra methods still fail. No business mismatch is classified as accepted.
 - Security-code delivery and rollback interoperability, the third legacy index,
   historical migrations, real R2, retry/lease/crash coverage for all jobs, optional
   routes, MIT consumers, SSRF/trusted proxies and resource/security controls remain
