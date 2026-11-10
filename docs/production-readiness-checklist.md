@@ -1,6 +1,6 @@
 # 生产替换硬门槛检查表
 
-日期：2026-11-10（夜间更新）。Python 参考 `be0b717`；C# 主分支 `2650a74` + 未提交 bootstrap/诊断路由工作树。
+日期：2026-11-10（深夜更新）。Python 参考 `be0b717`；C# 主分支 `a7fbfc4`。
 
 **发布结论：阻塞，不能替换生产 Python。**
 “已验证”只代表表中具体证据；静态实现、测试发现、旧快照绿色结果均不等于生产验收。
@@ -10,7 +10,7 @@
 
 | 硬门槛 | 状态 | 证据 / 阻塞 / 仍需执行 |
 |---|---|---|
-| 核心有效路由注册 | 已验证（静态） | 静态 160/160：`GET /docs/<path>`、`/error`、`/urls`、`/warning` 已由 `LegacyDiagnosticsEndpoints` 装配（`LegacyDiagnosticsTests` 5/5 中的 4 条断言）；运行时装配仍须测试机部署复核 |
+| 核心有效路由注册 | 已验证（静态 + 测试机抽查） | 静态 160/160；`LegacyDiagnosticsEndpoints` 的 `/urls`、`/error`、`/warning`、`/docs/<path>` 已在测试机容器内经 nginx 返回 200/500/500/404，`/ping`、`/health/*`、`/v1/site/homepage` 均为 200 |
 | 全核心路由 C# HTTP 行为与权限 | 未验证 | 静态审计命中 160/160；不等于 HTTP 执行通过，未跑全量 |
 | archive_import HTTP | 未验证 | 已装配；需 request/body/errors/auth/digest 测试 |
 | partner_search HTTP | 未验证 | 已有 HTTP 测试；需全契约、写/索引排序和 Python oracle |
@@ -25,7 +25,7 @@
 | Python auth token 互操作 | 未验证 | 旧 replay 使用 C# 自签 token；需真实 Python token |
 | storage key/prefix/R2 | 未验证 | Python 默认 storage/，C# 默认空；真实 R2 尚无验证；不用生产凭证 |
 | 设置、语言/类型/角色种子 | 未验证 | 当前初始化与 Python 逐项复核，不能沿用首轮猜测 |
-| 管理员/默认团队初始化 | 部分验证 | `BootstrapService` 已实现 Python `init_db`（站点设置/管理员/默认团队/默认项目集/`ajt`），`Testing` 环境默认关闭、部署默认开启；`BootstrapTests` 4/4、全量 888/888。测试机空库 HTTP 启动/登录待执行 |
+| 管理员/默认团队初始化 | 已验证（测试机空库） | 测试机 `moeflow` 原为空库；新镜像启动日志 `Created bootstrap administrator …`、`Created bootstrap Default Team …`，二次重启无重复创建；验证码 + 密码登录 `POST /v1/user/token` 成功，`/v1/user/info`、`/v1/user/teams` 正常 |
 | 迁移及回滚数据兼容 | 未验证 | production-shaped disposable 副本尚未演练 |
 | 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
@@ -35,7 +35,7 @@
 | Python 全量 suite | 未验证 | 需无 dotenv、owned DB、isolated catalog/storage/broker 的安全环境 |
 | 真实差分全量 suite | 未验证 | 扩展差分真实运行但结果失败；修复 fixture 后须完整重跑 |
 | 可复现镜像 / lock / digest | 已验证（本机 amd64） | 主线 `bc9557f` 内容的原仓库 Dockerfile 两次 `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` 冷构建 ImageID 均为 `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`，层摘要相同；SDK 10.0.403/runtime 10.0.8 按 digest 锁定。仅同 builder、平台和源树，不代表跨构建机或跨平台 |
-| 实际非 root / 文件权限 | 已验证（镜像 smoke） | 最终镜像配置 UID / 实际进程 UID 均 1654；Local tmpfs 可写；Imaging native 依赖解析和真实处理通过。测试机生产形状容器和文件挂载权限仍未验收 |
+| 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | 镜像与进程 UID 均为 1654；测试机 bind mount `./storage` 初始为 root:root 755，首次上传 500 `UnauthorizedAccessException`，`chown -R 1654:1654 storage` 后上传/缩略图/导出全部通过。部署文档必须包含该 chown |
 | health / readiness / 配置校验 | 部分验证 | 最终镜像 `/health/live` 与 Mongo-backed `/health/ready` 均 HTTP 200；配置校验矩阵、反代及部署形状仍未验收 |
 | 日志 / metrics / 告警 | 未验证 | 需可观测性、隐私与故障告警验证 |
 | 备份 / 副本恢复 / 恢复后的业务 smoke | 未验证 | 未执行；不得清理既有测试库 |
@@ -45,7 +45,7 @@
 | 密钥与依赖安全 | 未验证 | 首轮依赖工具未报 vulnerable，不等于完整安全通过；禁止读取真实密钥 |
 | 认证 / 越权 / 授权竞争窗口 | 未验证 | 需按 Python oracle 验证所有修改/删除/管理端及并发路径 |
 | SSRF / allowlist / DNS / redirects | 未验证 | archive 已有防护；Ziteng 和全部出站路径需源码及 HTTP/连接测试 |
-| 上传限制 / 内存放大 | 未验证 | 1 GiB 路径需兼容语义下的限额/并发/流式资源测试 |
+| 上传限制 / 内存放大 | 部分验证 | 测试机真实 multipart 上传图片成功，缩略图 worker 生成 cover/resample，导出 zip 可下载；1 GiB 边界与并发资源仍未验证 |
 | 真实 HTTP 限流 / XFF 防伪造 | 未验证 | limiter/routing 顺序、反代身份和 client_key 均需真实请求验证 |
 | 部署 / 迁移 / 回滚 runbook | 未验证 | 需与本轮命令、镜像、备份和演练证据一致，非纸面声明 |
 
@@ -57,6 +57,32 @@
 4. C# 测试依赖已统一可配置 loopback 端口并聚焦验收；Python 默认 dotenv/重建测试库仍必须安全隔离。
 5. 全 C# / Python / 差分 suite、测试机生产形状部署、备份恢复/回滚、负载长稳、安全自查均未完成。
 6. 未确认可用的生产 dump **副本**位置及所需容量；生产机仅只读，不通过读取生产凭证绕过限制。
+
+
+## 测试机生产形状部署（2026-11-10）
+
+镜像 `shoreline-moeflow:ready-20261110b`（ImageID `sha256:e6cb1a8a738763ba2c8ea638cf955f7368eee751a5e5f666549b5f73a3d0def2`）经 `docker save | ssh | docker load` 部署到 `103.195.188.139:50600` 的 `/root/moeflow-csharp-isolated`（Mongo 4.4.1、Local storage、nginx 反代、无 RabbitMQ）。
+
+已执行的端到端路径（全部经 nginx `http://127.0.0.1:5080/api`）：
+
+1. 空库启动：自动创建管理员、`Default Team`、默认项目集、creator 成员和 `site_setting.ajt`；重启后不重复创建。
+2. 登录：`POST /v1/captchas` → 直接读 `csharp_captcha.digest` 反解 4 位码 → `POST /v1/user/token` 返回 token。
+3. 团队/项目：`POST /v1/teams`、`POST /v1/teams/<id>/project-sets`、`POST /v1/teams/<id>/projects` 均成功，返回结构与 Python 紧凑 BSON 兼容。
+4. 术语库：`POST /v1/teams/<id>/term-banks` 成功。
+5. 文件：multipart `POST /v1/projects/<id>/files` 上传 PNG，`/storage/files/...` 原图 200，worker 生成 `cover-*.webp`/`resample-*.webp` 且 `thumbnail_status=3`。
+6. 标注：`POST /v1/files/<id>/sources` 新增原文，`POST /v1/sources/<id>/translations` 新增韩语翻译。
+7. 导出：`POST /v1/projects/<id>/outputs` 为两个 target 建任务，轮询 target outputs 到 `status=4`，zip 下载 200，含 `translations.txt`、`project.json`、`images/smoke.png`。
+
+部署前置条件（必须写入 runbook）：
+
+```bash
+# 容器进程 UID 1654，bind mount 目录必须先交给该 UID
+chown -R 1654:1654 /path/to/stack/storage
+```
+
+权限未修正时首次上传返回 500，日志为 `Request failed (UnauthorizedAccessException)`；修正后同一请求 200。挂载目录不能是 root:root 755。
+
+本次未覆盖：第二用户/邀请/申请、密码重置/邮件、OCR、MIT 外部消费、跨天 StoragePool、备份恢复、并发与长稳。
 
 数据/任务详细复核：[data-job-parity-audit-20261110.md](data-job-parity-audit-20261110.md)。
 

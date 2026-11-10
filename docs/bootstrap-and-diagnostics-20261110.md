@@ -119,3 +119,11 @@ API port `25241`.
 - Keep `Storage__KeyPrefix=storage/` in deployments that share Python data.
 - The route is present, but `/docs` content is only served when
   `LegacyDocs:Root` points at a directory included in the deployment.
+
+## 测试机实机复核（2026-11-10）
+
+- 部署镜像 `shoreline-moeflow:ready-20261110b`（`sha256:e6cb1a8a…`）到空库测试机；启动日志创建管理员与默认团队，`site_setting`、`project_set`、`team_member`、`team` 各 1 条。
+- 再次 `docker-compose up -d` 后日志无 `Created` 行，团队/用户/站点设置数量不变，确认幂等。
+- 经 nginx 实测：`/api/ping` 200、`/api/health/live` 200、`/api/health/ready` 200、`/api/urls` 200、`/api/error` 500、`/api/warning` 500、`/api/docs/missing.html` 404。
+- 用真实验证码 + 管理员密码登录成功，随后完成团队、项目集、项目、术语库、图片上传、原文/翻译、导出 zip 的真实 HTTP 流程。
+- 注意：Local storage 的 bind mount 必须 `chown -R 1654:1654`，否则上传返回 500 `UnauthorizedAccessException`；已写入生产检查表。
