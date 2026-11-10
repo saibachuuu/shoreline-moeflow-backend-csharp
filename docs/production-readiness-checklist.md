@@ -61,7 +61,7 @@
 
 ## 测试机生产形状部署（2026-11-10）
 
-镜像 `shoreline-moeflow:ready-20261110b`（ImageID `sha256:e6cb1a8a738763ba2c8ea638cf955f7368eee751a5e5f666549b5f73a3d0def2`）经 `docker save | ssh | docker load` 部署到 `103.195.188.139:50600` 的 `/root/moeflow-csharp-isolated`（Mongo 4.4.1、Local storage、nginx 反代、无 RabbitMQ）。
+镜像 `shoreline-moeflow:ready-20261110c`（ImageID `sha256:0d2294ea19037d22ed76b9ea862d50e19d3702d7f919a103803863547ab84124`）经 `docker save | ssh | docker load` 部署到 `103.195.188.139:50600` 的 `/root/moeflow-csharp-isolated`（Mongo 4.4.1、Local storage、nginx 反代、无 RabbitMQ）。
 
 已执行的端到端路径（全部经 nginx `http://127.0.0.1:5080/api`）：
 
@@ -72,6 +72,9 @@
 5. 文件：multipart `POST /v1/projects/<id>/files` 上传 PNG，`/storage/files/...` 原图 200，worker 生成 `cover-*.webp`/`resample-*.webp` 且 `thumbnail_status=3`。
 6. 标注：`POST /v1/files/<id>/sources` 新增原文，`POST /v1/sources/<id>/translations` 新增韩语翻译。
 7. 导出：`POST /v1/projects/<id>/outputs` 为两个 target 建任务，轮询 target outputs 到 `status=4`，zip 下载 200，含 `translations.txt`、`project.json`、`images/smoke.png`。
+8. 第二用户：管理员 `POST /v1/admin/users` 创建 `SmokeTwo`；owner `POST /v1/teams/<id>/invitations`（role member），第二用户登录后 `PATCH /v1/invitations/<id>` `{allow:true}` 接受；`user_count=2`，成员列表返回两人，重复邀请返回 `UserAlreadyJoinedError` 5003。
+9. 密码重置邮件：Stack 临时加入 `axllent/mailpit:v1.27` 与 `Mail__Host=mailpit`/`Mail__Port=1025`；`POST /v1/reset-password-codes` 后 Mailpit 收到主题“重置您的密码”和 6 位验证码；`DELETE /v1/user/password` 成功，旧密码登录 400，新密码登录 200。
+10. Mongo 4.4.1 实测：第二成员加入后 `GET /v1/teams/<id>/members` 首次返回 500（`MongoCommandException`），原因是 `$lookup` 同时使用 `localField` 和 `pipeline`（Mongo 5.0 才支持）；改为 `let` 形式后返回 200。详见 [mongodb-compatibility.md](mongodb-compatibility.md)。
 
 部署前置条件（必须写入 runbook）：
 
@@ -82,7 +85,13 @@ chown -R 1654:1654 /path/to/stack/storage
 
 权限未修正时首次上传返回 500，日志为 `Request failed (UnauthorizedAccessException)`；修正后同一请求 200。挂载目录不能是 root:root 755。
 
-本次未覆盖：第二用户/邀请/申请、密码重置/邮件、OCR、MIT 外部消费、跨天 StoragePool、备份恢复、并发与长稳。
+`docker-compose up -d` 重建后端容器后必须重启 frontend：nginx 在启动时解析 `moeflow-csharp` 上游地址，容器 IP 变化后不重启会持续返回 502（本次实测）。命令：
+
+```bash
+docker-compose restart moeflow-frontend
+```
+
+本次未覆盖：项目申请/审批、修改邮箱、OCR、MIT 外部消费、跨天 StoragePool、备份恢复、并发与长稳。
 
 数据/任务详细复核：[data-job-parity-audit-20261110.md](data-job-parity-audit-20261110.md)。
 

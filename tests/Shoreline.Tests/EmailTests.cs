@@ -28,6 +28,12 @@ public sealed class EmailTests(LocalServices services)
         Assert.Single(results, r => r);
         var row = await services.Store.Collection("csharp_job").Find(new BsonDocument("code_key", "2:" + email)).SingleAsync();
         Assert.Equal(row["_id"], row["payload"]["code_job_id"]);
+        // Rollback compatibility: the same code must be visible to the Python backend.
+        var legacy = await services.Store.Collection("v_code")
+            .Find(new BsonDocument { ["t"] = 2, ["i"] = email }).SingleAsync();
+        Assert.Equal(row["verification"]["c"].AsString, legacy["c"].AsString);
+        Assert.Equal(row["verification"]["e"].ToUniversalTime(), legacy["e"].ToUniversalTime());
+        Assert.Equal(0, legacy["w"].AsInt32);
         using var mailpit = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + TestEnvironment.MailpitPort), Timeout = TimeSpan.FromSeconds(5) };
         JsonElement messages = default;
         for (var attempt = 0; attempt < 50; attempt++)
@@ -55,6 +61,8 @@ public sealed class EmailTests(LocalServices services)
             catch (ApiError) { return false; }
         }));
         Assert.Single(successes, r => r);
+        Assert.Equal(0, await services.Store.Collection("v_code")
+            .CountDocumentsAsync(new BsonDocument { ["t"] = 4, ["i"] = email }));
         var otherEmail = Guid.NewGuid().ToString("N") + "@example.test";
         await codes.IssueAsync(4, otherEmail, default);
         await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Assert.ThrowsAsync<ApiError>(

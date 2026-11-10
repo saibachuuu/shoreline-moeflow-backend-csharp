@@ -44,6 +44,13 @@ public sealed class EmailCodeService(MongoStore store, IConfiguration configurat
             throw new ApiError("VCodeCoolingError", 2004, "验证码冷却中")
             { ResponseMessage = new { wait = seconds, tip = $"请等候{seconds}秒后再试" } };
         }
+        // Dual-write the legacy `v_code` document so a rollback to the Python
+        // backend can still verify a code issued while C# was serving.
+        await store.Collection("v_code").UpdateOneAsync(
+            new BsonDocument { ["t"] = type, ["i"] = email },
+            Builders<BsonDocument>.Update.Set("c", verification["c"]).Set("e", verification["e"])
+                .Set("w", 0).Set("s", now),
+            new UpdateOptions { IsUpsert = true }, ct);
         return wait;
     }
 
@@ -69,11 +76,17 @@ public sealed class EmailCodeService(MongoStore store, IConfiguration configurat
                 System.Text.Encoding.UTF8.GetBytes(content)))
         {
             await collection.UpdateOneAsync(filter, Builders<BsonDocument>.Update.Inc("verification.w", 1), cancellationToken: ct);
+            await store.Collection("v_code").UpdateOneAsync(
+                new BsonDocument { ["t"] = type, ["i"] = email, ["w"] = new BsonDocument("$lt", 5) },
+                Builders<BsonDocument>.Update.Inc("w", 1), cancellationToken: ct);
             throw ApiError.Field(field, "验证码错误");
         }
         var result = await collection.UpdateOneAsync(filter,
             Builders<BsonDocument>.Update.Set("verification.consumed", consume), cancellationToken: ct);
         if (result.MatchedCount != 1) throw ApiError.Field(field, "验证码失效，请重新获取");
+        if (consume)
+            await store.Collection("v_code").DeleteManyAsync(
+                new BsonDocument { ["t"] = type, ["i"] = email, ["c"] = code["c"].AsString }, ct);
     }
 
     private async Task VerifyLegacyAsync(int type, string email, string content, string field, bool consume, CancellationToken ct)
