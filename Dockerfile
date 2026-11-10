@@ -10,6 +10,9 @@ RUN dotnet restore src/Shoreline.Api --locked-mode
 COPY src/Shoreline.Api/ src/Shoreline.Api/
 COPY src/Shoreline.Imaging/ src/Shoreline.Imaging/
 RUN dotnet publish src/Shoreline.Api -c Release --no-restore -o /out /p:UseAppHost=false
+# Publish creates files and directories with wall-clock mtimes. Normalize them
+# before the final COPY so equivalent locked builds produce the same layer.
+RUN find /out -exec touch -h -d '@0' {} +
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.8@sha256:8c0b6857eab7b2aa57884c839bf4678414606bd7d17370f18a842ac5cf414711
 WORKDIR /app

@@ -81,7 +81,7 @@ try {
     }
 
     if (-not $SkipBuild) {
-        Invoke-Docker build --platform linux/amd64 --tag $Image $buildContext | Out-Host
+        Invoke-Docker build --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64 --tag $Image $buildContext | Out-Host
     }
     $result.ImageId = (Invoke-Docker image inspect --format '{{.Id}}' $Image | Out-String).Trim()
     $configuredUser = (Invoke-Docker image inspect --format '{{.Config.User}}' $Image | Out-String).Trim()
