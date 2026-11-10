@@ -1,32 +1,65 @@
 # Image Build Readiness
 
-Status: Dockerfile and smoke-test workflow prepared; end-to-end image validation is blocked by unreliable container registry/NuGet connectivity and unavailable MongoDB test dependency.
+Status: the repository Dockerfile now builds a Linux image from a cold cache, and `tools/Test-ReadinessImage.ps1` passes against that image with a disposable Local storage root and a disposable Mongo. One earlier smoke-script revision failed for real and its evidence is retained.
 
 ## Build inputs
 
 Build from the repository root so both `Shoreline.Api` and its project reference, `Shoreline.Imaging`, are in context. The Dockerfile copies both project files and lock files before a locked restore, then copies both source trees before publishing the API. `.dockerignore` excludes local build output, tests, docs, tools, Git metadata, and environment files.
 
-The base references are pinned to MCR multi-architecture manifest-list digests observed on 2026-11-10 via `https://mcr.microsoft.com/v2/.../manifests/...`:
+Base references are pinned to MCR multi-architecture manifest-list digests verified on 2026-11-10 via `https://mcr.microsoft.com/v2/.../manifests/...`:
 
 - `mcr.microsoft.com/dotnet/sdk:10.0`: index `sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e`; linux/amd64 `sha256:32ac63f80a3dfe48cf91ec1de80b0f394e37e353ee367c7fa87991c2111d22f4`; linux/arm64 `sha256:c99fcb290d1df5a09f0e4e99904d47d6027f966f50be4004088f14f57cf8ebbc`
 - `mcr.microsoft.com/dotnet/aspnet:10.0.8`: index `sha256:8c0b6857eab7b2aa57884c839bf4678414606bd7d17370f18a842ac5cf414711`; linux/amd64 `sha256:a7f704b4b87284c80df9b90ab0e06810a241785204dc191ec05f2b26b5847623`; linux/arm64 `sha256:8f64177b20c835c0b92514afdef8f50ada582c8bbd0970196c9ef1e8f3bf2235`
 
-MCR returned `MANIFEST_UNKNOWN` for `dotnet/sdk:10.0.204`; the repository's `global.json` requests SDK `10.0.204` with `rollForward: latestFeature`. On 2026-11-10, a Docker build using the pinned SDK index executed `dotnet --version` and printed `10.0.403`, which satisfies that roll-forward policy. The throwaway SDK probe image ID was `sha256:77c8481ff6d20e6c55c066359b91cbb746bbc9fd749a3c67af67cde795168451`, not an application image.
+MCR returns `MANIFEST_UNKNOWN` for `dotnet/sdk:10.0.204`; `global.json` requests `10.0.204` with `rollForward: latestFeature`. The pinned SDK image reports `dotnet --version` = `10.0.403`, which satisfies that policy.
 
-No apt packages are installed in the runtime image, avoiding an unpinned apt repository input. The image has no Docker `HEALTHCHECK`; deployment orchestration must independently probe `/health/live` for liveness and `/health/ready` for readiness. Liveness is not evidence of dependency readiness. NuGet lock files and pinned base manifests constrain inputs but do not by themselves guarantee byte-for-byte reproducible builds.
+The runtime stage installs no apt packages, so no unpinned apt repository input exists. The image deliberately has no Docker `HEALTHCHECK`; orchestration must probe `/health/live` for liveness and `/health/ready` for readiness, since the latter depends on Mongo.
 
 ## Validation
 
-On 2026-11-10, `dotnet restore Shoreline.sln --locked-mode` succeeded and `dotnet build Shoreline.sln --no-restore -warnaserror` succeeded with 0 warnings and 0 errors using SDK 10.0.204. `dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --no-restore` failed: 56 passed and 781 failed because the tests require MongoDB at `127.0.0.1:27128`, which was not listening. A focused `FullyQualifiedName~ThumbnailTests` run was also blocked by its shared MongoDB fixture (0 passed, 19 failed).
+Host: Windows .NET SDK `10.0.204`. `dotnet build Shoreline.sln --no-restore -warnaserror` succeeds with 0 warnings and 0 errors.
 
-Docker Engine is Linux (`Docker 26.1.5`, Compose `2.26.1`). An initial `docker pull --platform linux/amd64 mcr.microsoft.com/dotnet/sdk:10.0` failed with `Get "https://mcr.microsoft.com/v2/": EOF`, while another pull reported TLS handshake timeout. A subsequent `docker build --platform linux/amd64 -t shoreline-moeflow-readiness:local .` resolved both base manifests and reached locked restore with both project files, but NuGet downloads failed with `Received an unexpected EOF or 0 bytes from the transport stream.` The build timed out after 180 seconds while base layers were also downloading. Review retry `docker build --progress=plain --platform linux/amd64 -t shoreline-moeflow-readiness:review-20261110 .` completed runtime base layer extraction, but NuGet repeatedly returned the same EOF for `Magick.NET-Q8-AnyCPU.15.1.0` and other packages; it timed out after 300 seconds. No application image was built or started; application image ID, runtime UID, and endpoint status remain unavailable.
+Docker: WSL `Debian`, Engine and Compose `26.1.5`. On 2026-11-10 a cold, no-cache build of the repository Dockerfile succeeded:
 
-The API initializes MongoDB indexes before listening, including for `/health/live`. The script does not accept a Mongo target: it creates an internal Docker network and a new disposable Mongo container using a per-run random name, alias, label and database name, checks those identities before starting the API, and stores Mongo data on tmpfs. It publishes no Mongo port. It removes only resource IDs created by that invocation; the image is retained. On Windows it calls Docker in WSL (default distribution `Debian`). Run once Docker can access MCR and NuGet:
-
-```powershell
-./tools/Test-ReadinessImage.ps1
+```
+docker build --no-cache --progress=plain --platform linux/amd64 -t shoreline-moeflow-readiness:clean-20261110 .
 ```
 
-The script builds a Linux image, starts it on loopback port 25221, verifies `/app/Shoreline.Imaging.dll`, checks its non-root UID, then separately requests `/health/live` and `/health/ready`. It does not read an env file or use Compose. The smoke test itself is not yet end-to-end verified, because image build remains blocked. An independent WSL check successfully created a disposable network and Mongo container, verified their identities, and pinged Mongo; an initial ping attempt exposed WSL argument quoting and was fixed before the successful retry. Both resources from each attempt were removed. Its Mongo test image is currently the locally resolved `mongo:8.0` tag and is not a reproducibility guarantee.
+Locked restore completed for both projects (`Shoreline.Imaging` 20.53 s, `Shoreline.Api` 24.29 s), publish emitted `Shoreline.Imaging.dll` first and then `Shoreline.Api.dll`, and the image ID was `sha256:f264fe4b4265f5c2671a4284d523fb0ec0e394674007947526fffda5f0dd6a90` with configured user `1654` and no healthcheck. Earlier in the session the same build failed repeatedly with NuGet `Received an unexpected EOF or 0 bytes from the transport stream.`; that network failure later cleared, and it is not a Dockerfile defect.
 
-Record the command results, image ID, effective UID, health state, and MCR manifest digests here after running in an environment with registry access. Do not report an image validation until those runtime checks pass.
+`tools/Test-ReadinessImage.ps1 -SkipBuild -Image shoreline-moeflow-readiness:clean-20261110` passed:
+
+| Check | Result |
+| --- | --- |
+| Image ID | `sha256:f264fe4b4265f5c2671a4284d523fb0ec0e394674007947526fffda5f0dd6a90` |
+| Configured user / process UID | `1654` / `1654` (`app:app`, non-root) |
+| `Shoreline.Imaging.dll` in `/app` | present |
+| Local storage root | `test -w`, create, delete succeeded as UID 1654 |
+| Native Magick | `ldd` on `Magick.Native-Q8-x64.dll.so` resolved every shared object |
+| Native decode | probe printed `MAGICK_OK format=Xc bytes=310; IMAGING_OK cover=180x140 resample=2x2` |
+| `GET /health/live` | HTTP 200 |
+| `GET /health/ready` | HTTP 200 |
+
+The same checks passed against the offline-derived review image `sha256:2608afbcb8f7efbb0f7c89097ef5fd18b2079dcc6db88daee4b84d52969a2fc9`, which was prepared outside this Dockerfile and therefore is supporting evidence, not acceptance of the original build.
+
+### Recorded failure
+
+Revision `ca374f8` of the smoke script set Mongo but no `Storage:*` values. A real run against that image produced:
+
+```
+Unhandled exception. System.InvalidOperationException: Storage:Bucket is required for S3 storage.
+   at Shoreline.Api.Storage.ObjectStorage.Required(IConfiguration configuration, String key) in /src/src/Shoreline.Api/Storage/ObjectStorage.cs:line 193
+   at Shoreline.Api.Storage.ObjectStorage..ctor(IConfiguration configuration, ILogger`1 logger) in /src/src/Shoreline.Api/Storage/ObjectStorage.cs:line 55
+```
+
+The container exited with code 139 before listening, so liveness was never reachable. The current script reproduces this on demand with `-SimulateStorageFailure` and fails with `API bootstrap failed (exited): Unhandled exception. System.InvalidOperationException: Storage:Bucket is required for S3 storage.` instead of reporting a pass.
+
+## Smoke test design
+
+- Only owned resources: a per-run random network, Mongo container, API container, database name and label. Each is identity-checked (label, container name, attached network ID, alias) before use, and only those container/network IDs are removed. Mongo runs on tmpfs with no published port; the API publishes only `127.0.0.1:25221`.
+- No external storage or credentials: `Storage__Type=Local`, a tmpfs root mounted `uid=1654,gid=1654,mode=0700`, and a synthetic `Storage__Domain=http://127.0.0.1:25221/readiness-objects`. `Auth__Secret` is a per-run 64-character hex value and `Auth__AdminEmail` is a per-run `@example.invalid` address.
+- Evidence is written to `%TEMP%\shoreline-readiness-<token>.log` with container state and the last 60 log lines, so startup failures stay inspectable after cleanup.
+- Startup is checked before any HTTP probe; if the container exits, the script reports the first exception line and the evidence path.
+- The Imaging probe binary is built in a temporary directory and mounted read-only; it is removed afterwards. The only published port is the exclusive `25221` for the API.
+
+Known limitations: the test requires the host `dotnet` SDK and cached NuGet packages to compile the Imaging probe, the Mongo image is pinned to `mongo:8.0@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142` but other packages are not image-level pinned, and no orchestration healthcheck is defined in the image.
