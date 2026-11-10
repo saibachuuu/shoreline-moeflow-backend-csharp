@@ -326,8 +326,15 @@ translation 已提交但确认丢失的重试收敛。旧无 stable-id journal �
     2 source、1 translation、1 target。
   - 空文本与多 target：`is=2`、`it=""`、无 job。
   - `beginner`/无 `CREATE_PROJECT` 的团队成员：103，project/target/job 计数不变。
-- 回归子集（`ProjectTests` + `ProjectImportTests` + `TeamDissolutionTests` +
-  新 HTTP 测试）：61 passed / 0 failed / 0 skipped。
+- 回归子集：`ProjectTests` + `ProjectImportTests` + `TeamDissolutionTests`
+  56 passed / 0 failed / 0 skipped；加上新 HTTP 测试 5 passed，合计
+  61 passed / 0 failed / 0 skipped（分两次运行，同一 N5 随机库栈）。
+- `git diff --check f2a7325..HEAD`：干净（此前 docs 第 335 行 CRLF/trailing
+  whitespace 已修为 LF，且无 BOM 变更）。
+- 既有测试修改仅为默认值追随：`ProjectImportTests.cs` 3 处、
+  `TeamDissolutionTests.cs` 1 处把 `is == 1` 改为
+  `ProjectImportService.Succeeded`（Python 默认 `SUCCEEDED=2`），未删除或放宽
+  任何断言（同处仍有 `it==""`、`ij` 缺失、job 计数为 0 等断言）。
 - 全量 `dotnet test Shoreline.sln` 曾在本轮 N5 Mongo 上启动，但 Mongo 容器
   (`mem_limit: 512m`) 在约 25 分钟后被 OOM kill（`OOMKilled=true`, exit 137），
   因此**没有**可信的全量通过结果；本文不把它当作验收证据。
