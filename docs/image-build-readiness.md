@@ -28,7 +28,20 @@ docker build --no-cache --platform linux/amd64 -t shoreline-moeflow-readiness:ta
 
 Run 1: locked restore of both projects (`Shoreline.Imaging` 16.51 s, `Shoreline.Api` 1.95 min), publish emitted `Shoreline.Imaging.dll` then `Shoreline.Api.dll`, image ID `sha256:b4ecaccdc482bc4ac35da2e9208589416e8279f0093126132fc6188848068e58`.
 Run 2: locked restore (`Shoreline.Imaging` 24.25 s, `Shoreline.Api` 32.74 s), image ID `sha256:2adcc55f94ec0429d317618736185b726abad7c31f1f61452c841015f10eeec5`.
-Both images have configured user `1654` and no healthcheck, and their image config (env, entrypoint, user) is identical. Their final filesystem layer differs, so the ImageIDs differ; builds are not byte-for-byte reproducible even with pinned bases. An earlier build of the pre-change Dockerfile also succeeded cold (`sha256:f264fe4b4265f5c2671a4284d523fb0ec0e394674007947526fffda5f0dd6a90`). Earlier in the session builds failed repeatedly with NuGet `Received an unexpected EOF or 0 bytes from the transport stream.`; that network failure later cleared and is not a Dockerfile defect.
+Both images have configured user `1654` and no healthcheck, and their image config (env, entrypoint, user) is identical. Their final filesystem layer differs, so their ImageIDs differ. This was before the timestamp normalization below. An earlier build of the pre-change Dockerfile also succeeded cold (`sha256:f264fe4b4265f5c2671a4284d523fb0ec0e394674007947526fffda5f0dd6a90`). Earlier in the session builds failed repeatedly with NuGet `Received an unexpected EOF or 0 bytes from the transport stream.`; that network failure later cleared and is not a Dockerfile defect.
+
+### Reproducibility with explicit build epoch
+
+The two earlier images had identical SHA-256 hashes for every `/app` file but different modification times on generated output and directories. The Dockerfile now normalizes `/out` timestamps to Unix epoch zero after publish. The supported reproducible build invocation must also set BuildKit's `SOURCE_DATE_EPOCH=0`, including the image configuration timestamps; a plain `docker build` without this argument is not claimed to be reproducible. The smoke script supplies it when it builds.
+
+On the same WSL Docker 26.1.5 builder and identical source tree, two independent runs of:
+
+```
+docker build --no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64 -t shoreline-moeflow-readiness:repro-a-20261110 .
+docker build --no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64 -t shoreline-moeflow-readiness:repro-b-20261110 .
+```
+
+both produced ImageID `sha256:61b67b429da83d78e9d79492a65aeec65d531bfe7b17e9a36300b55fee4fead9` with identical layer digests and creation time `1970-01-01T00:00:00Z`. `tools/Test-ReadinessImage.ps1 -SkipBuild -Image shoreline-moeflow-readiness:repro-a-20261110` passed non-root UID 1654, writable disposable local storage, native Imaging processing, `/health/live` 200 and `/health/ready` 200; evidence is `C:\Users\88888888\AppData\Local\Temp\shoreline-readiness-7b38a1bcf67842b4af3c9aa156a45cd8.log`. This only proves these two builds on this machine, architecture, builder and source tree. Other platforms, builders, source metadata and the final release image still require separate verification. Normalized published file mtimes are intentional and must be considered if future runtime code depends on them.
 
 `tools/Test-ReadinessImage.ps1 -SkipBuild -Image shoreline-moeflow-readiness:tagged-20261110` passed:
 
