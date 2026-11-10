@@ -52,7 +52,7 @@ public static class UserEndpoints
             var filter = new BsonDocument("$or", new BsonArray { new BsonDocument("ns", pattern), new BsonDocument("asrch", pattern) });
             var users = store.Collection("user");
             var count = await users.CountDocumentsAsync(filter, cancellationToken: ct);
-            var rows = await users.Find(filter).Sort(new BsonDocument("_id", 1)).Skip(page.Skip).Limit(page.Limit).ToListAsync(ct);
+            var rows = await users.Find(filter).Skip(page.Skip).Limit(page.Limit).ToListAsync(ct);
             page.Apply(ctx.Response, count);
             return await Task.WhenAll(rows.Select(row => view.ToApiAsync(row, ctx)));
         });
@@ -101,7 +101,14 @@ public sealed class UserView(IConfiguration configuration, IServiceProvider serv
     public async Task<Dictionary<string, object?>> ToApiAsync(BsonDocument user, HttpContext ctx)
     {
         var locale = user.Text("l", "auto");
-        var name = locale switch { "zh_CN" => "中文（简体）", "zh_TW" => "中文（繁体）", "en" => "英文", _ => "自动" };
+        var chinese = LanguageCatalog.ChinesePreferred(ctx.Request.GetTypedHeaders().AcceptLanguage);
+        var name = locale switch
+        {
+            "zh_CN" => chinese ? "中文（简体）" : "Chinese (Simplified)",
+            "zh_TW" => chinese ? "中文（繁体）" : "Chinese (Traditional)",
+            "en" => chinese ? "英文" : "English",
+            _ => chinese ? "自动" : "Auto"
+        };
         var avatar = user.Text("a");
         var result = new Dictionary<string, object?>
         {
@@ -109,7 +116,7 @@ public sealed class UserView(IConfiguration configuration, IServiceProvider serv
             ["signature"] = user.Text("s"), ["has_avatar"] = avatar.Length > 0,
             ["avatar"] = avatar.Length == 0 ? configuration["Storage:DefaultUserAvatar"] :
                 await services.GetRequiredService<ObjectStorage>().SignGetAsync(AvatarStoragePrefixes.User(configuration) + avatar, TimeSpan.FromHours(1)),
-            ["locale"] = new { id = locale, name, intro = locale == "auto" ? "遵循浏览器设置" : "" },
+            ["locale"] = new { id = locale, name, intro = locale == "auto" ? (chinese ? "遵循浏览器设置" : "Follow browser settings") : "" },
             ["admin"] = user.Flag("admin"),
             ["aliases"] = user.GetValue("as", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray()
         };

@@ -199,7 +199,9 @@ public sealed class TeamService(MongoStore store, TeamMemberService members, Ide
             ["has_avatar"] = avatar.Length != 0,
             ["worker_qualification_mode"] = team.Text("wqm", "qualified"),
             ["base_tag"] = snapshot.SourceTags.FirstOrDefault(),
-            ["effective_permissions"] = snapshot.EffectivePermissions.Order(StringComparer.Ordinal).ToArray()
+            ["effective_permissions"] = snapshot.EffectivePermissions
+                .Where(p => p != "team:AUTO_BECOME_PROJECT_ADMIN")
+                .Order(StringComparer.Ordinal).ToArray()
         };
         if (compact) return view;
         object? role = null;

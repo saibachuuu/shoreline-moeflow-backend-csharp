@@ -98,7 +98,7 @@ public static class ProjectEndpoints
             var rows = await store.Collection("project_set").Find(filter)
                 .Sort(new BsonDocument("_id", 1)).Skip(page.Skip).Limit(page.Limit).ToListAsync(ct);
             page.Apply(context.Response, count);
-            return new { project_sets = rows.Select(ProjectService.ProjectSetListView).ToArray() };
+            return rows.Select(ProjectService.ProjectSetListView).ToArray();
         });
         teamSets.MapPost("", async (string teamId, JsonElement data, HttpContext context, CurrentUser current, ProjectService projects, CancellationToken ct) =>
         {

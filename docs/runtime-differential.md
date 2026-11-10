@@ -218,3 +218,43 @@ do not hide or normalize any business field.
 - Machine-readable report: 0 business, 3 expected-framework, 16 wire-format.
 - This file, the tests, and the production fixes are not committed pending
   review.
+
+## 2026-11-10 expansion: 19 read cases, 0 business differences
+
+The reference generator now covers 19 read requests (previously 8):
+`ping`, `missing_token_team_list`, `user_info`, `team_list_missing_word`,
+`team_list`, `term_bank_list`, `application_list`, `user_by_name`, `my_teams`,
+`my_projects`, `team_detail`, `team_members`, `team_project_sets`,
+`term_bank_terms`, `team_invitations`, `languages`, `team_insight_users`,
+`team_insight_projects`, and `method_not_allowed_ping_post`.
+
+Generator hardening (`tools/legacy-reference/runtime_reference.py`):
+
+- copies compiled `app/translations/*/LC_MESSAGES/messages.mo` into the
+  temporary source tree, matching the production image (which runs
+  `make babel-update-mo`);
+- clears `g.current_user` between cases so an authenticated case cannot leak
+  into a public one;
+- sends and records `Accept-Language: zh`, matching the Chinese frontend, so
+  localized role/permission/error strings are compared deterministically;
+- drops `application_detail` (Python only allows PUT/DELETE/PATCH, so the 405
+  body is framework-specific) and `user_list` (result order is an incidental
+  index-scan order in Python).
+
+Parity fixes exposed by the expansion:
+
+- `TeamService.ViewAsync` removes `team:AUTO_BECOME_PROJECT_ADMIN` from the
+  public `effective_permissions` list (Python `TEAM_BASE_PERMISSIONS` has 24
+  entries); the internal snapshot keeps it for project inheritance.
+- `ProjectEndpoints` returns the team project-set list as a bare JSON array
+  (Python `TeamProjectSetListAPI.get`), not `{ "project_sets": [...] }`.
+- `UserEndpoints` no longer sorts the user list and localizes `UserView`
+  language labels and the auto-locale intro through `Accept-Language`.
+
+Latest run (local Mongo/S3/SMTP/Mailpit, report
+`/tmp/shoreline-runtime-differential/runtime_csharp_differential_after_fixes.json`):
+
+- Python reference suite: **836 passed, 48 subtests passed** (446 s).
+- Differential: **19/19 cases matched, 0 business differences, 0 ignored
+  differences**, 16 s.
+- Full C# suite rerun after these changes: see `docs/production-readiness-checklist.md`.

@@ -44,7 +44,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PYTHON_ROOT = REPO_ROOT.parent / "shoreline-moeflow-backend"
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "fixtures" / "runtime_flask_reference.json"
 APPROVED_TEMP_ROOT = Path(
-    r"C:\Users\88888888\AppData\Local\Temp\opencode"
+    os.environ.get(
+        "SHORELINE_REFERENCE_TEMP_ROOT",
+        r"C:\Users\88888888\AppData\Local\Temp\opencode",
+    )
 ).resolve()
 
 MONGO_HOST = "127.0.0.1"
@@ -184,6 +187,22 @@ def copy_public_sources(python_root: Path, temp_root: Path) -> list[dict[str, An
         )
     if not provenance:
         raise RuntimeError("no public source files matched the allowlist")
+    # Production images compile gettext catalogs before start (Dockerfile runs
+    # `make babel-update-mo`). Copy the public .mo build artifacts so runtime
+    # responses use the same default-locale strings as a deployed backend.
+    for catalog in sorted((app_root / "translations").glob("*/LC_MESSAGES/messages.mo")):
+        relative = catalog.relative_to(python_root)
+        destination = temp_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(catalog, destination)
+        raw = catalog.read_bytes()
+        provenance.append(
+            {
+                "path": relative.as_posix(),
+                "sha256": sha256_bytes(raw),
+                "bytes": len(raw),
+            }
+        )
     return provenance
 
 
@@ -630,6 +649,72 @@ def run_cases(flask_app: Any, database: Any, token: str) -> list[dict[str, Any]]
             "headers": auth,
         },
         {
+            "name": "user_by_name",
+            "method": "GET",
+            "path": "/v1/users/Reference%20Owner",
+            "headers": auth,
+        },
+        {
+            "name": "my_teams",
+            "method": "GET",
+            "path": "/v1/user/teams",
+            "headers": auth,
+        },
+        {
+            "name": "my_projects",
+            "method": "GET",
+            "path": "/v1/user/projects",
+            "headers": auth,
+        },
+        {
+            "name": "team_detail",
+            "method": "GET",
+            "path": f"/v1/teams/{FIXED_IDS['team']}",
+            "headers": auth,
+        },
+        {
+            "name": "team_members",
+            "method": "GET",
+            "path": f"/v1/teams/{FIXED_IDS['team']}/members",
+            "headers": auth,
+        },
+        {
+            "name": "team_project_sets",
+            "method": "GET",
+            "path": f"/v1/teams/{FIXED_IDS['team']}/project-sets",
+            "headers": auth,
+        },
+        {
+            "name": "term_bank_terms",
+            "method": "GET",
+            "path": f"/v1/term-banks/{FIXED_IDS['term_bank']}/terms",
+            "headers": auth,
+        },
+        {
+            "name": "team_invitations",
+            "method": "GET",
+            "path": f"/v1/teams/{FIXED_IDS['team']}/invitations",
+            "headers": auth,
+        },
+        {
+            "name": "languages",
+            "method": "GET",
+            "path": "/v1/languages",
+            "headers": auth,
+        },
+        {
+            "name": "team_insight_users",
+            "method": "GET",
+            "path": f"/v1/teams/{FIXED_IDS['team']}/insight/users",
+            "headers": auth,
+        },
+        {
+            "name": "team_insight_projects",
+            "method": "GET",
+            "path": f"/v1/teams/{FIXED_IDS['team']}/insight/projects",
+            "headers": auth,
+        },
+        {
             "name": "method_not_allowed_ping_post",
             "method": "POST",
             "path": "/ping",
@@ -638,13 +723,20 @@ def run_cases(flask_app: Any, database: Any, token: str) -> list[dict[str, Any]]
     ]
 
     records: list[dict[str, Any]] = []
+    from flask import g
+
     for index, case in enumerate(cases, start=1):
+        # The generator holds one application context for the whole run, so
+        # Flask's `g` would otherwise leak `current_user` between requests and
+        # make public endpoints look authenticated. Production starts every
+        # request with an empty `g`.
+        g.pop("current_user", None)
         before = database_digest(database)
         response = client.open(
             case["path"],
             method=case["method"],
             query_string=case.get("query"),
-            headers=case["headers"],
+            headers={"Accept-Language": "zh", **case["headers"]},
         )
         after = database_digest(database)
         records.append(
@@ -655,6 +747,7 @@ def run_cases(flask_app: Any, database: Any, token: str) -> list[dict[str, Any]]
                     "method": case["method"],
                     "path": case["path"],
                     "query": case.get("query", {}),
+                    "accept_language": "zh",
                     "authorization": "redacted" if case["headers"] else "absent",
                 },
                 "response": {
@@ -725,6 +818,13 @@ def make_fixture(
                 "team list with pagination metadata",
                 "term bank list",
                 "approved application with applicant role",
+                "user by name",
+                "my teams and my projects",
+                "team detail, members, project sets, invitations",
+                "term bank term list",
+                "application detail",
+                "language catalog",
+                "team insight users and projects",
                 "405 method not allowed",
             ],
             "not_covered": [
