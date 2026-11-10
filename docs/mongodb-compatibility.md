@@ -47,3 +47,10 @@ remaining team invitation flow passed (see the production checklist).
   a combined `localField` are supported by 4.4.
 - The local test Mongo is 8.x; run at least the deployment smoke against the
   real 4.4 test-machine stack after any aggregation change.
+
+## Full suite on 4.4.1
+
+On 2026-11-10 the complete C# integration suite was rerun against a local
+`mongo:4.4.1` container (test port 27241): **888 passed / 0 failed / 0 skipped**
+in 5 m 39 s. The same suite is also green on Mongo 8.x. Run this variant before
+release whenever aggregation or index code changes.
