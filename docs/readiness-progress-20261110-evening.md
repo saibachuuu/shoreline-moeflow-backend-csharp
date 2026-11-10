@@ -27,10 +27,13 @@ load, migration, or production acceptance. No README production-status wording w
   Linux/amd64 builds of the branch Dockerfile succeeded; the tested branch image
   `sha256:b4ecaccdc482bc4ac35da2e9208589416e8279f0093126132fc6188848068e58`
   ran as UID 1654, loaded and exercised native Imaging, wrote disposable local
-  storage, and returned 200 from live and ready endpoints. The second clean build
-  produced a different ImageID: **byte-for-byte reproducibility is unverified and
-  currently fails**. No Docker HEALTHCHECK is included. This smoke preceded merging
-  subsequent main changes; it is not final-image acceptance. See
+  storage, and returned 200 from live and ready endpoints. A further cold build/smoke
+  against main content at `bc9557f` (no Dockerfile changes since) produced the
+  identical ImageID twice: `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`.
+  Runtime UID was 1654, Imaging processed a sample, Local storage was writable, and
+  live/ready both returned 200. This proves reproducibility only for the same source,
+  builder and amd64 platform. The smoke removed only its own resources and did not
+  alter the running user stack. No Docker HEALTHCHECK is included. See
   `docs/image-build-readiness.md` for commands and boundaries.
 
 The main `dotnet build Shoreline.sln --nologo` after these merges reported **0
@@ -63,9 +66,10 @@ Mongo's 63-character limit; it was shortened before the 47/47 rerun.
   `partner_search` writes/reads and a real Python token. Its test currently **fails**:
   profile writes add BSON `csharp_profile_revision`, and CORS/HTTP headers differ.
   The profile revision protects C# optimistic concurrency and must not simply be
-  removed to match a digest. Its effect on Python strict model loading requires
-  actual isolated Flask verification. The synthetic Flask CORS configuration also
-  supplied strings where lists were required; repair and rerun are in progress.
+  removed to match a digest. An isolated real Flask probe confirmed Python
+  MongoEngine raises `FieldDoesNotExist` when loading a user with
+  `csharp_profile_revision`. CORS synthetic defaults were corrected against Python
+  config and the real difference rerun; unresolved policy/wire differences remain.
 - Security-code delivery and rollback interoperability, the third legacy index,
   historical migrations, real R2, retry/lease/crash coverage for all jobs, optional
   routes, MIT consumers, SSRF/trusted proxies and resource/security controls remain

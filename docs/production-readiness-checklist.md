@@ -34,9 +34,9 @@
 | C# 全量 suite | 未验证 | 全量无有效通过证据；历史缺依赖 40/59、Mongo OOM 56/781 均不当作验收结果 |
 | Python 全量 suite | 未验证 | 需无 dotenv、owned DB、isolated catalog/storage/broker 的安全环境 |
 | 真实差分全量 suite | 未验证 | 扩展差分真实运行但结果失败；修复 fixture 后须完整重跑 |
-| 可复现镜像 / lock / digest | 未验证 | `22f63cf` 补 Imaging、锁定 SDK 10.0.403/runtime 10.0.8 digests；`bc9557f` 固定发布产物时间戳后，同一 builder 两次无缓存 Linux/amd64 ImageID 相同；最终主分支镜像尚待烟测验收 |
-| 实际非 root / 文件权限 | 未验证 | 独立分支实测 UID 1654、Local tmpfs 可写、Imaging 可解码；待最终主分支镜像复验 |
-| health / readiness / 配置校验 | 未验证 | 独立镜像 smoke 中 `/health/live`、`/health/ready` 为 200；完整配置校验及最终镜像仍未验收 |
+| 可复现镜像 / lock / digest | 已验证（本机 amd64） | 主线 `bc9557f` 内容的原仓库 Dockerfile 两次 `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` 冷构建 ImageID 均为 `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`，层摘要相同；SDK 10.0.403/runtime 10.0.8 按 digest 锁定。仅同 builder、平台和源树，不代表跨构建机或跨平台 |
+| 实际非 root / 文件权限 | 已验证（镜像 smoke） | 最终镜像配置 UID / 实际进程 UID 均 1654；Local tmpfs 可写；Imaging native 依赖解析和真实处理通过。测试机生产形状容器和文件挂载权限仍未验收 |
+| health / readiness / 配置校验 | 部分验证 | 最终镜像 `/health/live` 与 Mongo-backed `/health/ready` 均 HTTP 200；配置校验矩阵、反代及部署形状仍未验收 |
 | 日志 / metrics / 告警 | 未验证 | 需可观测性、隐私与故障告警验证 |
 | 备份 / 副本恢复 / 恢复后的业务 smoke | 未验证 | 未执行；不得清理既有测试库 |
 | TLS / 反代 / trusted proxy | 未验证 | 不读取生产 env/凭证；需 disposable 测试栈验收 |
