@@ -31,7 +31,7 @@
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
 | 最终合并后的 dotnet build 0/0 | 未验证 | 当前主分支 0/0；Bootstrap 接线与其他未合并修复最终定稿后还须重跑 |
-| C# 全量 suite | 未验证 | 全量无有效通过证据；历史缺依赖 40/59、Mongo OOM 56/781 均不当作验收结果 |
+| C# 全量 suite | 未验证 | 2026-11-10 晚间主线全量尝试未完成：专属 Mongo 配 1 GiB 限额后 14 秒以 exit 137 / `OOMKilled=true` 退出；`dotnet test` 因后续 Mongo 连接拒绝运行至 1800 秒 timeout，控制台有 306 条 `[FAIL]` 标记但无完整计数/TRX，不能当代码全量失败数或通过数。隔离栈已 stop。后续须提高独占 Mongo 可用内存后重跑 |
 | Python 全量 suite | 未验证 | 需无 dotenv、owned DB、isolated catalog/storage/broker 的安全环境 |
 | 真实差分全量 suite | 未验证 | 扩展差分真实运行但结果失败；修复 fixture 后须完整重跑 |
 | 可复现镜像 / lock / digest | 已验证（本机 amd64） | 主线 `bc9557f` 内容的原仓库 Dockerfile 两次 `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` 冷构建 ImageID 均为 `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`，层摘要相同；SDK 10.0.403/runtime 10.0.8 按 digest 锁定。仅同 builder、平台和源树，不代表跨构建机或跨平台 |

@@ -95,3 +95,18 @@ Mongo's 63-character limit; it was shortened before the 47/47 rerun.
   deployment, migration/backup/rollback, load and soak remain unverified. An earlier
   full-test attempt suffered Mongo OOM; it is not a pass. Do not read production
   credentials or treat S3Mock as evidence of real R2 authorization.
+
+## C# full-suite attempt (incomplete)
+
+At 2026-11-10 22:51 local, `dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj
+--no-build --nologo` was started with isolated Compose ports 27341/29341/21341/28341/
+25341. Mongo had a 1 GiB cgroup limit and 0.35 GiB WiredTiger cache. The owned Mongo
+container exited after 14 seconds with code 137 and `OOMKilled=true`; tests then
+received connection-refused/server-selection failures. The run reached the 1800 s
+command timeout and exited 1. Console capture contains 306 `[FAIL]` markers, but no
+complete summary or TRX was produced, so there is no authoritative total/pass/fail/
+skip count. This is an infrastructure-invalid full run, not a result to call green
+or a reliable count of product failures. Compose stopped only this run's S3/Mailpit
+and confirmed the test Mongo exited; the running user stack remained up. Do not
+retry before power-off. A later run needs a larger dedicated Mongo memory budget and
+must preserve full TRX output.
