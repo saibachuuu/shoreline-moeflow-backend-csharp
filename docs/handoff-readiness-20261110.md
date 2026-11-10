@@ -71,7 +71,10 @@ WSL 空闲退出导致本轮容器停止，退出码 Mongo/Mailpit 0、S3 143、
 | `audit/readiness-data-jobs-20261110` / 原 data worktree 的历史分支 | 无代码提交；20-task 审计已写 docs |
 | `audit/readiness-ops-20261110` / 原 ops worktree 的历史分支 | 无代码提交；诊断已写 docs |
 | `fix/readiness-image-20261110` / `.readiness-worktrees/moeflow-readiness-ops` | **未合并**，`a93a1f3` 仅 WIP 文档；没有修 Dockerfile、没有镜像构建/非 root 验收，LSP 新任务证据缺失；明确不接受为完成 |
-| `fix/readiness-bootstrap-20261110` / `.readiness-worktrees/moeflow-readiness-data-jobs` | 收尾结果另补，不能预先认定已合并或通过 |
+| `fix/readiness-bootstrap-20261110` / `.readiness-worktrees/moeflow-readiness-data-jobs` | **未合并**，`60f77ef` 保存 WIP 新服务、注册扩展、6 个 Mongo 测试及兼容文档，共 4 个新增文件；主只做保存提交，没有认定业务通过 |
+
+Bootstrap 代理没有返回完整最终交付。按关机要求调用该子会话的 OpenCode V2 `interrupt?resume=false`，返回 `interrupted=false`（已经空闲），inbox 为空。随后主保存其已暂存代码及未跟踪兼容文档，避免关机丢失；没有调用该服务或修改 `Program.cs`。
+其文档记录 build 0/0 和独占 worktree LSP 成功，但主尚未独立复核完整实现。主直接核对 Temp `readiness-bootstrap-20261110/bootstrap-pure-20261110.trx` 为 18/18；`bootstrap-core-20261110.trx` 为 0/6，六项全失败。记录原因是独占 Mongo 在 WSL 退出后停止、setup/cleanup 连接失败，不能据此声明 fresh/concurrent/crash 已通过；并发、各 checkpoint、unknown-commit、角色引用和实际启动接线验收均待完成。收尾未重启测试或继续修业务。
 
 `.readiness-worktrees` 位于 workspace 下但在主仓外，防 LSP project-directory guard 拒绝 Temp 路径；不要跨 worktree 改文件。
 每 agent 独占端口段（Mongo/S3/SMTP/Mailpit/API）：data N1 `27211/29211/21211/28211/25211`，ops N2 `27221/29221/21221/28221/25221`，isolation N3 `27231/29231/21231/28231/25231`。
@@ -90,6 +93,7 @@ WSL 空闲退出导致本轮容器停止，退出码 Mongo/Mailpit 0、S3 143、
 观察到另有 `debug-s3`（本日 08:41:47Z 创建，端口 29999），代理最终报告没有声明其来源；不擅自删除或变更，该容器检查时已退出。
 不停止既有 `moeflow-deploy-*`、`ar-io-gateway`，不改 Docker daemon / WSL / 用户配置。
 镜像任务没有创建 `shoreline-readiness-image:20261110`，没有 ImageID/UID 可验收。
+所有本轮代理均完成或已空闲；没有继续派发任务。Bootstrap 与镜像两个 WIP 分支保留，不能以“已保存”等同于“已完成修复”。
 生产和测试服务器在收尾阶段没有连接；生产始终只读，没有读取 `.env*`/生产 env/凭证。
 
 ## 继续工作的起点（下次用户恢复任务后）
