@@ -154,8 +154,10 @@ public sealed class IdentityTagPolicyService(MongoStore store, TeamMemberService
         if (scope == "team")
             return await store.Collection("team_member").Find(new BsonDocument { ["team"] = team["_id"], ["tags"] = code }).AnyAsync(ct);
         BsonDocument[] pipeline = [new("$match", new BsonDocument("tags", code)),
-            new("$lookup", new BsonDocument { ["from"] = "project", ["localField"] = "project", ["foreignField"] = "_id", ["as"] = "projects",
-                ["pipeline"] = new BsonArray { new BsonDocument("$match", new BsonDocument("t", team["_id"])), new BsonDocument("$project", new BsonDocument("_id", 1)) } }),
+            new("$lookup", new BsonDocument { ["from"] = "project", ["let"] = new BsonDocument("pid", "$project"), ["as"] = "projects",
+                ["pipeline"] = new BsonArray {
+                    new BsonDocument("$match", new BsonDocument("$expr", new BsonDocument("$eq", new BsonArray { "$_id", "$$pid" }))),
+                    new BsonDocument("$match", new BsonDocument("t", team["_id"])), new BsonDocument("$project", new BsonDocument("_id", 1)) } }),
             new("$match", new BsonDocument("projects.0", new BsonDocument("$exists", true))), new("$limit", 1)];
         return await store.Collection("project_member").Aggregate<BsonDocument>(pipeline).AnyAsync(ct);
     }

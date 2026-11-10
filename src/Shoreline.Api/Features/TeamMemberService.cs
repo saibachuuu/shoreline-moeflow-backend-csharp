@@ -299,9 +299,12 @@ public sealed class TeamMemberService(MongoStore store, IdentityPermissions perm
         var pipeline = new List<BsonDocument>
         {
             new("$match", match),
-            new("$lookup", new BsonDocument { ["from"] = "user", ["localField"] = "user", ["foreignField"] = "_id", ["as"] = "csharp_list_user",
-                ["pipeline"] = new BsonArray { new BsonDocument("$project", new BsonDocument { ["n"] = 1, ["ns"] = 1, ["asrch"] = 1,
-                    ["as"] = 1, ["ddn"] = 1, ["s"] = 1, ["a"] = 1, ["l"] = 1, ["admin"] = 1, ["e"] = 1 }) } }),
+            new("$lookup", new BsonDocument { ["from"] = "user", ["let"] = new BsonDocument("uid", "$user"),
+                ["pipeline"] = new BsonArray {
+                    new BsonDocument("$match", new BsonDocument("$expr", new BsonDocument("$eq", new BsonArray { "$_id", "$$uid" }))),
+                    new BsonDocument("$project", new BsonDocument { ["n"] = 1, ["ns"] = 1, ["asrch"] = 1,
+                    ["as"] = 1, ["ddn"] = 1, ["s"] = 1, ["a"] = 1, ["l"] = 1, ["admin"] = 1, ["e"] = 1 }) },
+                ["as"] = "csharp_list_user" }),
             new("$unwind", new BsonDocument { ["path"] = "$csharp_list_user", ["preserveNullAndEmptyArrays"] = true })
         };
         var needle = SearchText.Normalize(word ?? "");

@@ -21,7 +21,7 @@
 | 真实 Flask / C# 同种子 BSON | 未验证 | 旧 fixture 有局部种子；需完整 app / modules、可复现 fresh run |
 | 真实差分读与成功写 | 部分验证 | 真实 Flask 生成 19 个只读用例，C# replay **19/19 匹配，0 business differences**（`docs/runtime-differential.md`）；写请求仍未纳入差分，测试机 E2E 已覆盖建团队/项目/术语库/上传/源文/译文/导出 |
 | 差分 status/body/error/headers/前后 digest | 已验证（只读 19 例） | 19 例 status/body/前后 digest 全匹配；框架级 wire 差异单独记录；写请求和 4 个可选模块仍未覆盖 |
-| BSON collection/alias/type/index/unique | 部分验证 | 三个 team_member 索引（含 `team_member_alias_search_v1` on `{team,status,asrch}`）由 `MongoSchemaReadinessTests` 验证；冲突索引拒绝替换；测试机空库 BSON 字段与 Python 对齐。生产 dump 副本上的全集合对比未执行 |
+| BSON collection/alias/type/index/unique | 部分验证 | Mongo 4.4.1 实测发现两处 `$lookup` 同时使用 `localField`+`pipeline`（5.0 才支持），成员列表 500；已改为 `let` 形式并回归（[mongodb-compatibility.md](mongodb-compatibility.md)）。 三个 team_member 索引（含 `team_member_alias_search_v1` on `{team,status,asrch}`）由 `MongoSchemaReadinessTests` 验证；冲突索引拒绝替换；测试机空库 BSON 字段与 Python 对齐。生产 dump 副本上的全集合对比未执行 |
 | Python auth token 互操作 | 未验证 | 旧 replay 使用 C# 自签 token；需真实 Python token |
 | storage key/prefix/R2 | 未验证 | Python 默认 storage/，C# 默认空；真实 R2 尚无验证；不用生产凭证 |
 | 设置、语言/类型/角色种子 | 部分验证 | bootstrap/`LegacyTypes`/`LanguageCatalog` 已与 Python 逐项复核，测试机空库初始化通过；逐个种子集合的完整 BSON 差分仍未执行 |
