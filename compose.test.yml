@@ -1,9 +1,10 @@
-name: shoreline-csharp-test
+name: ${SHORELINE_TEST_STACK_NAME:-shoreline-readiness-isolation-20261110}
+
 services:
   api:
     profiles: ["api"]
     image: shoreline-csharp:dev
-    ports: ["127.0.0.1:25128:8080"]
+    ports: ["127.0.0.1:${SHORELINE_TEST_API_PORT:-25128}:8080"]
     environment:
       Mongo__Uri: mongodb://mongo:27017/shoreline_csharp_container_test
       Auth__Secret: local-test-secret-012345678901234567890
@@ -28,7 +29,7 @@ services:
     mem_limit: 256m
   mongo:
     image: mongo:8.0
-    ports: ["127.0.0.1:27128:27017"]
+    ports: ["127.0.0.1:${SHORELINE_TEST_MONGO_PORT:-27128}:27017"]
     tmpfs: ["/data/db", "/data/configdb"]
     mem_limit: 512m
     command: ["mongod", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25"]
@@ -39,14 +40,14 @@ services:
       retries: 30
   s3:
     image: adobe/s3mock@sha256:ab01a6946750f451ca215a47e91030695b260e4003b8a5a6201d25029b8fca92
-    ports: ["127.0.0.1:29128:9090"]
+    ports: ["127.0.0.1:${SHORELINE_TEST_S3_PORT:-29128}:9090"]
     environment:
       COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: shoreline-test
       COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /data
       JAVA_TOOL_OPTIONS: -Xms32m -Xmx192m
-    tmpfs: ["/data"]
+    tmpfs: ["/data:rw,mode=1777"]
     mem_limit: 384m
   mailpit:
     image: axllent/mailpit:v1.27
-    ports: ["127.0.0.1:21128:1025", "127.0.0.1:28128:8025"]
+    ports: ["127.0.0.1:${SHORELINE_TEST_SMTP_PORT:-21128}:1025", "127.0.0.1:${SHORELINE_TEST_MAILPIT_PORT:-28128}:8025"]
     mem_limit: 64m
