@@ -6,6 +6,8 @@ namespace Shoreline.Api.Infrastructure;
 // Preserve the Python BSON schema. A singleton client shares a small connection pool.
 public sealed class MongoStore
 {
+    private static readonly SemaphoreSlim InitializationGate = new(1, 1);
+
     public IMongoDatabase Database { get; }
     public MongoStore(IConfiguration configuration)
     {
@@ -24,6 +26,21 @@ public sealed class MongoStore
     public IMongoCollection<BsonDocument> Collection(string name) => Database.GetCollection<BsonDocument>(name);
 
     public async Task InitializeAsync(CancellationToken ct)
+    {
+        // Index migration is not safe to run concurrently in the same process:
+        // MongoDB rejects dropIndexes while another index build is in progress.
+        await InitializationGate.WaitAsync(ct);
+        try
+        {
+            await InitializeCoreAsync(ct);
+        }
+        finally
+        {
+            InitializationGate.Release();
+        }
+    }
+
+    private async Task InitializeCoreAsync(CancellationToken ct)
     {
         await Collection("site_setting").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("n"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
