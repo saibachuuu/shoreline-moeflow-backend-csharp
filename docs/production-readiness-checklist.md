@@ -27,7 +27,7 @@
 | 设置、语言/类型/角色种子 | 未验证 | 当前初始化与 Python 逐项复核，不能沿用首轮猜测 |
 | 管理员/默认团队初始化 | 未验证 | Bootstrap branch 的 standalone Mongo 恢复测试 46/46，wired fresh host/login 47/47；尚未合并。既有 `UserTests` wired fixture 0/3 因缺 disposable initial password 启动失败，fixture 兼容工作中 |
 | 迁移及回滚数据兼容 | 未验证 | production-shaped disposable 副本尚未演练 |
-| 每个 Celery 任务对应 handler/接受替代 | 未验证 | 已映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者等任务/替代仍未验收 |
+| 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
 | 最终合并后的 dotnet build 0/0 | 未验证 | 当前主分支 0/0；Bootstrap 接线与其他未合并修复最终定稿后还须重跑 |
