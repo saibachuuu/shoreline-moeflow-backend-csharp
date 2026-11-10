@@ -98,6 +98,12 @@ project every key is relative and the pool descriptor supplies only the
 per-source `sub_path` plus `Storage:KeyPrefix` normalization, so the logical key
 (`files/<save_name>`, `outputs/<id>/<file_name>`) is identical on both backends.
 
+Thumbnail publish and output publish also snapshot `csid` and re-check it under
+the final project label lock. If a transfer switches the pointer while a job is
+downloading/zipping, the job aborts instead of copying staging objects into the
+wrong backend; output export throws `OutputStale` (409) and the row is marked
+retryable.
+
 The default-only static cleanup overloads still call
 `EnsureDefaultStorageSource` and throw when `csid` is set; production callers
 pass the router-aware overload instead. This keeps an accidental default-bucket
@@ -305,8 +311,8 @@ The existing 34 facts still cover:
 
 These tests used an isolated snapshot of the shared working tree with the
 existing local MongoDB and S3Mock services: build 0 warnings/0 errors, focused
-StoragePool/File/Output/Thumbnail/ProjectCleanup run 140/140, and the full suite
-801/801. Production R2/OSS connectivity and authorization remain outside this
+StoragePool/File/Output/Thumbnail/ProjectCleanup run 146/146, and the full suite
+820/820. Production R2/OSS connectivity and authorization remain outside this
 evidence.
 
 ## Remaining limitations
