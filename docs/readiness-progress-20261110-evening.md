@@ -52,13 +52,16 @@ SHA-256 `5A2A4978CC7B57E47B5F4587152C19AB4F3A0F60427189F296C950DB2062B4C0`.
 The branch also tested an actual dropped Mongo TCP CAS reply; this is limited to
 that operation, not an exactly-once or cross-document transaction guarantee.
 
-**Do not merge yet:** the existing `LocalServices` fixture lacks the new initial
-administrator password; the wired branch's `UserTests` failed **0/3** at startup
-with `Auth:AdminInitialPassword is required before creating the configured administrator`.
-Fixture adaptation must retain real startup and all assertions, and account for
-existing tests that insert the same admin email. Separate fixture work is in progress.
-The initial wired HTTP test run also failed because its test database name exceeded
-Mongo's 63-character limit; it was shortened before the 47/47 rerun.
+**Do not merge yet:** follow-up fixture branch `test/readiness-bootstrap-fixtures-20261110`
+commit `d170969` supplies a disposable initial password and adapts existing-admin/site
+fixtures without skipping bootstrap. Its `BootstrapTests|BootstrapStartupHttpTests|
+UserTests|AdminUserTests` run passed **54/54**; `UserTests|AdminUserTests` passed **7/7**.
+However, `RuntimeCompatibilityHttpTests` remains **6/12**: the differential harness
+replaces the bootstrap-seeded users/team after bootstrap has persisted the admin ID,
+so later startup rejects the missing journal-bound admin. This needs a real fixture
+design fix and review before merge. No full suite was run on that branch. Its isolated
+Compose resources are stopped, volumes retained. The initial wired HTTP test also
+exceeded Mongo's 63-character DB-name limit and was corrected before the 47/47 run.
 
 ## Differential and remaining blockers
 
@@ -95,6 +98,18 @@ Mongo's 63-character limit; it was shortened before the 47/47 rerun.
   deployment, migration/backup/rollback, load and soak remain unverified. An earlier
   full-test attempt suffered Mongo OOM; it is not a pass. Do not read production
   credentials or treat S3Mock as evidence of real R2 authorization.
+
+## Python suite isolation preparation
+
+Unmerged branch `test/readiness-python-isolation-20261110` commit `868b5c1` adds a
+safe runner, tests and documentation; it did not alter the Python source repository
+or read `.env*`/credentials. Runner self-tests passed **68/68**, ruff passed, and its
+Release `dotnet build` passed 0/0. Pytest itself produced no valid result: the first
+attempt stopped during collection because a read-only snapshot blocked `.mo` output;
+the second produced **160 errors / 0 passed / 0 failed / 0 skipped** due to a harness
+`load_dotenv` stub rejecting its own key. That stub was fixed but pytest was not
+rerun. Its owned Mongo was removed and port 27321 is free; snapshot/logs remain in
+WSL. Python full-suite status is still **unverified**.
 
 ## C# full-suite attempt (incomplete)
 
