@@ -80,6 +80,7 @@ public sealed partial class FileService
     private readonly FileMutationGate _gate;
     private readonly ProjectLabelLock _labels;
     private readonly LabelRequestContext _labelContext;
+    private readonly IThumbnailScheduler? _thumbnails;
     private readonly ILogger<FileService>? _logger;
 
     private readonly IMongoCollection<BsonDocument> _files;
@@ -103,7 +104,8 @@ public sealed partial class FileService
         ILogger<FileService>? logger = null,
         ProjectLabelLock? labelLock = null,
         LabelRequestContext? labelContext = null,
-        ProjectStorageRouter? router = null)
+        ProjectStorageRouter? router = null,
+        IThumbnailScheduler? thumbnails = null)
     {
         _store = store;
         _projects = projects;
@@ -115,6 +117,7 @@ public sealed partial class FileService
         _gate = gate;
         _labels = labelLock ?? new ProjectLabelLock(store, clock);
         _labelContext = labelContext ?? new LabelRequestContext();
+        _thumbnails = thumbnails;
         _logger = logger;
         _files = store.Collection("file");
         _caches = store.Collection("file_target_cache");
@@ -615,6 +618,31 @@ public sealed partial class FileService
             if (!string.IsNullOrEmpty(oldSaveName) && oldSaveName != saveName)
             {
                 await DeleteStoredObjectsBestEffortAsync(oldSaveName, storage);
+            }
+
+            // Python File.upload_real_file schedules local thumbnails right
+            // after the rejected-upload/old-object work (app/models/file.py:867-891).
+            // The scheduler no-ops in server-side/Alibaba mode, so this branch
+            // only needs the image-type check. A scheduling failure must never
+            // fail an already-persisted upload; leave the previous honest
+            // status instead of advertising QUEUING.
+            if (_thumbnails is not null && file.Integer("t") == TypeImage)
+            {
+                try
+                {
+                    await _thumbnails.ScheduleAsync(
+                        file["_id"].AsObjectId, projectId, labelSession.Revision, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    _logger?.LogWarning(
+                        "Thumbnail schedule after upload failed ({ErrorType})",
+                        exception.GetType().Name);
+                }
             }
         }
         catch

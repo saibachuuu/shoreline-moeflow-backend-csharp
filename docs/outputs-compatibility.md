@@ -87,6 +87,15 @@ client polls GET. No synchronous fallback is performed.
 
 ### Team-wide export
 
+Python exposes the walk as the Celery task `tasks.output_team_projects_task`
+(`app/tasks/output_team_projects.py:20-66`) with a `run_sync`/worker-ping wrapper
+(`:69-80`). C# now has the same durable kind `output_team_projects`
+(`OutputService.TeamJobKind`), payload
+`{team_id: string, current_user_id: string}`, the
+`TeamOutputJobHandler` registration, and `RunTeamExportAsync` which resolves the
+same team/actor and calls `CreateTeamAsync`. `ScheduleTeamAsync` is the async
+producer; `CreateTeamAsync` remains the `run_sync` body used by the HTTP route.
+
 `POST /v1/teams/{teamId}/outputs` mirrors
 `app/tasks/output_team_projects.py:21-66`: it selects projects by
 `{t: team, st: 0}` (Python `team.projects(status=ProjectStatus.WORKING)`), then
@@ -96,9 +105,13 @@ created row. The response is `{"message": "创建导出任务成功"}`.
 
 Differences / unverified:
 
-- Python may execute the Celery task synchronously when no worker answers
-  (`output_team_projects.py:69-80`); C# always enqueues and returns immediately,
-  like the existing project output routes.
+- The C# route keeps the **sync/run_sync body** (`CreateTeamAsync`): it returns
+  after creating the per-target output rows and their `output_project` jobs.
+  Python normally `.delay()`s the team walk and returns after enqueue. The new
+  `output_team_projects` kind/handler is available for background/recovery
+  callers (`ScheduleTeamAsync`), but the route was not switched because its
+  existing contract/tests assert the rows exist when the response returns.
+  This is the one remaining observable timing difference.
 - Content is produced per project, so the team call creates N independent
   archives, never a combined team archive.
 - A project whose `csid` has no usable pool record fails the whole call closed
@@ -373,3 +386,20 @@ only the touched feature/endpoint/registration/test files. `dotnet build
   key. That shared storage API has no `response-content-disposition=attachment`
   override, unlike Python's `sign_url(..., download=True)`; the file name is
   still the final key segment.
+
+## Team task kind (2026-11-09)
+
+| Python | C# |
+| --- | --- |
+| `tasks.output_team_projects_task(team_id, current_user_id)` | `OutputService.RunTeamExportAsync(payload)` |
+| `.delay(team_id, current_user_id)` | `OutputService.ScheduleTeamAsync(teamId, actorId)` → kind `output_team_projects` |
+| `output_team_projects(..., run_sync=True)` | `OutputService.CreateTeamAsync(team, actor)` (route path) |
+
+The handler resolves the team and user by id (missing team → `3001`, missing
+user → `5105`), then reuses `CreateTeamAsync` unchanged: WORKING projects only
+(`{t, st: 0}`), per-target cooldown, newest-two prune, `ALL` type and one
+`output_project` job per created row. Payload ids are strings, matching Python's
+`str(...)` arguments. `TeamOutputJobTests` covers queued payload, handler body,
+missing team/actor and no partial outputs. `time_limit` is not part of the
+Python decorator for this task, so only the queue's normal attempt/lease rules
+apply.

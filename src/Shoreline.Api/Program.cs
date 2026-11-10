@@ -36,6 +36,7 @@ builder.Services.AddScoped<TeamMemberService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddFileServices();
+builder.Services.AddFileParseServices();
 builder.Services.AddOutputServices();
 builder.Services.AddNotificationManagementServices();
 builder.Services.AddTeamDissolutionServices();

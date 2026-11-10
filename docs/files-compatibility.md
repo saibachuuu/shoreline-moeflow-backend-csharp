@@ -160,7 +160,10 @@ SHA-256：`141c271429d8e7a8aaef0ed105ff0e8cc0eeabad3b933520f9ab8ab50c554306`
 2. **管理员列表**：已与 Python 对齐——任意一行未激活修订版都会使整个请求返回 4016 `此修订版未激活`；测试 `AdminList_InactiveRevisionReturns4016` 覆盖。
 3. **分页默认值**：待共享 `Pagination.cs` 配置化，详见第 6 节；文件域不维护第二套默认值。
 4. **存储池**：非默认 backend 的写入、删除、封面/重采样跨后端删除尚未实现；当前 fail-closed。
-5. **缩略图/OCR**：未实现，不返回假状态。`thumbnail_status` 仅按数据库值透出；覆盖上传会删除旧封面/重采样对象，但在后续缩略图实现重算之前，`cover_bytes/resample_bytes` 仍保留旧值（与 Python 上传路径一致，Python 靠随后的缩略图任务刷新）。
+5. **缩略图/OCR**：缩略图任务由 G4 `ThumbnailService` 实现；D1 上传现已按
+   Python `app/models/file.py:867-891` 自动调用 `IThumbnailScheduler`（见第 13 节）。
+   覆盖上传会删除旧封面/重采样对象，`cover_bytes/resample_bytes` 在任务完成前
+   仍保留旧值（与 Python 相同，由随后的缩略图任务刷新）。OCR 仍显式 501。
 6. **TEXT 上传**：仅 `File:AllowText=true` 时开放，生产默认关闭；默认生产行为与 Python `SUPPORTED=(IMAGE,)` 一致。
 7. **新增文件夹**：`FileService.CreateFolderAsync(project, name, parentId, ct)` 已按 Python 语义实现（重名 4007、folder_count、target 缓存、`label_epoch`），但本切片没有注册创建文件夹 HTTP 路由；后续接路由时无需再改服务层。
 
@@ -202,3 +205,87 @@ C# 不伪造能力，两个路由统一显式禁用：
   501，避免对不同角色返回“可用但稍后失败”的假象。真实 OCR 恢复后需要重新
   接入 Python 的 `USE_OCR_QUOTA` / 源语言 `g_ocr_code` / 额度语义。
 - 快照的 E1 文件（`ProjectLabelLock`、`LabelRequestGuard`、`LabelRegistration`、`LabelEndpoints`、`LabelService*`、`LabelPlusReader`）按 SHA256 固定复制，未修改；`Infrastructure/Pagination.cs` 复制共享配置化稳定版 SHA256 `7DFC5FB6DAAD1FA3524084491FAEAF0D0AC0025849794464BFF0FA543812EA32`；共享工作区 `Program.cs` 未改。依赖 E1 的 `file_target_cache (f,t)` 索引已存在（E1 命名为 `label_file_target_cache`），`FileService.EnsureCacheIndexAsync` 检测到同键索引后跳过创建。
+
+## 13. 文本解析 job 与上传后缩略图调度（2026-11-09 补齐）
+
+### 13.1 文本解析 / 寻找术语
+
+Python 对照：
+
+- `app/tasks/file_parse.py:23-106` `parse_text_task(file_id, old_revision_id=None)`；
+  `:109-116` `parse_text(..., run_sync=...)`。
+- `app/tasks/file_parse.py:119-156` `find_terms_task(file_id)`；
+  `:159-166` `find_terms(..., run_sync=...)`。
+- `app/models/file.py:1105-1145` `File.parse()`：TEXT 先
+  `clear_all_sources()`、写 `QUEUING`、取 `old_revision`、入队并记录
+  `parse_task_id`。
+- `app/models/file.py:1172-1184` `_create_text_source`：`content.strip()==""`
+  时 `blank=True` 且不增加 `source_count`；`:1220-1234` `clear_all_sources`
+  按 file/project/target 缓存扣减；`:1495-1549` `Source.copy` 克隆旧修订版的
+  translation/tip 并增加 `translated_source_count` / `checked_source_count`。
+- `app/models/file.py:1485-1493` `Source.find_terms()`；`app/models/project.py:575-592`
+  项目级 `find_terms` 批量入队。
+
+C# 实现（新增，未改其他业务模块）：
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/Shoreline.Api/Features/FileParseService.cs` | 两个 task body + `Schedule*` / `parse_text(..., run_sync)` 等价入口 |
+| `src/Shoreline.Api/Jobs/FileParseJobHandlers.cs` | `ParseTextJobHandler`（kind `parse_text`）、`FindTermsJobHandler`（kind `find_terms`） |
+| `src/Shoreline.Api/Features/FileParseRegistration.cs` | `AddFileParseServices()` |
+| `tests/Shoreline.Tests/FileParseTests.cs` | direct 成功/失败/旧修订版/队列恢复/术语匹配与恢复 |
+
+语义：
+
+- `parse_text` 跳过不存在/非 TEXT/已完成/其他 run 正在解析的文件；成功写
+  `ps=4` 并 unset `pt/pti/pst`。下载失败写 `ps=3, pe=2, pt+=1`；字符集失败写
+  `ps=3, pe=1, pt+=1`，与 Python 的 `FILE_CAN_NOT_READ` /
+  `TEXT_UNKNOWN_CHARSET` 对齐。
+- 换行按 Python `re.split(r"\n|\r\n|\r", text)`；空白行也创建 source，
+  `r` 为 0-based rank，`cm=true`，非空白行才增加 `sc`。
+- `old_revision_id` 只接受 TEXT 文件；同一内容行拷贝 translation/tip、选中的
+  translation 计 `checked`，与 `Source.copy` 一致。
+- Python 用 chardet；C# 无 chardet 依赖，按 BOM → strict UTF-8 → GB18030 →
+  Windows-1252 的顺序解码。GB18030/1252 需要运行时的 CodePages provider；
+  不可解码的 UTF-32 等仍映射为 `TEXT_UNKNOWN_CHARSET`（见第 13.3 节）。
+- `parse_text` / `find_terms` 的 Celery `time_limit=1200` 在 C# 没有硬超时，
+  由共享 `JobWorker` 的 2 分钟 lease + 30 秒续租 + 5 次 attempt 上限近似。
+- 恢复：queue 重投的 payload 带固定 `run_id`；文件上的 `parse_run` /
+  `find_terms_run` 只在同一 run 时允许从 `PARSING` / `FINDING` 继续，
+  避免 Python “正在处理则跳过”在 C# 重投场景把状态永久卡住。
+- `run_sync=true` 走进程内直接执行（测试/管理路径），不写 `csharp_job`；
+  `run_sync=false` 只持久化 job 并在 `ScheduleParseTextAsync` 里先清空旧
+  source、再写 `QUEUING` 和 `parse_task_id`（与 `File.parse` 顺序一致）。
+- 尚未接入：没有对应的 C# HTTP parse 路由；本轮只交付 task/handler 与
+  direct/run_sync 调用面。项目级“改术语库后批量 find_terms”同样未接路由。
+
+### 13.2 上传后自动调度缩略图
+
+Python 上传路径在 `app/models/file.py:867-891` **自动**调用
+`create_thumbnail(str(self.id))`（`app/tasks/thumbnail.py:330-360`）：先写
+`thumbnail_status=QUEUING`，`run_sync`/`_FORCE_SYNC_TASK` 或
+`THUMBNAIL_SYNC_FALLBACK` 且无 worker 时同步执行，否则 `.delay()`；
+入队失败写 `FAILED` 并重新抛出，由上传层兜底 inline 生成。
+
+结论：是自动入队，不是仅手动 `POST /v1/files/<id>/thumbnail`。
+
+C# 改动：`FileService.UploadAsync` 在对象与元数据持久化、计数/`edit_time` 更新
+和旧对象清理之后，对 IMAGE 调用 `IThumbnailScheduler.ScheduleAsync(...)`
+（`IThumbnailScheduler` 由 `ThumbnailRegistration` 注册到同一个 scoped
+`ThumbnailService`）。默认开启，与 Python 默认行为一致；server-side/Alibaba
+模式由 `ThumbnailService.LocalGenerationRequired` 内部 no-op，无需额外开关。
+调度失败只记 warning，不让已成功的上传失败，也不伪造 `QUEUING`；这与 Python
+“入队失败再尝试 inline”不同：C# 没有 worker 时没有独立的 inline Pillow 路径，
+保留而非伪造状态，URL 仍按存储探测回退。
+
+覆盖：`tests/Shoreline.Tests/FileUploadThumbnailHookTests.cs` 验证
+IMAGE 上传产生 `create_thumbnail` pending job + `th=1`，以及 scheduler 抛错时
+上传仍成功且 `th` 保持原值。
+
+### 13.3 CodePages 运行时注意
+
+`DecodeText` 的 GB18030 / Windows-1252 分支依赖
+`System.Text.Encoding.CodePages`。该程序集属于 .NET shared framework 时可直接
+`Encoding.GetEncoding(54936/1252)`；若部署裁剪（trimming）移除 provider，
+需要显式 `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)` 并在
+项目文件保留对应引用。未注册时异常会落到 `TEXT_UNKNOWN_CHARSET`，不会崩溃。

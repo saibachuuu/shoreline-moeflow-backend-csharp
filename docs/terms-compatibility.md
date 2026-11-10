@@ -1,7 +1,49 @@
 # F1 术语库 / 术语兼容性说明
 
 本切片只交付 `TermService`、`TermEndpoints`、`TermRegistration`、direct-service 测试和本说明。
-shared `Program.cs` 已加入最小接线 `AddTermServices()` / `MapTerms()`（仅 2 行，保留既有 Presence/Application 注册与映射）。构建/测试证据来自独立 clean snapshot：`33c93ea` 临时副本 + shared 的 F1 五文件 + Program + `TermHttpTests`，未混入其他 WIP。当前已完成 F1 路由 port，但项目术语库选择与 `find_terms` 仍缺，整体不代表“已可替代 Python”。
+shared `Program.cs` 已加入最小接线 `AddTermServices()` / `MapTerms()`（仅 2 行，保留既有 Presence/Application 注册与映射）。构建/测试证据来自独立 clean snapshot：`33c93ea` 临时副本 + shared 的 F1 五文件 + Program + `TermHttpTests`，未混入其他 WIP。当前已完成 F1 路由 port，并补齐 Celery `tasks.find_terms_task` 的 C# job
+handler（见下文“find_terms job”）；项目级“选择术语库后自动刷新”路由仍未接入，
+整体不代表“已可替代 Python”。
+
+
+## find_terms job（2026-11-09 补齐）
+
+Python 对照：
+
+- `app/tasks/file_parse.py:119-156` `find_terms_task(file_id)`：文件不存在跳过；
+  `find_terms_status == FINDING` 跳过；先写 `FINDING` + `find_terms_start_time`，
+  逐条 source 调用 `Source.find_terms()`，最后写 `FINISHED` 并 unset
+  `find_terms_task_id/find_terms_start_time`。
+- `app/tasks/file_parse.py:159-166` `find_terms(file_id, run_sync=...)`：同步直调或
+  `.delay(...)`。
+- `app/models/file.py:1485-1493` `Source.find_terms()`：读取
+  `file.project.term_banks`（BSON `project.tb`）下的全部 term，清空
+  `possible_terms`（`source.pt`），按 term 原文 `o` 在 source 内容 `c` 中的
+  **区分大小写子串**匹配，保持集合自然顺序去重后写回。
+- `app/models/project.py:575-592`：项目级入口负责设置 `QUEUING` 和任务 id。
+
+C# 对照（新增，未改 Label/Term 业务模块）：
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/Shoreline.Api/Features/FileParseService.cs` | `ScheduleFindTermsAsync` / `FindTermsAsync(runSync)` / `RunFindTermsAsync` |
+| `src/Shoreline.Api/Jobs/FileParseJobHandlers.cs` | `FindTermsJobHandler`，kind `find_terms` |
+| `src/Shoreline.Api/Features/FileParseRegistration.cs` | `AddFileParseServices()` 注册 |
+| `tests/Shoreline.Tests/FileParseTests.cs` | direct、queued、同 run 恢复、异 run 跳过 |
+
+语义与差异：
+
+- `QUEUING = 0`、`FINDING = 1`、`FINISHED = 2`，与
+  `app/constants/file.py:136-139` 一致；队列 kind 使用短名 `find_terms`，
+  文档映射到 `tasks.find_terms_task`。
+- 终态写 `FINISHED` 并 unset `ftt/fts`，与 Python 相同。
+- Python 只按 `FINDING` 跳过；C# job 可能因 lease 过期重投，因此额外使用
+  payload `run_id` 与文件字段 `find_terms_run`：同一 run 重投继续（幂等），
+  不同 run 仍按 Python 语义跳过。该字段是 C# 恢复标记，Python 无对应字段。
+- Python `time_limit=1200` 在 C# 无硬超时；由共享 `JobWorker` 的 2 分钟
+  lease、30 秒续租和 5 次 attempt 上限近似，详见 `FileParseService` 注释。
+- 尚未接入：项目修改术语库后的自动 `find_terms` 批量入队路由；本轮只补齐
+  task/handler 与 direct/run_sync 调用面。
 
 ## 文件
 

@@ -32,6 +32,7 @@ public static class ThumbnailRegistration
         });
 
         services.TryAddScoped<ThumbnailService>();
+        services.TryAddScoped<IThumbnailScheduler>(sp => sp.GetRequiredService<ThumbnailService>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IJobHandler, ThumbnailJobHandler>());
     }
 

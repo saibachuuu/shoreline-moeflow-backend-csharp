@@ -11,6 +11,7 @@ public static class OutputRegistration
         services.AddScoped<OutputService>();
         services.AddScoped<OutputExportService>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IJobHandler, OutputJobHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IJobHandler, TeamOutputJobHandler>());
         return services;
     }
 
