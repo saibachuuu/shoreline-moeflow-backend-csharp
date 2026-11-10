@@ -692,7 +692,7 @@ public sealed class TeamDissolutionTests(LocalServices services)
         Assert.Equal(5120, rejected!.Code);
         var stored = await services.Store.Collection("project")
             .Find(new BsonDocument("_id", project["_id"])).FirstAsync();
-        Assert.Equal(1, stored.Integer("is"));
+        Assert.Equal(ProjectImportService.Succeeded, (int)stored.Integer("is"));
         Assert.Equal("", stored.Text("it"));
         Assert.False(stored.Contains("ij"));
         Assert.Equal(0L, await CountAsync("csharp_job", new BsonDocument("kind", ProjectImportService.JobKind)));

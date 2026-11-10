@@ -17,7 +17,8 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
     TeamLifecycleLock? lifecycle = null, ProjectLabelLock? labels = null,
     LabelRequestContext? labelContext = null, ProjectStorageRouter? router = null,
     IEnumerable<IProjectCreatedHook>? projectCreatedHooks = null,
-    ILogger<ProjectService>? logger = null)
+    ILogger<ProjectService>? logger = null,
+    ProjectImportService? imports = null)
 {
     private IMongoCollection<BsonDocument> Projects => store.Collection("project");
     private IMongoCollection<BsonDocument> Sets => store.Collection("project_set");
@@ -143,6 +144,10 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         var name = data.RequiredText("name", 40);
         if (name.Length == 0) throw ApiError.Invalid("Invalid request");
         var intro = data.OptionalText("intro", 140);
+        // Python's CreateProjectSchema declares labelplus_txt as an optional
+        // string. Keep the raw value so Project.create can parse it before the
+        // first row is written, exactly like its pre-save load_from_labelplus.
+        var labelplusText = data.OptionalLabelplusText("labelplus_txt");
         var allowApply = AllowOrCheckType(data, "allow_apply_type", 1, 2);
         var checker = AllowOrCheckType(data, "application_check_type", 1, 2);
         // default_role: system role without creator (Python default: translator).
@@ -196,8 +201,15 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         }
         if (targetLanguages.Any(language => language["_id"] == sourceLanguage["_id"]))
             throw new ApiError("TargetAndSourceLanguageSameError", 6002, "目标语言不能与源语言相同");
-        // labelplus_txt: accepted for compatibility; the import pipeline is a
-        // later stage, so the field is intentionally not executed here.
+        // Python's Project.create parses any non-empty labelplus_txt before its
+        // first save, including the multi-target case where no import is
+        // queued. A malformed file must therefore create zero rows.
+        if (labelplusText.Length > 0)
+        {
+            if (imports is null)
+                throw new InvalidOperationException("LabelPlus import service is not configured");
+            imports.ValidateBeforeCreate(labelplusText);
+        }
         var now = clock.GetUtcNow().UtcDateTime;
         var document = new BsonDocument
         {
@@ -232,7 +244,11 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
             ["sc"] = 0,
             ["tsc"] = 0,
             ["csc"] = 0,
-            ["is"] = 1,
+            // Python Project.import_from_labelplus_status defaults to
+            // ImportFromLabelplusStatus.SUCCEEDED (2). Only a queued import
+            // rewrites this to Pending/Running; a project created without an
+            // import must not claim to be running.
+            ["is"] = ProjectImportService.Succeeded,
             ["ip"] = 0,
             ["ie"] = 0,
             ["it"] = "",
@@ -271,6 +287,20 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
                 new BsonDocument("$set", new BsonDocument("tc", created.Count)), cancellationToken: ct);
         }
         await AddCreatorMemberAsync(document, actor, ct);
+        // Python queues only when labelplus_txt is non-empty, a creator exists
+        // and there is exactly one target; the creator is the actor that was
+        // just inserted above. The hook persists the durable intent/enqueue
+        // flags itself and is skipped for the multi-target case, though the
+        // text was parsed before the first write above.
+        if (labelplusText.Length > 0 && created.Count == 1)
+        {
+            await imports!.InitializeAfterCreateAsync(document, actor, labelplusText, string.Empty, ct);
+            // Project.create reloads after calling import_from_labelplus, so the
+            // response exposes the persisted pending/error state (or an already
+            // completed job) rather than the stale pre-import document.
+            document = await Projects.Find(new BsonDocument("_id", document["_id"])).FirstOrDefaultAsync(ct)
+                       ?? document;
+        }
         if (projectCreatedHooks is not null)
         {
             var projectId = document["_id"].AsObjectId;
@@ -757,6 +787,19 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
 
 public static class ProjectRequestDataExtensions
 {
+    /// <summary>
+    /// Reads the optional labelplus_txt string without a length cap. Python's
+    /// CreateProjectSchema uses a plain fields.Str (missing=None), so a present
+    /// non-string value is a validation error and an absent/null value is empty.
+    /// </summary>
+    public static string OptionalLabelplusText(this System.Text.Json.JsonElement data, string field)
+    {
+        if (!data.TryGetProperty(field, out var value) || value.ValueKind == System.Text.Json.JsonValueKind.Null)
+            return "";
+        if (value.ValueKind != System.Text.Json.JsonValueKind.String) throw ApiError.Field(field, "Invalid value");
+        return value.GetString()!;
+    }
+
     public static string OptionalText(this System.Text.Json.JsonElement data, string field, int max, string fallback = "")
     {
         if (!data.TryGetProperty(field, out var value) || value.ValueKind == System.Text.Json.JsonValueKind.Null) return fallback;
