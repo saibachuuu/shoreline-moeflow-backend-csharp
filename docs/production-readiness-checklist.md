@@ -1,6 +1,6 @@
 # 生产替换硬门槛检查表
 
-日期：2026-11-10（晚间更新）。Python 参考 `be0b717`；C# 主分支 `c4f3639` + 本文件更新（Python 环境变量兼容 + 896 用例）。
+日期：2026-11-10（晚间更新）。Python 参考 `be0b717`；C# 主分支 `4476911` + 回滚/索引兼容工作树（Python 环境变量兼容 + 896 用例）。
 
 **发布结论：阻塞，不能替换生产 Python。**
 “已验证”只代表表中具体证据；静态实现、测试发现、旧快照绿色结果均不等于生产验收。
@@ -21,12 +21,12 @@
 | 真实 Flask / C# 同种子 BSON | 未验证 | 旧 fixture 有局部种子；需完整 app / modules、可复现 fresh run |
 | 真实差分读与成功写 | 部分验证 | 真实 Flask 生成 19 个只读用例，C# replay **19/19 匹配，0 business differences**（`docs/runtime-differential.md`）；写请求仍未纳入差分，测试机 E2E 已覆盖建团队/项目/术语库/上传/源文/译文/导出/邀请/申请审批/密码重置 |
 | 差分 status/body/error/headers/前后 digest | 已验证（只读 19 例） | 19 例 status/body/前后 digest 全匹配；框架级 wire 差异单独记录；写请求和 4 个可选模块仍未覆盖 |
-| BSON collection/alias/type/index/unique | 部分验证 | Mongo 4.4.1 实测发现两处 `$lookup` 同时使用 `localField`+`pipeline`（5.0 才支持），成员列表 500；已改为 `let` 形式并回归（[mongodb-compatibility.md](mongodb-compatibility.md)）。 三个 team_member 索引（含 `team_member_alias_search_v1` on `{team,status,asrch}`）由 `MongoSchemaReadinessTests` 验证；冲突索引拒绝替换；测试机空库 BSON 字段与 Python 对齐。生产 dump 副本上的全集合对比未执行 |
+| BSON collection/alias/type/index/unique | 部分验证 | Mongo 4.4.1 实测发现两处 `$lookup` 同时使用 `localField`+`pipeline`（5.0 才支持），成员列表 500；已改为 `let` 形式并回归（[mongodb-compatibility.md](mongodb-compatibility.md)）。 team_member 默认名索引（`team_1_status_1` / `team_1_aliases_1` / `team_1_worker_qualifications_1`）与 C# 查询索引 `team_member_alias_search_v1` on `{team,status,asrch}` 由 `MongoSchemaReadinessTests` 验证；`t_1_sn_-1` 等 MongoEngine 默认名已对齐；测试机空库 BSON 字段与 Python 对齐。生产 dump 副本上的全集合对比未执行 |
 | Python auth token 互操作 | 已验证（双向） | 用生产同款 `SECRET_KEY` 在 Python `itsdangerous` 中签发 `{id,pc}` token，测试机 C# `GET /api/v1/user/info` 返回 **200**；反向用 C# 登录签发的 token 交给 Python `URLSafeTimedSerializer.loads`，解出相同 `{id,pc}`。C# 同时接受 itsdangerous 与历史 HS512 JWS 格式（`src/Shoreline.Api/Security/LegacyToken.cs`） |
 | storage key/prefix/R2 | 部分验证 | 已实现 Python `.env-backend` 存储变量自动映射（`STORAGE_TYPE`/`OSS_BUCKET_STYLE`/`OSS_*`/`STORAGE_DOMAIN`），S3 分支在 `STORAGE_TYPE=OSS` 且未显式设置前缀时默认 `OSS_KEY_PREFIX=storage/`；`StorageLegacyEnvironmentTests` 4/4。生产为 R2 + `OSS_BUCKET_STYLE=S3`，CDN 模式在 Python S3 分支同样不签名，C# 行为一致。真实 R2 写入/读取仍未用生产凭证验证 |
 | 设置、语言/类型/角色种子 | 部分验证 | bootstrap/`LegacyTypes`/`LanguageCatalog` 已与 Python 逐项复核，测试机空库初始化通过；逐个种子集合的完整 BSON 差分仍未执行 |
 | 管理员/默认团队初始化 | 已验证（测试机空库） | 测试机 `moeflow` 原为空库；新镜像启动日志 `Created bootstrap administrator …`、`Created bootstrap Default Team …`，二次重启无重复创建；验证码 + 密码登录 `POST /v1/user/token` 成功，`/v1/user/info`、`/v1/user/teams` 正常 |
-| 迁移及回滚数据兼容 | 部分验证 | 邮件/安全码已双写：C# 签发时同时写入 Python `v_code`，验证消费后删除；测试机实测重置密码验证码在 `v_code` 可见、消费后为 0。完整 schema/数据迁移与回滚仍未演练 |
+| 迁移及回滚数据兼容 | 已验证（回滚演练） | 邮件/安全码已双写：C# 签发时同时写入 Python `v_code`，验证消费后删除；测试机实测重置密码验证码在 `v_code` 可见、消费后为 0。另用测试机 165 文档 dump 演练 Python 回滚：`tools/legacy-rollback-strip.js` 清理 C# 专有字段与冲突索引后，不启动 C# 直接由 Python 读取，`/v1/user/info`、`/v1/user/teams`、项目详情/文件/输出、团队成员均 200；步骤见 [legacy-rollback.md](legacy-rollback.md) |
 | 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
@@ -47,7 +47,7 @@
 | SSRF / allowlist / DNS / redirects | 未验证 | archive 已有防护；Ziteng 和全部出站路径需源码及 HTTP/连接测试 |
 | 上传限制 / 内存放大 | 部分验证 | 测试机真实 multipart 上传图片成功，缩略图 worker 生成 cover/resample，导出 zip 可下载；1 GiB 边界与并发资源仍未验证 |
 | 真实 HTTP 限流 / XFF 防伪造 | 未验证 | limiter/routing 顺序、反代身份和 client_key 均需真实请求验证 |
-| 部署 / 迁移 / 回滚 runbook | 未验证 | 需与本轮命令、镜像、备份和演练证据一致，非纸面声明 |
+| 部署 / 迁移 / 回滚 runbook | 部分验证 | 测试机空库部署、备份恢复、Python 回滚演练均有命令与证据；仍需固化为一页生产 runbook 并在测试机复跑 |
 
 ## 明确阻塞
 
