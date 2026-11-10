@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-09T22:24:54.753934+00:00",
+  "generated_at": "2026-11-10T18:10:24.338307+00:00",
   "tool": {
     "name": "Audit-LegacyRoutes.py",
     "mode": "offline static analysis",
@@ -8,8 +8,8 @@
     "guarantee": "not 100% automated; see unresolved sections"
   },
   "inputs": {
-    "legacy_directory": "/tmp/opencode/legacy-dev",
-    "csharp_directory": "/tmp/opencode/csharp-head"
+    "legacy_directory": "/tmp/opencode/legacy-be0b717",
+    "csharp_directory": "/home/hermes/work/shoreline-moeflow-backend-csharp"
   },
   "normalization": {
     "placeholder": "{}",
@@ -22,20 +22,20 @@
     "legacy_blueprints": 27,
     "core_business_registrations": 162,
     "core_effective_methods": 160,
-    "core_matched_in_csharp": 156,
-    "core_missing_in_csharp": 4,
+    "core_matched_in_csharp": 160,
+    "core_missing_in_csharp": 0,
     "core_registered_only_405": 2,
     "core_handler_unknown": 0,
     "conditional_business_registrations": 5,
     "conditional_effective_methods": 5,
-    "conditional_matched_in_csharp": 0,
-    "conditional_missing_in_csharp": 5,
+    "conditional_matched_in_csharp": 5,
+    "conditional_missing_in_csharp": 0,
     "optional_business_registrations": 27,
     "optional_effective_methods": 27,
     "optional_matched_in_csharp": 27,
     "optional_missing_in_csharp": 0,
     "disabled_comment_method_entries": 6,
-    "csharp_route_method_entries": 189,
+    "csharp_route_method_entries": 198,
     "csharp_extra_route_entries_not_in_legacy": 4,
     "legacy_unresolved_count": 0,
     "csharp_unresolved_count": 0
@@ -106,38 +106,7 @@
     }
   ],
   "missing_by_module": {
-    "core": {
-      "index": [
-        {
-          "method": "GET",
-          "path": "/docs/<path:path>",
-          "normalized_path": "/docs/{}",
-          "handler": "DocsAPI",
-          "source": "app/apis/urls.py:121"
-        },
-        {
-          "method": "GET",
-          "path": "/error",
-          "normalized_path": "/error",
-          "handler": "ErrorAPI",
-          "source": "app/apis/urls.py:134"
-        },
-        {
-          "method": "GET",
-          "path": "/urls",
-          "normalized_path": "/urls",
-          "handler": "UrlListAPI",
-          "source": "app/apis/urls.py:126"
-        },
-        {
-          "method": "GET",
-          "path": "/warning",
-          "normalized_path": "/warning",
-          "handler": "WarningAPI",
-          "source": "app/apis/urls.py:129"
-        }
-      ]
-    },
+    "core": {},
     "optional": {}
   },
   "module_summary": [
@@ -215,8 +184,8 @@
       "effective": 5,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 1,
-      "missing": 4
+      "matched_in_csharp": 5,
+      "missing": 0
     },
     {
       "module": "language",
@@ -237,8 +206,8 @@
       "effective": 5,
       "registered_only_405": 0,
       "handler_unknown": 0,
-      "matched_in_csharp": 0,
-      "missing": 5
+      "matched_in_csharp": 5,
+      "missing": 0
     },
     {
       "module": "me",
@@ -471,8 +440,8 @@
       "blueprint": "manga-image-translator",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/MitEndpoints.cs:57"
     },
     {
       "method": "GET",
@@ -488,8 +457,8 @@
       "blueprint": "manga-image-translator",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/MitEndpoints.cs:102"
     },
     {
       "method": "OPTIONS",
@@ -539,8 +508,8 @@
       "blueprint": "manga-image-translator",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/MitEndpoints.cs:24"
     },
     {
       "method": "OPTIONS",
@@ -573,8 +542,8 @@
       "blueprint": "manga-image-translator",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/MitEndpoints.cs:111"
     },
     {
       "method": "GET",
@@ -590,8 +559,8 @@
       "blueprint": "manga-image-translator",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/MitEndpoints.cs:126"
     },
     {
       "method": "OPTIONS",
@@ -693,7 +662,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:71"
+      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:96"
     },
     {
       "method": "OPTIONS",
@@ -727,7 +696,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:76"
+      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:101"
     },
     {
       "method": "GET",
@@ -2001,8 +1970,8 @@
       "blueprint": "index",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/BootstrapService.cs:206"
     },
     {
       "method": "OPTIONS",
@@ -2035,8 +2004,8 @@
       "blueprint": "index",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/BootstrapService.cs:180"
     },
     {
       "method": "OPTIONS",
@@ -2070,7 +2039,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Program.cs:121"
+      "csharp_source": "src/Shoreline.Api/Program.cs:131"
     },
     {
       "method": "OPTIONS",
@@ -2103,8 +2072,8 @@
       "blueprint": "index",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/BootstrapService.cs:192"
     },
     {
       "method": "OPTIONS",
@@ -2137,8 +2106,8 @@
       "blueprint": "index",
       "handler_status": "handler",
       "is_options": false,
-      "in_csharp": false,
-      "csharp_source": null
+      "in_csharp": true,
+      "csharp_source": "src/Shoreline.Api/Features/BootstrapService.cs:187"
     },
     {
       "method": "OPTIONS",
@@ -3770,7 +3739,7 @@
       "handler_status": "handler",
       "is_options": false,
       "in_csharp": true,
-      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:69"
+      "csharp_source": "src/Shoreline.Api/Features/SiteSettings.cs:94"
     },
     {
       "method": "OPTIONS",
@@ -6072,6 +6041,38 @@
       "receiver": "app"
     },
     {
+      "method": "GET",
+      "path": "/error",
+      "normalized_path": "/error",
+      "source": "src/Shoreline.Api/Features/BootstrapService.cs",
+      "line": 180,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/warning",
+      "normalized_path": "/warning",
+      "source": "src/Shoreline.Api/Features/BootstrapService.cs",
+      "line": 187,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/urls",
+      "normalized_path": "/urls",
+      "source": "src/Shoreline.Api/Features/BootstrapService.cs",
+      "line": 192,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/docs/{**path}",
+      "normalized_path": "/docs/{}",
+      "source": "src/Shoreline.Api/Features/BootstrapService.cs",
+      "line": 206,
+      "receiver": "app"
+    },
+    {
       "method": "POST",
       "path": "/v1/confirm-email-codes",
       "normalized_path": "/v1/confirm-email-codes",
@@ -6397,6 +6398,46 @@
       "normalized_path": "/v1/types/{}",
       "source": "src/Shoreline.Api/Features/LegacyTypes.cs",
       "line": 141,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/mit/images",
+      "normalized_path": "/v1/mit/images",
+      "source": "src/Shoreline.Api/Features/MitEndpoints.cs",
+      "line": 24,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/mit/image-tasks",
+      "normalized_path": "/v1/mit/image-tasks",
+      "source": "src/Shoreline.Api/Features/MitEndpoints.cs",
+      "line": 57,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mit/image-tasks/{taskId}",
+      "normalized_path": "/v1/mit/image-tasks/{}",
+      "source": "src/Shoreline.Api/Features/MitEndpoints.cs",
+      "line": 102,
+      "receiver": "app"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/mit/translate-tasks",
+      "normalized_path": "/v1/mit/translate-tasks",
+      "source": "src/Shoreline.Api/Features/MitEndpoints.cs",
+      "line": 111,
+      "receiver": "app"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mit/translate-tasks/{taskId}",
+      "normalized_path": "/v1/mit/translate-tasks/{}",
+      "source": "src/Shoreline.Api/Features/MitEndpoints.cs",
+      "line": 126,
       "receiver": "app"
     },
     {
@@ -6876,7 +6917,7 @@
       "path": "/v1/homepage",
       "normalized_path": "/v1/homepage",
       "source": "src/Shoreline.Api/Features/SiteSettings.cs",
-      "line": 67,
+      "line": 92,
       "receiver": "app"
     },
     {
@@ -6884,7 +6925,7 @@
       "path": "/v1/site/homepage",
       "normalized_path": "/v1/site/homepage",
       "source": "src/Shoreline.Api/Features/SiteSettings.cs",
-      "line": 69,
+      "line": 94,
       "receiver": "app"
     },
     {
@@ -6892,7 +6933,7 @@
       "path": "/v1/admin/site-setting",
       "normalized_path": "/v1/admin/site-setting",
       "source": "src/Shoreline.Api/Features/SiteSettings.cs",
-      "line": 71,
+      "line": 96,
       "receiver": "app"
     },
     {
@@ -6900,7 +6941,7 @@
       "path": "/v1/admin/site-setting",
       "normalized_path": "/v1/admin/site-setting",
       "source": "src/Shoreline.Api/Features/SiteSettings.cs",
-      "line": 76,
+      "line": 101,
       "receiver": "app"
     },
     {
@@ -7460,7 +7501,7 @@
       "path": "/ping",
       "normalized_path": "/ping",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 121,
+      "line": 131,
       "receiver": "app"
     },
     {
@@ -7468,7 +7509,7 @@
       "path": "/health/live",
       "normalized_path": "/health/live",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 156,
+      "line": 172,
       "receiver": "app"
     },
     {
@@ -7476,7 +7517,7 @@
       "path": "/health/ready",
       "normalized_path": "/health/ready",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 157,
+      "line": 173,
       "receiver": "app"
     }
   ],
@@ -7486,7 +7527,7 @@
       "path": "/health/live",
       "normalized_path": "/health/live",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 156,
+      "line": 172,
       "receiver": "app"
     },
     {
@@ -7494,7 +7535,7 @@
       "path": "/health/ready",
       "normalized_path": "/health/ready",
       "source": "src/Shoreline.Api/Program.cs",
-      "line": 157,
+      "line": 173,
       "receiver": "app"
     },
     {
@@ -7510,7 +7551,7 @@
       "path": "/v1/homepage",
       "normalized_path": "/v1/homepage",
       "source": "src/Shoreline.Api/Features/SiteSettings.cs",
-      "line": 67,
+      "line": 92,
       "receiver": "app"
     }
   ],

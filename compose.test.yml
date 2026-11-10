@@ -9,6 +9,10 @@ services:
       Mongo__Uri: mongodb://mongo:27017/shoreline_csharp_container_test
       Auth__Secret: local-test-secret-012345678901234567890
       Auth__AdminEmail: owner@example.test
+      # This disposable integration stack seeds its own data; the fresh-install
+      # bootstrap would require Auth__AdminInitialPassword and create rows that
+      # the seeded tests do not expect.
+      Bootstrap__Enabled: "false"
       Storage__Endpoint: http://s3:9090
       Storage__Bucket: shoreline-test
       Storage__AccessKey: local-test-only

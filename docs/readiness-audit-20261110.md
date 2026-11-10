@@ -161,3 +161,11 @@ dotnet test Shoreline.sln --no-build --nologo --filter "FullyQualifiedName~Shore
 首轮备用端口：N=0/1/2 分别使用 Mongo `27201/27211/27221`、S3 `29201/29211/29221`、SMTP `21201/21211/21221`、Mailpit `28201/28211/28221`、API `25201/25211/25221`；本轮未监听。
 
 下一步：接受纠正的逐路由测试与数据/任务矩阵，形成不重叠的 3–6 工作流；先完成 test-only 隔离前提，再派 beam-free 小任务，逐提交 review / 合并 / 验收。
+
+## 10. 夜间更新（bootstrap 与诊断路由）
+
+- 参考 Python 固定为 `be0b717`（含 label snapshots）。用该提交的独立 worktree 重新生成 `docs/route-coverage.md`：核心有效路由 **160/160**，可选模块 **27/27**，MIT 条件路由 **5/5**，缺失 **0**；此前 4 条缺失均为根诊断路由。
+- 4 条诊断路由已由 `LegacyDiagnosticsEndpoints` 实现，`LegacyDiagnosticsTests` 断言 `/urls` 200、`/error` 500、`/warning` 500、缺失文档 404。
+- `BootstrapService` 已实现 Python `init_db` 等价流程；`Testing` 环境默认关闭，部署默认开启。`BootstrapTests` 4/4。
+- 当前工作树全量：**888 passed / 0 failed / 0 skipped**（10 m 01 s，TRX `/tmp/opencode/full-post-bootstrap.trx`），包含 8 例 Python/C# 差分（0 business differences）。
+- 尚未完成：测试机空库 HTTP 启动/登录、迁移/备份/回滚、完整差分与负载长稳。

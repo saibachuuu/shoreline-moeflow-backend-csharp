@@ -1,13 +1,13 @@
 # Legacy route vs C# route coverage
 
-Generated: `2026-11-09T22:24:54.753934+00:00` (UTC) by `Audit-LegacyRoutes.py`.
+Generated: `2026-11-10T18:10:24.338307+00:00` (UTC) by `Audit-LegacyRoutes.py`.
 
 This is an **offline static audit**. It does not import or run the legacy Python app, does not run `dotnet build`, and does not read deployment configuration values. It reports route registration presence only, not business compatibility.
 
 ## Inputs and normalization
 
-- Legacy directory: `/tmp/opencode/legacy-dev`
-- C# directory: `/tmp/opencode/csharp-head`
+- Legacy directory: `/tmp/opencode/legacy-be0b717`
+- C# directory: `/home/hermes/work/shoreline-moeflow-backend-csharp`
 - Placeholder normalization: Flask <name>/<converter:name> and C# {name}/{name:constraint}/{*name} are collapsed to one '{}' token; path structure is unchanged.
 - OPTIONS is recorded but excluded from business coverage.
 
@@ -19,8 +19,8 @@ This is an **offline static audit**. It does not import or run the legacy Python
 | Legacy business registrations (non-OPTIONS) | 194 |
 | Core business registrations | 162 |
 | Core effective methods (handler exists) | 160 |
-| Core effective methods present in C# | 156 |
-| Core effective methods missing in C# | 4 |
+| Core effective methods present in C# | 160 |
+| Core effective methods missing in C# | 0 |
 | Core registered-only methods (405) | 2 |
 | Core methods with unresolved handler status | 0 |
 | Conditional (MIT) effective methods | 5 |
@@ -28,7 +28,7 @@ This is an **offline static audit**. It does not import or run the legacy Python
 | Optional-module effective methods | 27 |
 | Optional-module methods present in C# | 27 |
 | Commented-out method entries | 6 |
-| C# route method entries | 189 |
+| C# route method entries | 198 |
 | C# entries not in legacy | 4 |
 | Legacy unresolved warnings | 0 |
 | C# unresolved warnings | 0 |
@@ -44,9 +44,7 @@ This is an **offline static audit**. It does not import or run the legacy Python
 
 ## Missing by module (core effective routes)
 
-| Module | Missing | Methods and paths |
-| --- | ---: | --- |
-| index | 4 | `GET /docs/<path:path>` (DocsAPI @ app/apis/urls.py:121)<br>`GET /error` (ErrorAPI @ app/apis/urls.py:134)<br>`GET /urls` (UrlListAPI @ app/apis/urls.py:126)<br>`GET /warning` (WarningAPI @ app/apis/urls.py:129) |
+No core effective routes are missing.
 
 ## Optional modules and enable conditions
 
@@ -65,16 +63,16 @@ None.
 
 | Method | Path | Handler | Condition | In C# |
 | --- | --- | --- | --- | --- |
-| OPTIONS | `/v1/mit/image-tasks` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| OPTIONS | `/v1/mit/image-tasks` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
 | POST | `/v1/mit/image-tasks` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
 | GET | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
-| OPTIONS | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
-| OPTIONS | `/v1/mit/images` | `MitImageApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| OPTIONS | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
+| OPTIONS | `/v1/mit/images` | `MitImageApi` | `app_config['MIT_STORAGE_ROOT']` | no |
 | POST | `/v1/mit/images` | `MitImageApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
-| OPTIONS | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| OPTIONS | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
 | POST | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
 | GET | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
-| OPTIONS | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| OPTIONS | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
 
 ## Commented-out (disabled) routes
 
@@ -102,14 +100,14 @@ None.
 | Category | Module | Method | Path | Handler | Handler status | C# | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | conditional | manga-image-translator | OPTIONS | `/v1/mit/image-tasks` | `MitImageTaskApi` | options_not_business | - | `app/apis/urls.py:639` |
-| conditional | manga-image-translator | POST | `/v1/mit/image-tasks` | `MitImageTaskApi` | handler | no | `app/apis/urls.py:639` |
-| conditional | manga-image-translator | GET | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | handler | no | `app/apis/urls.py:644` |
+| conditional | manga-image-translator | POST | `/v1/mit/image-tasks` | `MitImageTaskApi` | handler | yes | `app/apis/urls.py:639` |
+| conditional | manga-image-translator | GET | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | handler | yes | `app/apis/urls.py:644` |
 | conditional | manga-image-translator | OPTIONS | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | options_not_business | - | `app/apis/urls.py:644` |
 | conditional | manga-image-translator | OPTIONS | `/v1/mit/images` | `MitImageApi` | options_not_business | - | `app/apis/urls.py:634` |
-| conditional | manga-image-translator | POST | `/v1/mit/images` | `MitImageApi` | handler | no | `app/apis/urls.py:634` |
+| conditional | manga-image-translator | POST | `/v1/mit/images` | `MitImageApi` | handler | yes | `app/apis/urls.py:634` |
 | conditional | manga-image-translator | OPTIONS | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | options_not_business | - | `app/apis/urls.py:649` |
-| conditional | manga-image-translator | POST | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | handler | no | `app/apis/urls.py:649` |
-| conditional | manga-image-translator | GET | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | handler | no | `app/apis/urls.py:654` |
+| conditional | manga-image-translator | POST | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | handler | yes | `app/apis/urls.py:649` |
+| conditional | manga-image-translator | GET | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | handler | yes | `app/apis/urls.py:654` |
 | conditional | manga-image-translator | OPTIONS | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | options_not_business | - | `app/apis/urls.py:654` |
 | core | admin | OPTIONS | `/v1/admin/admin-status` | `AdminUserAdminStatusAPI` | options_not_business | - | `app/apis/urls.py:601` |
 | core | admin | PUT | `/v1/admin/admin-status` | `AdminUserAdminStatusAPI` | handler | yes | `app/apis/urls.py:601` |
@@ -192,15 +190,15 @@ None.
 | core | identity | PATCH | `/v1/teams/<team_id>/members/<member_id>/default-display-name` | `TeamMemberDefaultDisplayNameAPI` | handler | yes | `app/apis/urls.py:281` |
 | core | identity | OPTIONS | `/v1/users/<user_id>/aliases` | `UserAliasesAPI` | options_not_business | - | `app/apis/urls.py:216` |
 | core | identity | PATCH | `/v1/users/<user_id>/aliases` | `UserAliasesAPI` | handler | yes | `app/apis/urls.py:216` |
-| core | index | GET | `/docs/<path:path>` | `DocsAPI` | handler | no | `app/apis/urls.py:121` |
+| core | index | GET | `/docs/<path:path>` | `DocsAPI` | handler | yes | `app/apis/urls.py:121` |
 | core | index | OPTIONS | `/docs/<path:path>` | `DocsAPI` | options_not_business | - | `app/apis/urls.py:121` |
-| core | index | GET | `/error` | `ErrorAPI` | handler | no | `app/apis/urls.py:134` |
+| core | index | GET | `/error` | `ErrorAPI` | handler | yes | `app/apis/urls.py:134` |
 | core | index | OPTIONS | `/error` | `ErrorAPI` | options_not_business | - | `app/apis/urls.py:134` |
 | core | index | GET | `/ping` | `PingAPI` | handler | yes | `app/apis/urls.py:118` |
 | core | index | OPTIONS | `/ping` | `PingAPI` | options_not_business | - | `app/apis/urls.py:118` |
-| core | index | GET | `/urls` | `UrlListAPI` | handler | no | `app/apis/urls.py:126` |
+| core | index | GET | `/urls` | `UrlListAPI` | handler | yes | `app/apis/urls.py:126` |
 | core | index | OPTIONS | `/urls` | `UrlListAPI` | options_not_business | - | `app/apis/urls.py:126` |
-| core | index | GET | `/warning` | `WarningAPI` | handler | no | `app/apis/urls.py:129` |
+| core | index | GET | `/warning` | `WarningAPI` | handler | yes | `app/apis/urls.py:129` |
 | core | index | OPTIONS | `/warning` | `WarningAPI` | options_not_business | - | `app/apis/urls.py:129` |
 | core | language | GET | `/v1/languages` | `LanguageListAPI` | handler | yes | `app/apis/urls.py:583` |
 | core | language | OPTIONS | `/v1/languages` | `LanguageListAPI` | options_not_business | - | `app/apis/urls.py:583` |
@@ -431,10 +429,10 @@ None.
 
 | Method | Path | Source |
 | --- | --- | --- |
-| GET | `/health/live` | `src/Shoreline.Api/Program.cs:156` |
-| GET | `/health/ready` | `src/Shoreline.Api/Program.cs:157` |
+| GET | `/health/live` | `src/Shoreline.Api/Program.cs:172` |
+| GET | `/health/ready` | `src/Shoreline.Api/Program.cs:173` |
 | GET | `/v1/config/ziteng-partner` | `src/Shoreline.Api/Modules/ZitengPartner/ZitengPartnerEndpoints.cs:27` |
-| GET | `/v1/homepage` | `src/Shoreline.Api/Features/SiteSettings.cs:67` |
+| GET | `/v1/homepage` | `src/Shoreline.Api/Features/SiteSettings.cs:92` |
 
 ## Usage
 

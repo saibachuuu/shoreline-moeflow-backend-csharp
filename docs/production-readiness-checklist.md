@@ -1,6 +1,6 @@
 # 生产替换硬门槛检查表
 
-日期：2026-11-10（晚间更新）。Python 参考 `be0b717`；C# 主分支当前 `bc9557f`。
+日期：2026-11-10（夜间更新）。Python 参考 `be0b717`；C# 主分支 `2650a74` + 未提交 bootstrap/诊断路由工作树。
 
 **发布结论：阻塞，不能替换生产 Python。**
 “已验证”只代表表中具体证据；静态实现、测试发现、旧快照绿色结果均不等于生产验收。
@@ -10,8 +10,8 @@
 
 | 硬门槛 | 状态 | 证据 / 阻塞 / 仍需执行 |
 |---|---|---|
-| 核心有效路由注册 | 未验证 | 静态 156/160；4 条诊断路由没有实现或批准例外；还须运行时装配验证 |
-| 全核心路由 C# HTTP 行为与权限 | 未验证 | 静态审计命中 156/160；不等于 HTTP 执行通过，未跑全量 |
+| 核心有效路由注册 | 已验证（静态） | 静态 160/160：`GET /docs/<path>`、`/error`、`/urls`、`/warning` 已由 `LegacyDiagnosticsEndpoints` 装配（`LegacyDiagnosticsTests` 5/5 中的 4 条断言）；运行时装配仍须测试机部署复核 |
+| 全核心路由 C# HTTP 行为与权限 | 未验证 | 静态审计命中 160/160；不等于 HTTP 执行通过，未跑全量 |
 | archive_import HTTP | 未验证 | 已装配；需 request/body/errors/auth/digest 测试 |
 | partner_search HTTP | 未验证 | 已有 HTTP 测试；需全契约、写/索引排序和 Python oracle |
 | storage_pool HTTP | 未验证 | 已装配；需完整 admin HTTP 及权限/任务状态测试 |
@@ -25,13 +25,13 @@
 | Python auth token 互操作 | 未验证 | 旧 replay 使用 C# 自签 token；需真实 Python token |
 | storage key/prefix/R2 | 未验证 | Python 默认 storage/，C# 默认空；真实 R2 尚无验证；不用生产凭证 |
 | 设置、语言/类型/角色种子 | 未验证 | 当前初始化与 Python 逐项复核，不能沿用首轮猜测 |
-| 管理员/默认团队初始化 | 未验证 | Bootstrap branch 的 standalone Mongo 恢复测试 46/46，wired fresh host/login 47/47；尚未合并。既有 `UserTests` wired fixture 0/3 因缺 disposable initial password 启动失败，fixture 兼容工作中 |
+| 管理员/默认团队初始化 | 部分验证 | `BootstrapService` 已实现 Python `init_db`（站点设置/管理员/默认团队/默认项目集/`ajt`），`Testing` 环境默认关闭、部署默认开启；`BootstrapTests` 4/4、全量 888/888。测试机空库 HTTP 启动/登录待执行 |
 | 迁移及回滚数据兼容 | 未验证 | production-shaped disposable 副本尚未演练 |
 | 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
-| 最终合并后的 dotnet build 0/0 | 未验证 | 当前主分支 0/0；Bootstrap 接线与其他未合并修复最终定稿后还须重跑 |
-| C# 全量 suite | 未验证 | 2026-11-10 晚间主线全量尝试未完成：专属 Mongo 配 1 GiB 限额后 14 秒以 exit 137 / `OOMKilled=true` 退出；`dotnet test` 因后续 Mongo 连接拒绝运行至 1800 秒 timeout，控制台有 306 条 `[FAIL]` 标记但无完整计数/TRX，不能当代码全量失败数或通过数。隔离栈已 stop。后续须提高独占 Mongo 可用内存后重跑 |
+| 最终合并后的 dotnet build 0/0 | 已验证 | `2650a74` + bootstrap/诊断工作树：`dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error（2026-11-10） |
+| C# 全量 suite | 已验证 | `2650a74` + bootstrap/诊断工作树：`dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --no-build`，888 passed / 0 failed / 0 skipped，10 m 01 s；五端口隔离服务（Mongo 27241 / S3 29241 / SMTP 21241 / Mailpit 28241 / API 25241）。包含 `LegacyRuntimeDifferentialTests`，8 例差分仍为 0 business differences |
 | Python 全量 suite | 未验证 | 需无 dotenv、owned DB、isolated catalog/storage/broker 的安全环境 |
 | 真实差分全量 suite | 未验证 | 扩展差分真实运行但结果失败；修复 fixture 后须完整重跑 |
 | 可复现镜像 / lock / digest | 已验证（本机 amd64） | 主线 `bc9557f` 内容的原仓库 Dockerfile 两次 `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` 冷构建 ImageID 均为 `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`，层摘要相同；SDK 10.0.403/runtime 10.0.8 按 digest 锁定。仅同 builder、平台和源树，不代表跨构建机或跨平台 |

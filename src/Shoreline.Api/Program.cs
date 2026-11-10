@@ -68,6 +68,7 @@ builder.Services.AddScoped<ProjectInvitationService>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<ApplicationService>();
 builder.Services.AddScoped<IdentityTagPolicyService>();
+builder.Services.AddScoped<BootstrapService>();
 builder.Services.AddSingleton<ObjectStorage>();
 builder.Services.AddSingleton<JobQueue>();
 builder.Services.AddSingleton<EmailCodeService>();
@@ -93,6 +94,13 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .WithHeaders("Authorization", "Content-Type", "X-Label-Revision", "X-Request-ID", "Idempotency-Key")
     .WithExposedHeaders("X-Pagination-Page", "X-Pagination-Limit", "X-Pagination-Count", "X-Pagination-Page-Count", "X-Label-Revision", "X-Label-Project")));
 var app = builder.Build();
+// Python's init_db always prepares the site setting, administrator and default
+// team. Tests run against disposable databases with their own fixtures, so the
+// bootstrap is opt-out there unless explicitly requested. Read the merged
+// configuration after Build so WebApplicationFactory overrides are visible.
+var bootstrapEnabled = bool.TryParse(app.Configuration["Bootstrap:Enabled"], out var configuredBootstrap)
+    ? configuredBootstrap
+    : !app.Environment.IsEnvironment("Testing");
 app.UseCors();
 app.UseRateLimiter();
 app.Use(async (context, next) =>
@@ -121,6 +129,7 @@ app.Use(async (context, next) =>
 app.UseRouting();
 app.UseLabelRequestGuard();
 app.MapGet("/ping", () => Results.Text("pong"));
+app.MapLegacyDiagnostics();
 app.MapUsers();
 app.MapEmail();
 app.MapSite();
@@ -186,6 +195,11 @@ using (var scope = app.Services.CreateScope())
 }
 await app.Services.GetRequiredService<LanguageCatalog>().InitializeAsync(CancellationToken.None);
 await app.Services.GetRequiredService<LegacyTypes>().InitializeAsync(CancellationToken.None);
+if (bootstrapEnabled)
+{
+    using var bootstrapScope = app.Services.CreateScope();
+    await bootstrapScope.ServiceProvider.GetRequiredService<BootstrapService>().RunAsync(CancellationToken.None);
+}
 app.Run();
 
 public partial class Program;

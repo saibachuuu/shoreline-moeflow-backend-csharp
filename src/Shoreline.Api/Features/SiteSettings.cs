@@ -20,6 +20,31 @@ public sealed class SiteSettings(MongoStore store)
         ?? new BsonDocument { ["n"] = "site", ["ew"] = true, ["oacg"] = true,
             ["we"] = new BsonArray(), ["ajt"] = new BsonArray() };
 
+    /// <summary>
+    /// Python SiteSetting.init_site_setting: persist the single site document on a
+    /// fresh installation. Existing documents (including extension-owned fields)
+    /// are never overwritten.
+    /// </summary>
+    public async Task<BsonDocument> EnsureAsync(CancellationToken ct)
+    {
+        var defaults = new BsonDocument
+        {
+            ["n"] = "site", ["ew"] = true,
+            ["we"] = new BsonArray(), ["oacg"] = true, ["ajt"] = new BsonArray(),
+            ["h"] = "", ["hc"] = "", ["st"] = "", ["hw"] = "", ["hi"] = ""
+        };
+        try
+        {
+            await store.Collection("site_setting").UpdateOneAsync(new BsonDocument("n", "site"),
+                new BsonDocument("$setOnInsert", defaults), new UpdateOptions { IsUpsert = true }, ct);
+        }
+        catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        {
+            // Another instance won the one-document race; its row is authoritative.
+        }
+        return await GetAsync(ct);
+    }
+
     public static Dictionary<string, object?> View(BsonDocument doc, bool homepageOnly = false)
     {
         var view = TextFields.ToDictionary(f => f.Api, f => (object?)doc.Text(f.Bson));
