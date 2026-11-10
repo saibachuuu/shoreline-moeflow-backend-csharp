@@ -42,6 +42,7 @@ python -m unittest discover -s tools/tests -p "test_*.py"
 ```
 
 本轮主验收端口：Mongo 27231、S3 29231、SMTP 21231、Mailpit 28231、API 25231（未起 API）。先检查端口是否仍由本轮容器拥有，不通过任意 URI 或 SSH tunnel 使用生产库。
+TRX 时间（UTC+08:00）：首次依赖失败 16:51:28–16:52:04；纯单元 16:54:15–16:54:16；依赖就绪复验 16:56:09–16:56:29。三个结果均读取 XML Counters 核对，不以控制台截断推算。
 WSL 空闲退出导致本轮容器停止，退出码 Mongo/Mailpit 0、S3 143、OOM=false；不能以 Windows 进程运行推断 Linux 依赖存活。
 复验使用同一有界 Linux shell 起依赖并调用 Windows dotnet.exe，维持 WSL 会话，99/99 通过。
 
@@ -84,6 +85,7 @@ WSL 空闲退出导致本轮容器停止，退出码 Mongo/Mailpit 0、S3 143、
 - `shoreline-readiness-isolation-20261110-mailpit-1`
 - `shoreline-readiness-bootstrap-20261110`
 
+收尾已显式执行 `docker stop --time 15` 上述四个名字，再逐个 inspect 确认为 `status=exited oom=false`，没有删除或重建。
 保留容器/网络/worktree/分支，不做 down -v、prune、删除库或 dump。tmpfs 中的测试数据在容器停止后不可靠，验证证据在宿主 Temp。
 观察到另有 `debug-s3`（本日 08:41:47Z 创建，端口 29999），代理最终报告没有声明其来源；不擅自删除或变更，该容器检查时已退出。
 不停止既有 `moeflow-deploy-*`、`ar-io-gateway`，不改 Docker daemon / WSL / 用户配置。
