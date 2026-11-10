@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
@@ -14,7 +15,9 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
     IdentityPermissions permissions, TeamService teams, TeamMemberService members,
     ObjectStorage? storage = null, IConfiguration? configuration = null,
     TeamLifecycleLock? lifecycle = null, ProjectLabelLock? labels = null,
-    LabelRequestContext? labelContext = null, ProjectStorageRouter? router = null)
+    LabelRequestContext? labelContext = null, ProjectStorageRouter? router = null,
+    IEnumerable<IProjectCreatedHook>? projectCreatedHooks = null,
+    ILogger<ProjectService>? logger = null)
 {
     private IMongoCollection<BsonDocument> Projects => store.Collection("project");
     private IMongoCollection<BsonDocument> Sets => store.Collection("project_set");
@@ -268,6 +271,21 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
                 new BsonDocument("$set", new BsonDocument("tc", created.Count)), cancellationToken: ct);
         }
         await AddCreatorMemberAsync(document, actor, ct);
+        if (projectCreatedHooks is not null)
+        {
+            var projectId = document["_id"].AsObjectId;
+            foreach (var hook in projectCreatedHooks)
+            {
+                try
+                {
+                    await hook.OnProjectCreatedAsync(projectId, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                {
+                    logger?.LogError(ex, "ProjectCreatedHook {HookType} failed for project {ProjectId}", hook.GetType().Name, projectId);
+                }
+            }
+        }
         return document;
     }
 

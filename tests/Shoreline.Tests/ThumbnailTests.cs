@@ -408,6 +408,36 @@ public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDispo
     }
 
     [Fact]
+    public async Task JobHandler_PassesAttemptsContextToThumbnailService()
+    {
+        var root = TempRoot();
+        var config = LocalConfig(root);
+        using var storage = new ObjectStorage(config);
+        var save = Save("handler_blocked.jpg");
+        await PutAsync(storage, $"files/{save}", ImageBytes(300, 200, MagickFormat.Jpeg));
+        // Block cover upload so it triggers transient error handling
+        Directory.CreateDirectory(Path.Combine(root, "files",
+            $"cover-{Path.GetFileNameWithoutExtension(save)}.webp"));
+        var project = await ProjectAsync();
+        var file = await FileAsync(project, save);
+        var service = Service(storage, config, TempRoot(), maxAttempts: 4);
+        var payload = await ScheduleAndPayloadAsync(service, file, project);
+
+        var serviceCollection = new ServiceCollection();
+        serviceCollection.AddSingleton(service);
+        var provider = serviceCollection.BuildServiceProvider();
+        var handler = new ThumbnailJobHandler(provider.GetRequiredService<IServiceScopeFactory>());
+
+        // Execute via IJobHandler overload with attempts = 4
+        var jobId = ObjectId.GenerateNewId();
+        await handler.ExecuteAsync(jobId, 4, payload, ct);
+
+        var row = await LoadFileAsync(file);
+        Assert.Equal(ThumbnailService.ThumbnailFailed, row.Integer("th"));
+        Assert.Equal(ThumbnailService.TransientFailureError, row.Text("the"));
+    }
+
+    [Fact]
     public async Task CanceledRun_DoesNotPublish()
     {
         var project = await ProjectAsync();

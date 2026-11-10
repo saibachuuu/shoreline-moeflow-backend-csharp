@@ -7,4 +7,5 @@ public interface IJobHandler
 {
     string Kind { get; }
     Task ExecuteAsync(BsonDocument payload, CancellationToken ct);
+    Task ExecuteAsync(ObjectId jobId, int attempts, BsonDocument payload, CancellationToken ct) => ExecuteAsync(payload, ct);
 }

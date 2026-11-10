@@ -286,4 +286,50 @@ public sealed class ProjectTests(LocalServices services)
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(code, body.GetProperty("code").GetInt32());
     }
+
+    [Fact]
+    public async Task CreateProject_InvokesProjectCreatedHooks_AndSurvivesHookFailure()
+    {
+        var store = services.Store;
+        var clock = TimeProvider.System;
+        var types = services.App.Services.GetRequiredService<LegacyTypes>();
+        var teams = services.App.Services.GetRequiredService<TeamService>();
+        var members = services.App.Services.GetRequiredService<TeamMemberService>();
+        var permissions = services.App.Services.GetRequiredService<IdentityPermissions>();
+
+        var invoked = new List<ObjectId>();
+        var successHook = new RecordingProjectCreatedHook(invoked);
+        var failingHook = new ThrowingProjectCreatedHook();
+
+        var projectService = new ProjectService(
+            store, clock, types, permissions, teams, members,
+            projectCreatedHooks: [successHook, failingHook]);
+
+        var creator = await UserAsync();
+        using var client = Client(creator);
+        var teamId = await CreateTeamAsync(client, Name("team"));
+        var team = await members.GetTeamAsync(teamId.ToString(), CancellationToken.None);
+
+        var project = await projectService.CreateProjectAsync(
+            creator, team, JsonDocument.Parse(JsonSerializer.Serialize(ProjectForm())).RootElement, CancellationToken.None);
+
+        Assert.NotNull(project);
+        var createdId = project["_id"].AsObjectId;
+        Assert.Contains(createdId, invoked);
+    }
+
+    private sealed class RecordingProjectCreatedHook(List<ObjectId> invoked) : IProjectCreatedHook
+    {
+        public Task OnProjectCreatedAsync(ObjectId projectId, CancellationToken ct)
+        {
+            invoked.Add(projectId);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingProjectCreatedHook : IProjectCreatedHook
+    {
+        public Task OnProjectCreatedAsync(ObjectId projectId, CancellationToken ct) =>
+            throw new InvalidOperationException("hook exploded");
+    }
 }

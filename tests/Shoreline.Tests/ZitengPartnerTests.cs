@@ -512,6 +512,33 @@ public sealed class ZitengPartnerTests
     }
 
     [Fact]
+    public async Task ProjectCreatedHook_InvokesNotifierAndEnqueuesCheck()
+    {
+        await using var world = await DirectWorld.CreateAsync();
+        var projectId = ObjectId.GenerateNewId();
+        await world.Store.Collection("project").InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = projectId,
+            ["n"] = "【7】[社团] 作品名 (シリーズ)",
+        });
+        var handler = new FakeHandler((_, _, _) => throw new InvalidOperationException("must not call"));
+        var service = world.Service(handler);
+        var notifier = new ZitengPartnerProjectCreatedNotifier(service,
+            NullLogger<ZitengPartnerProjectCreatedNotifier>.Instance);
+        var hook = new ZitengPartnerProjectCreatedHook(notifier);
+
+        await hook.OnProjectCreatedAsync(projectId, CancellationToken.None);
+
+        var check = await world.PartnerStore.GetCheckAsync(projectId.ToString());
+        Assert.NotNull(check);
+        Assert.Equal("作品名 (シリーズ)", check.Keyword);
+        var job = await world.Store.Collection("csharp_job")
+            .Find(new BsonDocument("kind", ZitengPartnerService.JobKind))
+            .FirstAsync();
+        Assert.Equal(check.Generation, job["payload"]["generation"].ToInt64());
+    }
+
+    [Fact]
     public async Task Store_ReadProjectNameReturnsEmptyWhenDeleted()
     {
         await using var world = await DirectWorld.CreateAsync();

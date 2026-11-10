@@ -17,4 +17,10 @@ public sealed class ThumbnailJobHandler(IServiceScopeFactory scopes) : IJobHandl
         using var scope = scopes.CreateScope();
         await scope.ServiceProvider.GetRequiredService<ThumbnailService>().RunAsync(payload, ct);
     }
+
+    public async Task ExecuteAsync(ObjectId jobId, int attempts, BsonDocument payload, CancellationToken ct)
+    {
+        using var scope = scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ThumbnailService>().RunAsync(payload, attempts, ct);
+    }
 }

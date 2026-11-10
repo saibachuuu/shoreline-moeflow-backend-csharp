@@ -1,5 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Bson;
+using Shoreline.Api.Features;
 using Shoreline.Api.Jobs;
 
 namespace Shoreline.Api.Modules.ZitengPartner;
@@ -29,6 +31,7 @@ public static class ZitengPartnerRegistration
             });
         services.AddTransient<ZitengPartnerService>();
         services.AddTransient<ZitengPartnerProjectCreatedNotifier>();
+        services.AddTransient<IProjectCreatedHook, ZitengPartnerProjectCreatedHook>();
         // The generic Mongo-backed JobWorker already runs in the host; this adds
         // the replacement for tasks.ziteng_partner.check_project.
         services.AddSingleton<IJobHandler, ZitengCheckJobHandler>();
@@ -49,4 +52,10 @@ public static class ZitengPartnerRegistration
             logger?.LogError("建立紫藤查重索引失败: {Error}", exception.GetType().Name);
         }
     }
+}
+
+internal sealed class ZitengPartnerProjectCreatedHook(ZitengPartnerProjectCreatedNotifier notifier) : IProjectCreatedHook
+{
+    public Task OnProjectCreatedAsync(ObjectId projectId, CancellationToken ct) =>
+        notifier.TryNotifyAsync(projectId.ToString(), ct);
 }

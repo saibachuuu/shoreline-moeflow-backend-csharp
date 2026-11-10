@@ -43,7 +43,7 @@ public sealed class JobWorker(JobQueue queue, IEnumerable<IJobHandler> handlers,
         var renewal = RenewAsync(id, owner, execution, heartbeat.Token);
         try
         {
-            await handler.ExecuteAsync(job["payload"].AsBsonDocument, execution.Token);
+            await handler.ExecuteAsync(id, job["attempts"].AsInt32, job["payload"].AsBsonDocument, execution.Token);
             execution.Token.ThrowIfCancellationRequested();
             await queue.CompleteAsync(id, owner, ct);
         }

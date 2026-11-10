@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
@@ -28,6 +29,28 @@ public sealed class ArchiveImportTests(LocalServices services)
         Assert.True(ArchiveImportStatus.IsRunning(0));
         Assert.True(ArchiveImportStatus.IsRunning(4));
         Assert.False(ArchiveImportStatus.IsRunning(5));
+    }
+
+    [Theory]
+    [InlineData("valid_image.png", true)]
+    [InlineData("test.jpg", true)]
+    [InlineData("path/with/slash.png", false)]
+    [InlineData("path\\with\\backslash.png", false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    public void ArchiveFilenamePolicy_IsValid_MatchesFileServiceContract(string name, bool expected)
+    {
+        Assert.Equal(expected, ArchiveFilenamePolicy.IsValid(name));
+    }
+
+    [Fact]
+    public async Task FileServiceArchiveUploader_ThrowsWhenServiceUnavailable()
+    {
+        var sc = new ServiceCollection();
+        var provider = sc.BuildServiceProvider();
+        var uploader = new FileServiceArchiveUploader(provider.GetRequiredService<IServiceScopeFactory>());
+        await Assert.ThrowsAsync<ArchiveUploaderUnavailableException>(() =>
+            uploader.UploadAsync(new BsonDocument(), "test.png", Stream.Null, 0, CancellationToken.None));
     }
 
     [Fact]
