@@ -1,6 +1,6 @@
 # 生产替换硬门槛检查表
 
-日期：2026-11-10（深夜更新）。Python 参考 `be0b717`；C# 主分支 `a7fbfc4`。
+日期：2026-11-10（晚间更新）。Python 参考 `be0b717`；C# 主分支 `2ab6863`（差分扩展）+ 本文件更新。
 
 **发布结论：阻塞，不能替换生产 Python。**
 “已验证”只代表表中具体证据；静态实现、测试发现、旧快照绿色结果均不等于生产验收。
@@ -19,22 +19,22 @@
 | MIT 条件模块 | 未验证 | 启用/禁用装配及 Python 契约待执行 |
 | OCR / 405 / 注释禁用路由的逐条例外 | 未验证 | 已记录候选原因，尚无产品批准；须核对真实响应 |
 | 真实 Flask / C# 同种子 BSON | 未验证 | 旧 fixture 有局部种子；需完整 app / modules、可复现 fresh run |
-| 真实差分读与成功写 | 未验证 | 未合并的真实 Flask 扩展已成功执行 partner_search 写/读/查询；整体差分仍失败 |
-| 差分 status/body/error/headers/前后 digest | 未验证 | 当前 16 个 business differences；包含额外 BSON 字段及 CORS/HTTP 差异，fixture 错误修订中 |
-| BSON collection/alias/type/index/unique | 未验证 | `2aaaa85` 接入两个 team_member 索引，Mongo focused 11/11；`team_member_alias_search_v1` 定义冲突仅只读报告，尚未用生产形状副本处置 |
+| 真实差分读与成功写 | 部分验证 | 真实 Flask 生成 19 个只读用例，C# replay **19/19 匹配，0 business differences**（`docs/runtime-differential.md`）；写请求仍未纳入差分，测试机 E2E 已覆盖建团队/项目/术语库/上传/源文/译文/导出 |
+| 差分 status/body/error/headers/前后 digest | 已验证（只读 19 例） | 19 例 status/body/前后 digest 全匹配；框架级 wire 差异单独记录；写请求和 4 个可选模块仍未覆盖 |
+| BSON collection/alias/type/index/unique | 部分验证 | 三个 team_member 索引（含 `team_member_alias_search_v1` on `{team,status,asrch}`）由 `MongoSchemaReadinessTests` 验证；冲突索引拒绝替换；测试机空库 BSON 字段与 Python 对齐。生产 dump 副本上的全集合对比未执行 |
 | Python auth token 互操作 | 未验证 | 旧 replay 使用 C# 自签 token；需真实 Python token |
 | storage key/prefix/R2 | 未验证 | Python 默认 storage/，C# 默认空；真实 R2 尚无验证；不用生产凭证 |
-| 设置、语言/类型/角色种子 | 未验证 | 当前初始化与 Python 逐项复核，不能沿用首轮猜测 |
+| 设置、语言/类型/角色种子 | 部分验证 | bootstrap/`LegacyTypes`/`LanguageCatalog` 已与 Python 逐项复核，测试机空库初始化通过；逐个种子集合的完整 BSON 差分仍未执行 |
 | 管理员/默认团队初始化 | 已验证（测试机空库） | 测试机 `moeflow` 原为空库；新镜像启动日志 `Created bootstrap administrator …`、`Created bootstrap Default Team …`，二次重启无重复创建；验证码 + 密码登录 `POST /v1/user/token` 成功，`/v1/user/info`、`/v1/user/teams` 正常 |
 | 迁移及回滚数据兼容 | 未验证 | production-shaped disposable 副本尚未演练 |
 | 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
 | 最终合并后的 dotnet build 0/0 | 已验证 | `2650a74` + bootstrap/诊断工作树：`dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error（2026-11-10） |
-| C# 全量 suite | 已验证 | `2650a74` + bootstrap/诊断工作树：`dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --no-build`，888 passed / 0 failed / 0 skipped，10 m 01 s；五端口隔离服务（Mongo 27241 / S3 29241 / SMTP 21241 / Mailpit 28241 / API 25241）。包含 `LegacyRuntimeDifferentialTests`，8 例差分仍为 0 business differences |
-| Python 全量 suite | 未验证 | 需无 dotenv、owned DB、isolated catalog/storage/broker 的安全环境 |
-| 真实差分全量 suite | 未验证 | 扩展差分真实运行但结果失败；修复 fixture 后须完整重跑 |
-| 可复现镜像 / lock / digest | 已验证（本机 amd64） | 主线 `bc9557f` 内容的原仓库 Dockerfile 两次 `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` 冷构建 ImageID 均为 `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`，层摘要相同；SDK 10.0.403/runtime 10.0.8 按 digest 锁定。仅同 builder、平台和源树，不代表跨构建机或跨平台 |
+| C# 全量 suite | 已验证 | `2ab6863`：`dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --no-build`，**888 passed / 0 failed / 0 skipped**，9 m 39 s；五端口隔离服务（Mongo 27241 / S3 29241 / SMTP 21241 / Mailpit 28241 / API 25241）。包含 19 例 `LegacyRuntimeDifferentialTests`，0 business differences |
+| Python 全量 suite | 已验证 | `venv-moeflow/bin/pytest -q`：**836 passed, 48 subtests passed**, 446 s（`.env.test`，mongomock/memory broker/local storage） |
+| 真实差分全量 suite | 部分验证 | 只读扩展 19/19、0 business differences；写路径和可选模块差分未覆盖，不能称全量 |
+| 可复现镜像 / lock / digest | 部分验证 | `bc9557f` 内容两次 `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` 冷构建 ImageID 均为 `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`，层摘要相同；SDK 10.0.403/runtime 10.0.8 按 digest 锁定。仅同 builder、平台和源树，不代表跨构建机或跨平台 |
 | 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | 镜像与进程 UID 均为 1654；测试机 bind mount `./storage` 初始为 root:root 755，首次上传 500 `UnauthorizedAccessException`，`chown -R 1654:1654 storage` 后上传/缩略图/导出全部通过。部署文档必须包含该 chown |
 | health / readiness / 配置校验 | 部分验证 | 最终镜像 `/health/live` 与 Mongo-backed `/health/ready` 均 HTTP 200；配置校验矩阵、反代及部署形状仍未验收 |
 | 日志 / metrics / 告警 | 未验证 | 需可观测性、隐私与故障告警验证 |
@@ -51,12 +51,12 @@
 
 ## 明确阻塞
 
-1. 没有通过且可重复、覆盖读写及四可选模块要求的真实运行时差分；已有差分仍失败。
-2. 静态路由意图矩阵及 20 task 映射已落盘，但全 HTTP 执行、全部 BSON/index 及故障恢复证据仍不足；C# 54 条有效 legacy 路由没有静态 HTTP 命中。
-3. Dockerfile 的项目复制和镜像 digest 已补齐；最终镜像复建/运行、配置/security/observability 仍需验收。
-4. C# 测试依赖已统一可配置 loopback 端口并聚焦验收；Python 默认 dotenv/重建测试库仍必须安全隔离。
-5. 全 C# / Python / 差分 suite、测试机生产形状部署、备份恢复/回滚、负载长稳、安全自查均未完成。
-6. 未确认可用的生产 dump **副本**位置及所需容量；生产机仅只读，不通过读取生产凭证绕过限制。
+1. 真实运行时差分只覆盖 19 个只读请求；成功写、邮件、四可选模块、真实 OSS/R2 尚未纳入。
+2. 静态路由 160/160 已覆盖，但全路由 HTTP 行为/越权矩阵未执行；20 个 Celery task 的故障/重试/幂等证据不足，MIT 缺外部消费者。
+3. 最新镜像 `shoreline-moeflow:ready-20261110` 只做过单次构建；未重跑双构建 digest 一致性，也未在 CI 中复现。
+4. Python/C# 全量 suite 已绿，但测试机只做了单用户 E2E；第二用户邀请/申请/密码重置邮件、跨天 StoragePool、并发/长稳未验证。
+5. 备份恢复、迁移回滚、生产 dump 副本上的 schema/索引校验未执行；生产机仅只读参考。
+6. 可观测性、限流/XFF、安全自查与部署 runbook 仍未完成。
 
 
 ## 测试机生产形状部署（2026-11-10）
