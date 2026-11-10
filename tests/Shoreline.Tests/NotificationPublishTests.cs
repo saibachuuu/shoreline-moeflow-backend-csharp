@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Features;
@@ -505,11 +506,125 @@ public sealed class NotificationPublishTests
                 UserEmailEnabled = false,
                 LogEmailEnabled = false
             }).Reason);
+        Assert.Equal("channel_disabled",
+            ProtectedNotificationMail.Check(
+                Message("dest@example.test"), settings with
+                {
+                    UserEmailEnabled = false,
+                    LogEmailEnabled = false
+                },
+                NotificationMailChannel.Log).Reason);
 
         Assert.Equal(MailKit.Security.SecureSocketOptions.StartTls,
             ProtectedNotificationMail.SocketOptions(false));
         Assert.Equal(MailKit.Security.SecureSocketOptions.SslOnConnect,
             ProtectedNotificationMail.SocketOptions(true));
+    }
+
+    [Theory]
+    [InlineData(true, true, "ok", "ok")]
+    [InlineData(true, false, "ok", "skipped")]
+    [InlineData(false, true, "skipped", "ok")]
+    [InlineData(false, false, "skipped", "skipped")]
+    public void MailGate_SelectsUserAndLogSwitchesIndependently(
+        bool userEmail, bool logEmail, string userStatus, string logStatus)
+    {
+        var allowlist = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "dest@example.test" };
+        var settings = new NotificationMailSettings(
+            userEmail, logEmail, true, false, "127.0.0.1", 25, false,
+            "noreply@example.test", null, null, true, allowlist);
+
+        var user = ProtectedNotificationMail.Check(Message("dest@example.test"), settings);
+        Assert.Equal(userStatus, user.Status);
+        Assert.Equal(userStatus == "ok" ? "" : "channel_disabled", user.Reason);
+
+        var log = ProtectedNotificationMail.Check(
+            Message("dest@example.test"), settings, NotificationMailChannel.Log);
+        Assert.Equal(logStatus, log.Status);
+        Assert.Equal(logStatus == "ok" ? "" : "channel_disabled", log.Reason);
+    }
+
+    [Fact]
+    public void MailSettings_ReadsUserAndLogSwitchesFromLegacyAndNewKeys()
+    {
+        var legacy = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ENABLE_USER_EMAIL"] = "false",
+            ["ENABLE_LOG_EMAIL"] = "True"
+        }).Build();
+        var legacySettings = NotificationMailSettings.FromConfiguration(legacy, new TestHostEnvironment());
+        Assert.False(legacySettings.UserEmailEnabled);
+        Assert.True(legacySettings.LogEmailEnabled);
+
+        var current = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Notifications:UserEmailEnabled"] = "true",
+            ["Notifications:LogEmailEnabled"] = "false",
+            ["ENABLE_USER_EMAIL"] = "false",
+            ["ENABLE_LOG_EMAIL"] = "true"
+        }).Build();
+        var currentSettings = NotificationMailSettings.FromConfiguration(current, new TestHostEnvironment());
+        Assert.True(currentSettings.UserEmailEnabled);
+        Assert.False(currentSettings.LogEmailEnabled);
+    }
+
+    [Fact]
+    public async Task ProtectedTransport_DoesNotSendUserMailWhenOnlyLogChannelIsEnabled()
+    {
+        var allowlist = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "dest@example.test" };
+        var settings = new NotificationMailSettings(
+            false, true, true, false, "127.0.0.1", TestEnvironment.SmtpPort, false,
+            "noreply@example.test", null, null, true, allowlist);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Notifications:UserEmailEnabled"] = "false",
+            ["Notifications:LogEmailEnabled"] = "true",
+            ["TESTING"] = "YES",
+            ["Mail:Host"] = settings.Host,
+            ["Mail:Port"] = settings.Port.ToString(),
+            ["Mail:UseSsl"] = "false",
+            ["Mail:From"] = settings.From,
+            ["Notifications:EmailAllowlist:0"] = "dest@example.test"
+        }).Build();
+        var transport = new MailKitNotificationTransport(
+            configuration, new TestHostEnvironment(), NullLogger<MailKitNotificationTransport>.Instance);
+
+        var result = await transport.SendAsync(Message("dest@example.test"), default);
+
+        Assert.Equal("skipped", result.Status);
+        Assert.Equal("channel_disabled", result.Reason);
+    }
+
+    [Fact]
+    public async Task ProtectedTransport_RejectsRecipientOutsideAllowlistWithoutSending()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Notifications:UserEmailEnabled"] = "true",
+            ["Notifications:LogEmailEnabled"] = "false",
+            ["TESTING"] = "YES",
+            ["Mail:Host"] = "127.0.0.1",
+            ["Mail:Port"] = TestEnvironment.SmtpPort.ToString(),
+            ["Mail:UseSsl"] = "false",
+            ["Mail:From"] = "noreply@example.test",
+            ["Notifications:EmailAllowlist:0"] = "allowed@example.test"
+        }).Build();
+        var transport = new MailKitNotificationTransport(
+            configuration, new TestHostEnvironment(), NullLogger<MailKitNotificationTransport>.Instance);
+
+        var result = await transport.SendAsync(Message("dest@example.test"), default);
+
+        Assert.Equal("skipped", result.Status);
+        Assert.Equal("recipient_not_allowed", result.Reason);
+    }
+
+    private sealed class TestHostEnvironment : Microsoft.Extensions.Hosting.IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = "Testing";
+        public string ApplicationName { get; set; } = "Shoreline.Tests";
+        public string ContentRootPath { get; set; } = Path.GetTempPath();
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } =
+            new Microsoft.Extensions.FileProviders.NullFileProvider();
     }
 
     [Fact]

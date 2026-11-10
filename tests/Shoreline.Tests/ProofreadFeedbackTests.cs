@@ -457,6 +457,28 @@ public sealed class ProofreadFeedbackTests : IDisposable
     }
 
     [Fact]
+    public async Task Send_UserMailDisabledWithLogMailEnabledDoesNotSendProofreadDraft()
+    {
+        var page = await CreateChangedPageAsync();
+        var configuration = new ConfigurationBuilder()
+            .AddConfiguration(Configuration(false, true, ("a", page.TranslatorEmail)))
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Notifications:UserEmailEnabled"] = "false",
+                ["Notifications:LogEmailEnabled"] = "true"
+            }).Build();
+        var service = Service(configuration);
+
+        var error = await Assert.ThrowsAsync<ApiError>(() =>
+            service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
+                page.Target["_id"].AsObjectId.ToString(), Body(), "key-0011", default));
+
+        Assert.Equal(4600, error.Code);
+        Assert.Equal(502, error.Status);
+        Assert.Empty(_mail.Messages);
+    }
+
+    [Fact]
     public async Task Send_TipsOnlyPageIsIncludedWithAllLabels()
     {
         var page = await CreateChangedPageAsync();

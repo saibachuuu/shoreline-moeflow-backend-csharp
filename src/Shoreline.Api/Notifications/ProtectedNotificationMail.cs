@@ -20,6 +20,17 @@ public sealed record NotificationMailMessage(
 
 public sealed record NotificationMailResult(string Status, string Reason);
 
+/// <summary>
+/// Which legacy SMTP channel a send belongs to. The Python adapter selects
+/// <c>ENABLE_USER_EMAIL</c> or <c>ENABLE_LOG_EMAIL</c> independently; the two
+/// switches never OR together.
+/// </summary>
+public enum NotificationMailChannel
+{
+    User,
+    Log
+}
+
 public interface INotificationMailTransport
 {
     Task<NotificationMailResult> SendAsync(NotificationMailMessage message, CancellationToken ct);
@@ -98,9 +109,17 @@ public static partial class ProtectedNotificationMail
     /// without ever touching the network.
     /// </summary>
     public static (string Status, string Reason, string Address) Check(
-        NotificationMailMessage message, NotificationMailSettings settings)
+        NotificationMailMessage message,
+        NotificationMailSettings settings,
+        NotificationMailChannel channel = NotificationMailChannel.User)
     {
-        if (!settings.UserEmailEnabled && !settings.LogEmailEnabled)
+        var channelEnabled = channel switch
+        {
+            NotificationMailChannel.User => settings.UserEmailEnabled,
+            NotificationMailChannel.Log => settings.LogEmailEnabled,
+            _ => false
+        };
+        if (!channelEnabled)
             return ("skipped", "channel_disabled", "");
         if (!IsValidAddress(message.To))
             return ("skipped", "invalid_email", "");
@@ -155,7 +174,8 @@ public sealed class MailKitNotificationTransport(
     public async Task<NotificationMailResult> SendAsync(NotificationMailMessage message, CancellationToken ct)
     {
         var settings = NotificationMailSettings.FromConfiguration(configuration, environment);
-        var (status, reason, address) = ProtectedNotificationMail.Check(message, settings);
+        var (status, reason, address) = ProtectedNotificationMail.Check(
+            message, settings, NotificationMailChannel.User);
         if (status != "ok")
         {
             Log(status, reason);
