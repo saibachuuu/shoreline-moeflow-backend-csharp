@@ -127,7 +127,9 @@ public sealed class OutputHttpTests
         var fileName = completedRow.Text("file_name");
         Assert.EndsWith(".zip", fileName);
         Assert.True(completed.GetProperty("storage_bytes").GetInt64() > 0);
-        Assert.False(string.IsNullOrWhiteSpace(completed.GetProperty("link").GetString()));
+        var link = completed.GetProperty("link").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(link));
+        Assert.Contains("response-content-disposition=attachment", link);
 
         var finalKey = "outputs/" + outputId + "/" + fileName;
         Assert.NotNull(await world.Storage.HeadAsync(finalKey, CancellationToken.None));

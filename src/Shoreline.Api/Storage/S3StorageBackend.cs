@@ -119,7 +119,10 @@ internal sealed class S3StorageBackend : IStorageBackend
         await client.CopyObjectAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<string> SignGetAsync(string key, TimeSpan validity)
+    public Task<string> SignGetAsync(string key, TimeSpan validity) =>
+        SignGetAsync(key, validity, null);
+
+    public Task<string> SignGetAsync(string key, TimeSpan validity, string? contentDisposition)
     {
         StorageKey.ValidateObjectKey(key);
 
@@ -148,6 +151,11 @@ internal sealed class S3StorageBackend : IStorageBackend
             Verb = HttpVerb.GET,
             Expires = DateTime.UtcNow.Add(validity),
         };
+
+        if (!string.IsNullOrEmpty(contentDisposition))
+        {
+            request.ResponseHeaderOverrides.ContentDisposition = contentDisposition;
+        }
 
         return client.GetPreSignedURLAsync(request);
     }

@@ -212,6 +212,9 @@ internal sealed class ObjectStorageBackend : IStorageBackend
     public Task<string> SignGetAsync(string key, TimeSpan validity) =>
         storage.SignGetAsync(key, validity);
 
+    public Task<string> SignGetAsync(string key, TimeSpan validity, string? contentDisposition) =>
+        storage.SignGetAsync(key, validity, contentDisposition);
+
     public Task<ObjectPage> ListAsync(string prefix, string? startAfter, int maxKeys,
         CancellationToken cancellationToken) =>
         storage.ListAsync(prefix, startAfter, maxKeys, cancellationToken);

@@ -2,10 +2,12 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
+using Shoreline.Api.Jobs;
 using Shoreline.Api.Security;
 
 namespace Shoreline.Tests;
@@ -107,5 +109,40 @@ public sealed class EmailTests(LocalServices services)
         await services.Store.Collection("v_code").InsertOneAsync(new BsonDocument
         { ["t"] = 2, ["i"] = email, ["c"] = "legacy", ["w"] = 0, ["e"] = DateTime.UtcNow.AddHours(1) });
         await Assert.ThrowsAsync<ApiError>(() => codes.VerifyAsync(2, email, "legacy", "v_code", true, default));
+    }
+
+    [Fact]
+    public async Task SecurityEmailHandler_Validates_Preconditions()
+    {
+        var clock = TimeProvider.System;
+        var disabledConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Mail:Enabled"] = "false"
+        }).Build();
+
+        var handlerWithDisabledMail = new SecurityEmailHandler(services.Store, disabledConfig, clock);
+        var jobId = ObjectId.GenerateNewId();
+        await services.Store.Collection("csharp_job").InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = jobId,
+            ["verification"] = new BsonDocument
+            {
+                ["consumed"] = false,
+                ["w"] = 0,
+                ["e"] = DateTime.UtcNow.AddHours(1),
+                ["t"] = 2,
+                ["i"] = "test@example.test",
+                ["c"] = "123456"
+            }
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handlerWithDisabledMail.ExecuteAsync(new BsonDocument("code_job_id", jobId), default));
+
+        // When consumed is true, it should return silently
+        await services.Store.Collection("csharp_job").UpdateOneAsync(
+            new BsonDocument("_id", jobId),
+            Builders<BsonDocument>.Update.Set("verification.consumed", true));
+        await handlerWithDisabledMail.ExecuteAsync(new BsonDocument("code_job_id", jobId), default);
     }
 }

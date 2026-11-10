@@ -368,7 +368,8 @@ public sealed class OutputService(
                     var objectStorage = storageLease?.Backend ?? storage;
                     link = await objectStorage.SignGetAsync(
                         cleanup.OutputPrefix + output["_id"].AsObjectId + "/" + fileName,
-                        TimeSpan.FromDays(7));
+                        TimeSpan.FromDays(7),
+                        contentDisposition: "attachment");
                 }
             }
 

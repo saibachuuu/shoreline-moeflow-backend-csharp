@@ -1079,6 +1079,8 @@ internal sealed class MemoryBackend : IStorageBackend
 
     public Task<string> SignGetAsync(string key, TimeSpan validity) => Task.FromResult("");
 
+    public Task<string> SignGetAsync(string key, TimeSpan validity, string? contentDisposition) => Task.FromResult("");
+
     public Task<ObjectPage> ListAsync(string prefix, string? startAfter, int maxKeys, CancellationToken ct)
     {
         var items = objects.Keys.Where(key => key.StartsWith(prefix, StringComparison.Ordinal))

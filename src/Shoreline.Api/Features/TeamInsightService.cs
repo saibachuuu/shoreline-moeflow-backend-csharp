@@ -433,7 +433,8 @@ public sealed class TeamInsightService(
                 // project whose artifacts live in another storage source.
                 if (!project.GetValue("csid", BsonNull.Value).IsObjectId && fileName.Length > 0)
                     link = await storage.SignGetAsync(OutputPrefix() + output["_id"].AsObjectId + "/" + fileName,
-                        SignedUrlValidity);
+                        SignedUrlValidity,
+                        contentDisposition: "attachment");
                 item["link"] = link;
             }
             result.Add(item);

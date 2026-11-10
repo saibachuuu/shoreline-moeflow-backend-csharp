@@ -28,6 +28,10 @@ public sealed class StorageTests(LocalServices services)
             }
             var signed = await storage.SignGetAsync(copy, TimeSpan.FromMinutes(1));
             Assert.Contains("X-Amz-Signature=", signed);
+
+            var signedWithDisposition = await storage.SignGetAsync(copy, TimeSpan.FromMinutes(1), "attachment; filename=\"custom.zip\"");
+            Assert.Contains("X-Amz-Signature=", signedWithDisposition);
+            Assert.Contains("response-content-disposition=", signedWithDisposition);
         }
         finally
         {

@@ -14,7 +14,9 @@ public interface IStorageBackend : IDisposable
 
     Task CopyAsync(string source, string destination, CancellationToken cancellationToken);
 
-    Task<string> SignGetAsync(string key, TimeSpan validity);
+    Task<string> SignGetAsync(string key, TimeSpan validity) => SignGetAsync(key, validity, null);
+
+    Task<string> SignGetAsync(string key, TimeSpan validity, string? contentDisposition);
 
     Task<ObjectPage> ListAsync(string prefix, string? startAfter, int maxKeys, CancellationToken cancellationToken);
 }

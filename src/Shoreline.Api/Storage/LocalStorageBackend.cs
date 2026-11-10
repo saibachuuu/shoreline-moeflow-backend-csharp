@@ -175,7 +175,10 @@ internal sealed class LocalStorageBackend : IStorageBackend
             .ConfigureAwait(false);
     }
 
-    public Task<string> SignGetAsync(string key, TimeSpan validity)
+    public Task<string> SignGetAsync(string key, TimeSpan validity) =>
+        SignGetAsync(key, validity, null);
+
+    public Task<string> SignGetAsync(string key, TimeSpan validity, string? contentDisposition)
     {
         StorageKey.ValidateLocalObjectKey(key);
 
