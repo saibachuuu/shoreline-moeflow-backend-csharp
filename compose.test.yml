@@ -1,4 +1,4 @@
-name: ${SHORELINE_TEST_STACK_NAME:-shoreline-readiness-isolation-20261110}
+name: ${SHORELINE_TEST_STACK_NAME:-shoreline-csharp-test}
 
 services:
   api:

@@ -13,12 +13,16 @@ public sealed class TestEnvironmentTests
     [Fact]
     public void DefaultsArePreserved()
     {
-        ClearAll();
-        Assert.Equal(27128, TestEnvironment.MongoPort);
-        Assert.Equal(29128, TestEnvironment.S3Port);
-        Assert.Equal(21128, TestEnvironment.SmtpPort);
-        Assert.Equal(28128, TestEnvironment.MailpitPort);
-        Assert.Equal(25128, TestEnvironment.ApiPort);
+        WithEnv("SHORELINE_TEST_MONGO_PORT", null, () =>
+            Assert.Equal(27128, TestEnvironment.MongoPort));
+        WithEnv("SHORELINE_TEST_S3_PORT", null, () =>
+            Assert.Equal(29128, TestEnvironment.S3Port));
+        WithEnv("SHORELINE_TEST_SMTP_PORT", null, () =>
+            Assert.Equal(21128, TestEnvironment.SmtpPort));
+        WithEnv("SHORELINE_TEST_MAILPIT_PORT", null, () =>
+            Assert.Equal(28128, TestEnvironment.MailpitPort));
+        WithEnv("SHORELINE_TEST_API_PORT", null, () =>
+            Assert.Equal(25128, TestEnvironment.ApiPort));
     }
 
     [Fact]
@@ -121,15 +125,6 @@ public sealed class TestEnvironmentTests
             Assert.Equal("http://127.0.0.1:28231", TestEnvironment.MailpitBaseUrl));
         WithEnv("SHORELINE_TEST_API_PORT", "25231", () =>
             Assert.Equal("http://127.0.0.1:25231", TestEnvironment.ApiBaseUrl));
-    }
-
-    private static void ClearAll()
-    {
-        Environment.SetEnvironmentVariable("SHORELINE_TEST_MONGO_PORT", null);
-        Environment.SetEnvironmentVariable("SHORELINE_TEST_S3_PORT", null);
-        Environment.SetEnvironmentVariable("SHORELINE_TEST_SMTP_PORT", null);
-        Environment.SetEnvironmentVariable("SHORELINE_TEST_MAILPIT_PORT", null);
-        Environment.SetEnvironmentVariable("SHORELINE_TEST_API_PORT", null);
     }
 
     private static void WithEnv(string name, string? value, Action action)

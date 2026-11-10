@@ -15,7 +15,7 @@ The host is fixed to `127.0.0.1`. Arbitrary MongoDB URIs are not supported, so t
 Use Docker Compose v2 with an explicit non-`.env` file so Compose does not automatically read a repository `.env`:
 
 ```sh
-docker compose -f compose.test.yml --env-file /tmp/shoreline-isolation.env up -d mongo s3 mailpit
+docker compose -f compose.test.yml --env-file /path/to/shoreline-isolation.ports up -d mongo s3 mailpit
 ```
 
 Example disposable env file:
@@ -29,4 +29,6 @@ SHORELINE_TEST_MAILPIT_PORT=28231
 SHORELINE_TEST_API_PORT=25231
 ```
 
-Only this project's `mongo`, `s3`, and `mailpit` services are started. No API image is built and no existing services or volumes are changed. Stop them with `docker compose -f compose.test.yml --env-file /tmp/shoreline-isolation.env down` when finished; leave them running for later acceptance unless explicitly asked to remove them.
+Export the same five port variables in the shell running `dotnet test`; Compose's `--env-file` does not configure the host test process. Check port occupancy before starting the uniquely named stack. A fixed loopback host prevents arbitrary remote hosts, but ports may still reach an SSH tunnel or another local service: ensure these ports belong to your disposable containers.
+
+Only this project's `mongo`, `s3`, and `mailpit` services are started. No API image is built and no existing services or volumes are changed. Use `docker compose -f compose.test.yml --env-file /path/to/shoreline-isolation.ports stop` to stop this stack without deleting its resources. Removing containers backed by tmpfs destroys their disposable data; do that only after checking ownership and preserving required evidence.
