@@ -1,6 +1,8 @@
 **/bin
 **/obj
 .git
-.env*
+**/.env*
 artifacts
 tests
+docs
+tools
