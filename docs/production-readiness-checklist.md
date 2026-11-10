@@ -19,7 +19,7 @@
 | MIT 条件模块 | 未验证 | 启用/禁用装配及 Python 契约待执行 |
 | OCR / 405 / 注释禁用路由的逐条例外 | 未验证 | 已记录候选原因，尚无产品批准；须核对真实响应 |
 | 真实 Flask / C# 同种子 BSON | 未验证 | 旧 fixture 有局部种子；需完整 app / modules、可复现 fresh run |
-| 真实差分读与成功写 | 部分验证 | 真实 Flask 生成 19 个只读用例，C# replay **19/19 匹配，0 business differences**（`docs/runtime-differential.md`）；写请求仍未纳入差分，测试机 E2E 已覆盖建团队/项目/术语库/上传/源文/译文/导出 |
+| 真实差分读与成功写 | 部分验证 | 真实 Flask 生成 19 个只读用例，C# replay **19/19 匹配，0 business differences**（`docs/runtime-differential.md`）；写请求仍未纳入差分，测试机 E2E 已覆盖建团队/项目/术语库/上传/源文/译文/导出/邀请/申请审批/密码重置 |
 | 差分 status/body/error/headers/前后 digest | 已验证（只读 19 例） | 19 例 status/body/前后 digest 全匹配；框架级 wire 差异单独记录；写请求和 4 个可选模块仍未覆盖 |
 | BSON collection/alias/type/index/unique | 部分验证 | Mongo 4.4.1 实测发现两处 `$lookup` 同时使用 `localField`+`pipeline`（5.0 才支持），成员列表 500；已改为 `let` 形式并回归（[mongodb-compatibility.md](mongodb-compatibility.md)）。 三个 team_member 索引（含 `team_member_alias_search_v1` on `{team,status,asrch}`）由 `MongoSchemaReadinessTests` 验证；冲突索引拒绝替换；测试机空库 BSON 字段与 Python 对齐。生产 dump 副本上的全集合对比未执行 |
 | Python auth token 互操作 | 未验证 | 旧 replay 使用 C# 自签 token；需真实 Python token |
@@ -38,7 +38,7 @@
 | 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | 镜像与进程 UID 均为 1654；测试机 bind mount `./storage` 初始为 root:root 755，首次上传 500 `UnauthorizedAccessException`，`chown -R 1654:1654 storage` 后上传/缩略图/导出全部通过。部署文档必须包含该 chown |
 | health / readiness / 配置校验 | 部分验证 | 最终镜像 `/health/live` 与 Mongo-backed `/health/ready` 均 HTTP 200；配置校验矩阵、反代及部署形状仍未验收 |
 | 日志 / metrics / 告警 | 未验证 | 需可观测性、隐私与故障告警验证 |
-| 备份 / 副本恢复 / 恢复后的业务 smoke | 未验证 | 未执行；不得清理既有测试库 |
+| 备份 / 副本恢复 / 恢复后的业务 smoke | 已验证（测试机） | `mongodump --gzip --archive` 13 KB / 158 文档；恢复到 `moeflow_restore` 后启动只读验证容器，登录/团队/成员/项目/文件/术语库均 200；验证后 drop 临时库。未在生产数据规模上计时 |
 | TLS / 反代 / trusted proxy | 未验证 | 不读取生产 env/凭证；需 disposable 测试栈验收 |
 | 资源限制 / graceful stop / rollback | 未验证 | 测试机可用磁盘约 2.1 GiB，需安全隔离部署及回滚演练 |
 | 测试机负载 / 长稳 / 内存比较 | 未验证 | 现有资源快照不是等负载基准；需约定时长、数据和通过阈值 |
@@ -61,7 +61,7 @@
 
 ## 测试机生产形状部署（2026-11-10）
 
-镜像 `shoreline-moeflow:ready-20261110c`（ImageID `sha256:0d2294ea19037d22ed76b9ea862d50e19d3702d7f919a103803863547ab84124`）经 `docker save | ssh | docker load` 部署到 `103.195.188.139:50600` 的 `/root/moeflow-csharp-isolated`（Mongo 4.4.1、Local storage、nginx 反代、无 RabbitMQ）。
+镜像 `shoreline-moeflow:ready-20261110d`（ImageID `sha256:d0edc71ff1b8abf4d9a96900ef5336e11ef8dd2fdb56eebd5b2646b4b93def8b`）经 `docker save | ssh | docker load` 部署到 `103.195.188.139:50600` 的 `/root/moeflow-csharp-isolated`（Mongo 4.4.1、Local storage、nginx 反代、无 RabbitMQ）。
 
 已执行的端到端路径（全部经 nginx `http://127.0.0.1:5080/api`）：
 
@@ -74,7 +74,9 @@
 7. 导出：`POST /v1/projects/<id>/outputs` 为两个 target 建任务，轮询 target outputs 到 `status=4`，zip 下载 200，含 `translations.txt`、`project.json`、`images/smoke.png`。
 8. 第二用户：管理员 `POST /v1/admin/users` 创建 `SmokeTwo`；owner `POST /v1/teams/<id>/invitations`（role member），第二用户登录后 `PATCH /v1/invitations/<id>` `{allow:true}` 接受；`user_count=2`，成员列表返回两人，重复邀请返回 `UserAlreadyJoinedError` 5003。
 9. 密码重置邮件：Stack 临时加入 `axllent/mailpit:v1.27` 与 `Mail__Host=mailpit`/`Mail__Port=1025`；`POST /v1/reset-password-codes` 后 Mailpit 收到主题“重置您的密码”和 6 位验证码；`DELETE /v1/user/password` 成功，旧密码登录 400，新密码登录 200。
-10. Mongo 4.4.1 实测：第二成员加入后 `GET /v1/teams/<id>/members` 首次返回 500（`MongoCommandException`），原因是 `$lookup` 同时使用 `localField` 和 `pipeline`（Mongo 5.0 才支持）；改为 `let` 形式后返回 200。详见 [mongodb-compatibility.md](mongodb-compatibility.md)。
+10. 项目/团队申请：`SmokeThree` 登录后 `POST /v1/teams/<id>/applications`，owner `GET /v1/teams/<id>/applications` 看到 pending，`PATCH /v1/applications/<id>` `{allow:true}` 通过；第三人 `GET /v1/user/teams` 出现 `SmokeTeam`，成员数 3。
+11. 备份/恢复：`mongodump --gzip --archive` 导出 `moeflow`（158 文档），`mongorestore --nsFrom=moeflow.* --nsTo=moeflow_restore.*` 恢复成功；用同一镜像、`Bootstrap__Enabled=false`、`moeflow_restore` 连接串启动第二个容器，登录、团队/成员/项目/文件/术语库读取全部 200；结束后删除容器并 `dropDatabase`。
+12. Mongo 4.4.1 实测：第二成员加入后 `GET /v1/teams/<id>/members` 首次返回 500（`MongoCommandException`），原因是 `$lookup` 同时使用 `localField` 和 `pipeline`（Mongo 5.0 才支持）；改为 `let` 形式后返回 200。详见 [mongodb-compatibility.md](mongodb-compatibility.md)。
 
 部署前置条件（必须写入 runbook）：
 
