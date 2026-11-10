@@ -61,6 +61,7 @@ builder.Services.AddAvatarServices();
 builder.Services.AddAdminStorageOverviewServices();
 builder.Services.AddNotificationServices();
 builder.Services.AddNotificationPublishServices();
+builder.Services.AddMitServices();
 builder.Services.AddScoped<ProjectMemberService>();
 builder.Services.AddScoped<ProjectLifecycleService>();
 builder.Services.AddScoped<ProjectInvitationService>();
@@ -154,6 +155,11 @@ app.MapArchiveImports();
 app.MapPartnerSearch();
 app.MapStoragePool();
 app.MapZitengPartner();
+var mitStorageRoot = builder.Configuration["Mit:StorageRoot"] ?? Environment.GetEnvironmentVariable("MIT_STORAGE_ROOT");
+if (!string.IsNullOrWhiteSpace(mitStorageRoot) && mitStorageRoot != "/MIT_STORAGE_ROOT_UNDEFINED")
+{
+    app.MapMitEndpoints();
+}
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
 {

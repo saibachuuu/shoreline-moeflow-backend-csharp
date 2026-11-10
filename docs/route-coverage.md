@@ -24,7 +24,7 @@ This is an **offline static audit**. It does not import or run the legacy Python
 | Core registered-only methods (405) | 2 |
 | Core methods with unresolved handler status | 0 |
 | Conditional (MIT) effective methods | 5 |
-| Conditional (MIT) present in C# | 0 |
+| Conditional (MIT) present in C# | 5 |
 | Optional-module effective methods | 27 |
 | Optional-module methods present in C# | 27 |
 | Commented-out method entries | 6 |
@@ -65,16 +65,16 @@ None.
 
 | Method | Path | Handler | Condition | In C# |
 | --- | --- | --- | --- | --- |
-| OPTIONS | `/v1/mit/image-tasks` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| POST | `/v1/mit/image-tasks` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| GET | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| OPTIONS | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| OPTIONS | `/v1/mit/images` | `MitImageApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| POST | `/v1/mit/images` | `MitImageApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| OPTIONS | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| POST | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| GET | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
-| OPTIONS | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | no |
+| OPTIONS | `/v1/mit/image-tasks` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| POST | `/v1/mit/image-tasks` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| GET | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| OPTIONS | `/v1/mit/image-tasks/<task_id>` | `MitImageTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| OPTIONS | `/v1/mit/images` | `MitImageApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| POST | `/v1/mit/images` | `MitImageApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| OPTIONS | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| POST | `/v1/mit/translate-tasks` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| GET | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
+| OPTIONS | `/v1/mit/translate-tasks/<task_id>` | `MitTranslateTaskApi` | `app_config['MIT_STORAGE_ROOT']` | yes |
 
 ## Commented-out (disabled) routes
 
