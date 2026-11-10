@@ -2,7 +2,8 @@
 
 本文记录 C# 后端对 Python `TeamProjectImportAPI`、`Project.create(labelplus_txt)` 与
 `import_from_labelplus` 后台任务的兼容实现。`Program.cs` 已接入导入路由与 job
-handler；普通项目创建端点把 `labelplus_txt` 传给导入 hook 的接线仍待完成，见第 8 节。
+handler；普通项目创建端点也已在 `ProjectService.CreateProjectAsync` 内完成
+`labelplus_txt` 的创建前校验、单 target 入队与重新读取，见第 8 节。
 
 ## 1. 文件与职责
 
@@ -15,9 +16,11 @@ handler；普通项目创建端点把 `labelplus_txt` 传给导入 hook 的接�
 | `src/Shoreline.Api/Jobs/ProjectImportJobHandler.cs` | `IJobHandler` 适配器，kind = `import_from_labelplus` |
 | `src/Shoreline.Api/Features/ProjectImportRegistration.cs` | 扩展注册/路由入口 |
 | `tests/Shoreline.Tests/ProjectImportTests.cs` | 23 个 direct Facts |
+| `tests/Shoreline.Tests/ProjectCreateLabelPlusHttpTests.cs` | 普通创建端点 4 个真实 HTTP Facts |
 
-本实现只新增上述文件，不修改 `Program.cs`、`ProjectService.cs`、`FileService.cs`、
-`LabelService.cs` 或任何共享路由。
+本模块的注册与路由保持 additive；普通创建端点的接线只改
+`src/Shoreline.Api/Features/ProjectService.cs`，不修改 `Program.cs`、
+`FileService.cs`、`LabelService.cs` 或任何共享路由。
 
 ## 2. 解析语义
 
@@ -140,11 +143,21 @@ handler；普通项目创建端点把 `labelplus_txt` 传给导入 hook 的接�
    `ProjectImportService` 与 `ProjectImportJobHandler`。
 2. `POST /v1/teams/{teamId}/project-sets/{projectSetId}/project-zips` 已接线，并调用
    `ValidateBeforeCreate` → `CreateProjectAsync` → `InitializeAfterCreateAsync`。
-3. 剩余接线（普通创建端点，不在本模块）：
-   `ProjectService.CreateProjectAsync` 在创建 project 之前也应调用
-   `ValidateBeforeCreate(labelplus_txt)`；创建、target、creator member 完成后调用
-   `InitializeAfterCreateAsync(project, actor, labelplus_txt, requestId, ct)`。
-   即使 target 数大于 1，也要先解析，不能只在最终可导入时才解析。
+3. 普通创建端点已接线（`ProjectService.CreateProjectAsync`）：
+   - 读取普通 JSON 的 `labelplus_txt`（缺省/null 为空，非字符串按字段校验失败）。
+   - 非空文本在 **schema 字段/语言校验之后、source == target 校验之前**调用
+     `ValidateBeforeCreate`，与 Python `CreateProjectSchema`（先做 schema）→
+     `Project.create:477`（解析）→ `:500`（同源目标）的顺序一致；即使 target 数大于 1
+     也先解析，坏文件返回 4029 且不产生 project/target/job。
+   - 同时无效文本 + 同源目标时返回 4029（不是 6002）；有效文本 + 同源目标仍返回 6002。
+   - project、targets、creator member 完成后，仅当文本非空且恰好 1 个 target 时调用
+     `InitializeAfterCreateAsync(project, actor, labelplusText, "", ct)`。空文本与多
+     target 不写 `it/is/ip`、不入队。
+   - 普通创建写入的默认 `is` 与 Python 模型默认值一致，为 `SUCCEEDED=2`（不是
+     `RUNNING=1`）；只有真正入队的导入才改写为 `PENDING/RUNNING`。
+   - 入队后重新读取 project，使响应像 Python 的 `project.reload()` 一样反映已持久化的
+     `is/it/ip`（可能是 pending、running 或已完成）。`requestId` 在该参数中不参与
+     幂等，普通端点传空字符串。
 4. `JobWorker` 已能发现所有 `IJobHandler`。调用 `RunImportAsync` 的测试使用
    `LocalServicesWithoutWorker`，由测试自己拥有 job，避免后台 worker 与直接调用
    竞争同一个导入。
@@ -172,7 +185,8 @@ handler；普通项目创建端点把 `labelplus_txt` 传给导入 hook 的接�
 
 ## 10. 已知边界
 
-- HTTP 导入路由已接线；普通项目创建端点尚未把 `labelplus_txt` 传给导入 hook。
+- 普通创建端点与 HTTP 导入路由都已接线；普通端点的 `requestId` 传空字符串，因为该
+  参数不参与导入幂等（durable `ij` job id 才是幂等锚点）。
 - 生产导入仅支持图片占位文件；文本文件与多 target 不导入（与 Python 一致）。
 - 未实现图片上传/对象存储，`fs` 等字段保持 0。
 - 标签计数缓存统一为 canonical `file_target_cache`（E1 reconciler 与
@@ -255,12 +269,79 @@ translation 已提交但确认丢失的重试收敛。旧无 stable-id journal �
 
 ### K1 团队生命周期锁预留
 
-`ValidateBeforeCreate` / `InitializeAfterCreateAsync` / `RunImportAsync` 已加 K1
-调用点注释：最终接线时应在持有写锁的范围内调用
-`TeamLifecycleLock.EnsureWritableAsync(teamId)`，而不是在锁外做一次可能失效的
-检查。本轮不注入 `TeamLifecycleLock`、不改变任何写路径，也不新增第二个检查。
+`ProjectImportService` 构造函数保留可选 `TeamLifecycleLock`：
+`InitializeAfterCreateAsync` 与 `RunImportAsync` 在持有 project label lock 后、
+第一次标志写入前调用 `EnsureWritableAsync(teamId)`；`ValidateBeforeCreate` 保持
+纯解析，不做团队写入检查。生产 DI 提供该服务；直接单测未注入时保持可构造。
 
 ### 旧 blocker 已解除
 
 早期 `e910e33` 快照的 `FileService` long/int 编译错误属于并行 WIP，本任务在
 `5bb9404` 干净基线上不再出现。
+## 12. 本轮接线实证（2026-11-10）
+
+### Python 绝对路径对照
+
+- `C:\Users\88888888\shoreline-moeflow\shoreline-moeflow-backend\app\models\project.py:460-546`
+  - `Project.create` 在第一次 `project.save()` 之前执行 `load_from_labelplus`
+    （非空文本；失败抛 `LabelplusParseFailedError`）。
+  - 只有 `labelplus_txt` 非空、`creator` 存在且 `len(targets) == 1` 时写
+    `it/is=PENDING/ip=0` 并调用 `import_from_labelplus(project.id)`，随后 `reload()`。
+  - `import_from_labelplus_status` 模型默认值是 `SUCCEEDED=2`
+    （`project.py:415-417`，常量见 `app/constants/project.py:19-24`）。
+- `C:\Users\88888888\shoreline-moeflow\shoreline-moeflow-backend\app\apis\team.py:472-489`
+  - 普通创建先检查 `team:CREATE_PROJECT`，再把 JSON 的 `labelplus_txt` 传给
+    `Project.create`。
+- `C:\Users\88888888\shoreline-moeflow\shoreline-moeflow-backend\app\validators\project.py:29-75`
+  - `labelplus_txt = fields.Str(missing=None)`：缺省/null 为空，非字符串是字段校验失败。
+- `C:\Users\88888888\shoreline-moeflow\shoreline-moeflow-backend\app\apis\team.py:508-552`
+  - 导入端点把上传的 labelplus 文本作为 `labelplus_txt` 传入同一个
+    `Project.create`，C# 导入端点继续复用同一 hook。
+
+### 与 Python 的已知差异
+
+- Python 在 `Project.create` 内直接调用 Celery 任务；C# 使用已有的
+  `InitializeAfterCreateAsync` 持久化 durable `ij` intent 后写入 `csharp_job`，
+  由 `JobWorker` 执行。区别是队列实现，不是触发条件。
+- Python 的 `request_id` 不参与导入去重；普通创建端点在 C# 中传空字符串，
+  durable `ij` job id 才是幂等锚点。
+- C# 原先普通创建写 `is=1`；本轮改为 Python 默认的 `is=SUCCEEDED=2`。只有真正
+  入队的导入才进入 `PENDING=0 / RUNNING=1`。
+
+### 验证记录
+
+- 基线：`f2a73253dfd9d4b2cd7caf0bc8f282b9795c3f4c`（分支
+  `fix/readiness-labelplus-20261110`）。本轮没有其它提交或未知提交。
+- 修改文件：`src/Shoreline.Api/Features/ProjectService.cs`、
+  `tests/Shoreline.Tests/ProjectCreateLabelPlusHttpTests.cs`、
+  `tests/Shoreline.Tests/ProjectImportTests.cs`、
+  `tests/Shoreline.Tests/TeamDissolutionTests.cs`、本文档。
+- `dotnet restore Shoreline.sln --locked-mode`：成功。
+- `dotnet build Shoreline.sln -warnaserror --no-restore`：0 warnings / 0 errors。
+- 新 HTTP 测试 `ProjectCreateLabelPlusHttpTests`：5 passed / 0 failed / 0 skipped。
+  - invalid 单/多 target：4029，project/target/csharp_job 计数不变。
+  - invalid 文本 + 同源目标：4029（优先于 6002）且计数不变；有效文本 + 同源目标
+    保持 6002；未知目标语言仍在 parser 之前报字段错误 2。
+  - valid 单 target：durable job 入队，`JobWorker` 执行至 `is=2`；实测 1 file、
+    2 source、1 translation、1 target。
+  - 空文本与多 target：`is=2`、`it=""`、无 job。
+  - `beginner`/无 `CREATE_PROJECT` 的团队成员：103，project/target/job 计数不变。
+- 回归子集：`ProjectTests` + `ProjectImportTests` + `TeamDissolutionTests`
+  56 passed / 0 failed / 0 skipped；加上新 HTTP 测试 5 passed，合计
+  61 passed / 0 failed / 0 skipped（分两次运行，同一 N5 随机库栈）。
+- `git diff --check f2a7325..HEAD`：干净（此前 docs 第 335 行 CRLF/trailing
+  whitespace 已修为 LF，且无 BOM 变更）。
+- 既有测试修改仅为默认值追随：`ProjectImportTests.cs` 3 处、
+  `TeamDissolutionTests.cs` 1 处把 `is == 1` 改为
+  `ProjectImportService.Succeeded`（Python 默认 `SUCCEEDED=2`），未删除或放宽
+  任何断言（同处仍有 `it==""`、`ij` 缺失、job 计数为 0 等断言）。
+- 全量 `dotnet test Shoreline.sln` 曾在本轮 N5 Mongo 上启动，但 Mongo 容器
+  (`mem_limit: 512m`) 在约 25 分钟后被 OOM kill（`OOMKilled=true`, exit 137），
+  因此**没有**可信的全量通过结果；本文不把它当作验收证据。
+- LSP：本环境只配置了 C# LSP（`csharp-ls`）。在 Api 源文件与 Tests 文件上实际
+  成功执行 `documentSymbol`、`hover`、`findReferences`、`workspaceSymbol`；
+  Markdown/YAML/JSON 没有可用 LSP server。
+- 端口与隔离：N5 Mongo `27261` / S3 `29261` / SMTP `21261` / Mailpit `28261` /
+  API `25261`；Compose 使用显式非 `.env` 的 `/tmp/labelplus-n5.env`，stack 名
+  `shoreline-csharp-labelplus-n5-20261110`，测试库均为随机库。启动前 Windows
+  TCP 与 WSL `ss` 均确认端口空闲。

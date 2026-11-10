@@ -217,7 +217,7 @@ public sealed class ProjectImportTests(LocalServicesWithoutWorker services)
         });
         Assert.Null(await imports.InitializeAfterCreateAsync(projectDoc, creator, GoldenText, "req",
             CancellationToken.None));
-        Assert.Equal(1L, (await ProjectAsync(project)).Integer("is"));
+        Assert.Equal(ProjectImportService.Succeeded, (int)(await ProjectAsync(project)).Integer("is"));
         Assert.Equal(0, await services.Store.Collection("csharp_job")
             .CountDocumentsAsync(new BsonDocument
             {
@@ -234,7 +234,7 @@ public sealed class ProjectImportTests(LocalServicesWithoutWorker services)
             new BsonDocument { ["project"] = project, ["tags"] = "creator" });
         Assert.Null(await imports.InitializeAfterCreateAsync(projectDoc, creator, GoldenText, "req",
             CancellationToken.None));
-        Assert.Equal(1L, (await ProjectAsync(project)).Integer("is"));
+        Assert.Equal(ProjectImportService.Succeeded, (int)(await ProjectAsync(project)).Integer("is"));
     }
 
     [Fact]
@@ -651,7 +651,7 @@ public sealed class ProjectImportTests(LocalServicesWithoutWorker services)
 
         Assert.Null(job);
         projectDoc = await ProjectAsync(project);
-        Assert.Equal(1L, projectDoc.Integer("is"));
+        Assert.Equal(ProjectImportService.Succeeded, (int)projectDoc.Integer("is"));
         Assert.Equal("", projectDoc.Text("it"));
         Assert.Equal(0L, await services.Store.Collection("csharp_job")
             .CountDocumentsAsync(new BsonDocument
