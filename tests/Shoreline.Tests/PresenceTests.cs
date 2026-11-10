@@ -26,8 +26,11 @@ public sealed class PresenceTests(LocalServices services)
         var project = await ProjectAsync(team);
         var user = await UserAsync(name: "legacy-name", displayName: "Legacy DDN", avatar: "legacy.png");
         var lastHeartbeat = new DateTime(2026, 1, 2, 3, 4, 5, 123, DateTimeKind.Utc);
+        // The production TTL index uses expireAfterSeconds=0. A historical
+        // expire_at would race the TTL monitor and delete the row mid-test, so
+        // only the heartbeat timestamp is fixed while the expiry stays current.
         await InsertPresenceAsync(project, team, user, "translating", lastHeartbeat,
-            clock.GetUtcNow().UtcDateTime.AddSeconds(60));
+            DateTime.UtcNow.AddSeconds(60));
 
         var active = Assert.Single(await service.ActiveUsersForProjectAsync(project, default));
         Assert.Equal(user["_id"].AsObjectId.ToString(), Assert.IsType<string>(active["id"]));
@@ -48,7 +51,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task AvatarIsEmptyWhenNoAvatarAndDefaultIsMissingAndUsesConfiguredDefault()
     {
-        var clock = new TestClock(new DateTimeOffset(2026, 1, 3, 0, 0, 0, TimeSpan.Zero));
+        var clock = RecentClock();
         var noDefaultConfig = new ConfigurationBuilder().Build();
         var service = Service(clock, noDefaultConfig);
         await service.InitializeAsync(default);
@@ -75,7 +78,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task HeartbeatUpsertsOneRowAndRefreshesTeamActionHeartbeatAndExpiry()
     {
-        var clock = new TestClock(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = RecentClock();
         var service = Service(clock);
         await service.InitializeAsync(default);
         var firstTeam = await TeamAsync();
@@ -99,7 +102,12 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task QueryFilterEnforcesFortyFiveSecondExpiryWithoutRelyingOnTheTtlMonitor()
     {
-        var start = new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero);
+        // Anchor to real time so the TTL monitor cannot delete the row before
+        // the explicit query-boundary checks below. BSON stores milliseconds,
+        // so build the clock from that same precision.
+        var now = RecentClock().GetUtcNow();
+        var start = new DateTimeOffset(now.Ticks - now.Ticks % TimeSpan.TicksPerSecond,
+            TimeSpan.Zero);
         var clock = new TestClock(start);
         var service = Service(clock);
         await service.InitializeAsync(default);
@@ -112,7 +120,8 @@ public sealed class PresenceTests(LocalServices services)
         Assert.Equal(45,
             (row["expire_at"].ToUniversalTime() - row["last_heartbeat"].ToUniversalTime()).TotalSeconds);
         var active = Assert.Single(await service.ActiveUsersForProjectAsync(project, default));
-        Assert.Equal("2026-02-01T00:00:00", Assert.IsType<string>(active["last_heartbeat"]));
+        Assert.Equal(start.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+            Assert.IsType<string>(active["last_heartbeat"]));
 
         // Python uses expire_at__gt=now, so the row is inactive at the exact
         // boundary even if MongoDB's TTL monitor has not deleted it yet.
@@ -128,7 +137,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task ProjectAndTeamPresenceAreIsolated()
     {
-        var clock = new TestClock(new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = RecentClock();
         var service = Service(clock);
         await service.InitializeAsync(default);
         var teamA = await TeamAsync();
@@ -165,7 +174,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task LeaveRemovesOnlyOwnRowAndIsIdempotent()
     {
-        var clock = new TestClock(new DateTimeOffset(2026, 4, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = RecentClock();
         var service = Service(clock);
         await service.InitializeAsync(default);
         var team = await TeamAsync();
@@ -191,7 +200,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task NamesPreferActiveMemberDisplayNameThenDdnThenName()
     {
-        var clock = new TestClock(new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = RecentClock();
         var service = Service(clock);
         await service.InitializeAsync(default);
         var team = await TeamAsync();
@@ -225,7 +234,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task DanglingUserAndProjectReferencesAreSkipped()
     {
-        var clock = new TestClock(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = RecentClock();
         var service = Service(clock);
         await service.InitializeAsync(default);
         var team = await TeamAsync();
@@ -258,7 +267,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task UnicodeActionIsTruncatedByCodePointAndFalsyActionsBecomeWorking()
     {
-        var clock = new TestClock(new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = RecentClock();
         var service = Service(clock);
         await service.InitializeAsync(default);
         var team = await TeamAsync();
@@ -291,7 +300,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task TeamAggregateHasPythonShapeAndEmptyResultsUseObjectAndArray()
     {
-        var clock = new TestClock(new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = RecentClock();
         var service = Service(clock);
         await service.InitializeAsync(default);
         var team = await TeamAsync();
@@ -329,7 +338,7 @@ public sealed class PresenceTests(LocalServices services)
     [Fact]
     public async Task IndexesMatchPythonNamesTtlAndUniqueProjectUserConstraint()
     {
-        var service = Service(new TestClock(DateTimeOffset.UtcNow));
+        var service = Service(RecentClock());
         await service.InitializeAsync(default);
         using var cursor = await services.Store.Collection("project_presence").Indexes.ListAsync(default);
         var listed = new List<BsonDocument>();
@@ -359,6 +368,11 @@ public sealed class PresenceTests(LocalServices services)
 
         public override DateTimeOffset GetUtcNow() => Now;
     }
+
+    // MongoDB BSON DateTime has millisecond precision; use the same precision
+    // so heartbeat/expiry equality assertions are not truncated by the server.
+    private static TestClock RecentClock() => new(DateTimeOffset.FromUnixTimeMilliseconds(
+        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
 
     private async Task<BsonDocument> TeamAsync()
     {

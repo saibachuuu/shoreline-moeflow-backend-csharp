@@ -5,6 +5,19 @@ using Shoreline.Api.Infrastructure;
 namespace Shoreline.Api.Features;
 
 /// <summary>
+/// Accounting phases whose write has been committed. The optional observer is a
+/// test seam for the unknown-result window: it runs after the server acknowledged
+/// the write but before the method returns, so a throwing observer models a lost
+/// acknowledgement on an already-committed operation.
+/// </summary>
+public enum OutputAccountingWritePhase
+{
+    ArtifactRecorded,
+    ProjectLedgerApplied,
+    SuccessMarked
+}
+
+/// <summary>
 /// Crash-consistent accounting for an output artifact.
 ///
 /// The output row is the durable per-output record: <c>sb</c> and
@@ -35,7 +48,8 @@ public static class OutputAccounting
         string fileName,
         DateTime now,
         FilterDefinition<BsonDocument> guard,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<OutputAccountingWritePhase, Task>? afterWrite = null)
     {
         var update = new BsonDocument("$set", new BsonDocument
         {
@@ -51,6 +65,8 @@ public static class OutputAccounting
         // A retry can write exactly the same sb/file_name/marker (for example
         // when the clock is fixed), in which case MongoDB reports a match but
         // no modification. The guard matching is what proves ownership.
+        if (result.MatchedCount == 1 && afterWrite is not null)
+            await afterWrite(OutputAccountingWritePhase.ArtifactRecorded);
         return result.MatchedCount == 1;
     }
 
@@ -63,7 +79,8 @@ public static class OutputAccounting
     public static async Task<bool> ApplyProjectAccountingAsync(
         MongoStore store,
         ObjectId projectId,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<OutputAccountingWritePhase, Task>? afterWrite = null)
     {
         var outputs = store.Collection("output");
         var projects = store.Collection("project");
@@ -95,7 +112,12 @@ public static class OutputAccounting
                 ["fs"] = currentFs + kilobytes
             });
             var result = await projects.UpdateOneAsync(filter, update, cancellationToken: ct);
-            if (result.ModifiedCount == 1) return true;
+            if (result.ModifiedCount == 1)
+            {
+                if (afterWrite is not null)
+                    await afterWrite(OutputAccountingWritePhase.ProjectLedgerApplied);
+                return true;
+            }
 
             // A concurrent accounting/file-size update changed ob or fs.
             // Re-read and converge without ever incrementing twice.
@@ -115,7 +137,8 @@ public static class OutputAccounting
         string fileName,
         DateTime now,
         FilterDefinition<BsonDocument> guard,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<OutputAccountingWritePhase, Task>? afterWrite = null)
     {
         var update = new BsonDocument
         {
@@ -131,6 +154,8 @@ public static class OutputAccounting
             ["$unset"] = new BsonDocument("job_accounting", "")
         };
         var result = await store.Collection("output").UpdateOneAsync(guard, update, cancellationToken: ct);
+        if (result.ModifiedCount == 1 && afterWrite is not null)
+            await afterWrite(OutputAccountingWritePhase.SuccessMarked);
         return result.ModifiedCount == 1;
     }
 

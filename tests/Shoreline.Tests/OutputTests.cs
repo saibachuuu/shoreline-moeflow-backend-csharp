@@ -439,6 +439,212 @@ public sealed class OutputTests(LocalServices services)
     }
 
     [Fact]
+    public async Task Export_CrashAfterFinalCopyReplayReusesArtifactAndKeepsOneRecord()
+    {
+        var clock = new TestClock(BaseTime);
+        var fixture = await ExportFixtureAsync(clock, putImage: true);
+        var root = NewLocalStorageRoot();
+        try
+        {
+            var config = LocalStorageConfig(root);
+            using var storage = new ObjectStorage(config);
+            var crashed = LocalExportService(clock, storage, config);
+            crashed.AfterFinalCopyAsync = _ =>
+                throw new InvalidOperationException("injected crash after final copy");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                crashed.RunAsync(fixture.Payload, CancellationToken.None));
+
+            var output = await LoadOutputAsync(fixture.OutputId);
+            Assert.Equal(OutputStatus.Error, output.Integer("s"));
+            Assert.Equal(0L, output["sb"].ToInt64());
+            Assert.Equal("", output.Text("file_name"));
+            Assert.False(output.Contains("job_accounting"));
+            Assert.Equal(1L, await OutputCountAsync(fixture.ProjectId));
+
+            var prefix = "outputs/" + fixture.OutputId + "/";
+            var afterCrash = await storage.ListAsync(prefix, null, 100, CancellationToken.None);
+            var orphan = Assert.Single(afterCrash.Objects);
+            Assert.DoesNotContain("/.work/", orphan.Key, StringComparison.Ordinal);
+
+            // A reused object is not rewritten, so pinning the timestamp proves
+            // the replay claimed the already-copied artifact instead of copying
+            // it again.
+            var artifactPath = ObjectPath(root, orphan.Key);
+            var sentinel = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(artifactPath, sentinel);
+
+            await ResetForRetryAsync(fixture.OutputId);
+            await LocalExportService(clock, storage, config)
+                .RunAsync(fixture.Payload, CancellationToken.None);
+
+            var replayed = await LoadOutputAsync(fixture.OutputId);
+            Assert.Equal(OutputStatus.Succeeded, replayed.Integer("s"));
+            Assert.Equal(new FileInfo(artifactPath).Length, replayed["sb"].ToInt64());
+            Assert.False(replayed.Contains("job_accounting"));
+            Assert.Equal(1L, await OutputCountAsync(fixture.ProjectId));
+
+            var afterReplay = await storage.ListAsync(prefix, null, 100, CancellationToken.None);
+            Assert.Equal(orphan.Key, Assert.Single(afterReplay.Objects).Key);
+            Assert.Equal(sentinel, File.GetLastWriteTimeUtc(artifactPath));
+        }
+        finally
+        {
+            TryDeleteRoot(root);
+        }
+    }
+
+    [Fact]
+    public async Task Export_CrashAfterFinalCopyThenRenamedArtifactSweepsOrphan()
+    {
+        var clock = new TestClock(BaseTime);
+        var fixture = await ExportFixtureAsync(clock, putImage: true);
+        var root = NewLocalStorageRoot();
+        try
+        {
+            var config = LocalStorageConfig(root);
+            using var storage = new ObjectStorage(config);
+            var crashed = LocalExportService(clock, storage, config);
+            crashed.AfterFinalCopyAsync = _ =>
+                throw new InvalidOperationException("injected crash after final copy");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                crashed.RunAsync(fixture.Payload, CancellationToken.None));
+
+            var prefix = "outputs/" + fixture.OutputId + "/";
+            var staleKey = Assert.Single(
+                (await storage.ListAsync(prefix, null, 100, CancellationToken.None)).Objects).Key;
+
+            await services.Store.Collection("project").UpdateOneAsync(
+                new BsonDocument("_id", fixture.ProjectId),
+                new BsonDocument("$set", new BsonDocument("n", "改名项目")));
+
+            await ResetForRetryAsync(fixture.OutputId);
+            await LocalExportService(clock, storage, config)
+                .RunAsync(fixture.Payload, CancellationToken.None);
+
+            var replayed = await LoadOutputAsync(fixture.OutputId);
+            Assert.Equal(OutputStatus.Succeeded, replayed.Integer("s"));
+            Assert.StartsWith("改名项目 - ", replayed.Text("file_name"));
+
+            var objects = await storage.ListAsync(prefix, null, 100, CancellationToken.None);
+            var current = Assert.Single(objects.Objects);
+            Assert.Equal(prefix + replayed.Text("file_name"), current.Key);
+            Assert.Null(await storage.HeadAsync(staleKey, CancellationToken.None));
+            Assert.Equal(1L, await OutputCountAsync(fixture.ProjectId));
+        }
+        finally
+        {
+            TryDeleteRoot(root);
+        }
+    }
+
+    [Fact]
+    public async Task Accounting_RecordArtifactUnknownCommitReplayKeepsOnePendingRecord()
+    {
+        var project = await ProjectAsync();
+        var output = new BsonDocument
+        {
+            ["_id"] = ObjectId.GenerateNewId(),
+            ["p"] = project["_id"].AsObjectId,
+            ["s"] = 0,
+            ["sb"] = 0L
+        };
+        await services.Store.Collection("output").InsertOneAsync(output);
+        var guard = Builders<BsonDocument>.Filter.Eq("_id", output["_id"]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            OutputAccounting.RecordArtifactAsync(
+                services.Store, output["_id"].AsObjectId, 100, "first.zip",
+                BaseTime.UtcDateTime, guard, CancellationToken.None, ThrowAfterWrite));
+
+        var committed = await LoadOutputAsync(output["_id"].AsObjectId);
+        Assert.Equal(100L, committed["sb"].ToInt64());
+        Assert.Equal("first.zip", committed.Text("file_name"));
+        Assert.True(committed.Contains("job_accounting"));
+
+        Assert.True(await OutputAccounting.RecordArtifactAsync(
+            services.Store, output["_id"].AsObjectId, 100, "first.zip",
+            BaseTime.UtcDateTime, guard, CancellationToken.None));
+
+        var replayed = await LoadOutputAsync(output["_id"].AsObjectId);
+        Assert.Equal(100L, replayed["sb"].ToInt64());
+        Assert.Equal("first.zip", replayed.Text("file_name"));
+        Assert.Equal(1L, await services.Store.Collection("output")
+            .CountDocumentsAsync(new BsonDocument("_id", output["_id"])));
+    }
+
+    [Fact]
+    public async Task Accounting_ProjectLedgerUnknownCommitReplayDoesNotDoubleApply()
+    {
+        var project = await ProjectAsync();
+        var output = new BsonDocument
+        {
+            ["_id"] = ObjectId.GenerateNewId(),
+            ["p"] = project["_id"].AsObjectId,
+            ["s"] = 0,
+            ["sb"] = 1000L
+        };
+        await services.Store.Collection("output").InsertOneAsync(output);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            OutputAccounting.ApplyProjectAccountingAsync(
+                services.Store, project["_id"].AsObjectId, CancellationToken.None, ThrowAfterWrite));
+
+        var committed = await ProjectAsync(project["_id"].AsObjectId);
+        Assert.Equal(1000L, committed["ob"].ToInt64());
+        Assert.Equal(1L, committed["fs"].ToInt64());
+
+        // The replay sees total == ob and returns before any write, so the
+        // observer would not run even if the caller passed it again.
+        Assert.True(await OutputAccounting.ApplyProjectAccountingAsync(
+            services.Store, project["_id"].AsObjectId, CancellationToken.None, ThrowAfterWrite));
+        var replayed = await ProjectAsync(project["_id"].AsObjectId);
+        Assert.Equal(1000L, replayed["ob"].ToInt64());
+        Assert.Equal(1L, replayed["fs"].ToInt64());
+    }
+
+    [Fact]
+    public async Task Accounting_SuccessUnknownCommitReplayIsNoOp()
+    {
+        var project = await ProjectAsync();
+        var output = new BsonDocument
+        {
+            ["_id"] = ObjectId.GenerateNewId(),
+            ["p"] = project["_id"].AsObjectId,
+            ["s"] = 0,
+            ["sb"] = 100L
+        };
+        await services.Store.Collection("output").InsertOneAsync(output);
+        var guard = Builders<BsonDocument>.Filter.Eq("_id", output["_id"]);
+
+        Assert.True(await OutputAccounting.RecordArtifactAsync(
+            services.Store, output["_id"].AsObjectId, 100, "first.zip",
+            BaseTime.UtcDateTime, guard, CancellationToken.None));
+        Assert.True(await OutputAccounting.ApplyProjectAccountingAsync(
+            services.Store, project["_id"].AsObjectId, CancellationToken.None));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            OutputAccounting.MarkSucceededAsync(
+                services.Store, output["_id"].AsObjectId, "first.zip",
+                BaseTime.UtcDateTime, guard, CancellationToken.None, ThrowAfterWrite));
+
+        var committed = await LoadOutputAsync(output["_id"].AsObjectId);
+        Assert.Equal(OutputStatus.Succeeded, committed.Integer("s"));
+        Assert.False(committed.Contains("job_accounting"));
+
+        Assert.False(await OutputAccounting.MarkSucceededAsync(
+            services.Store, output["_id"].AsObjectId, "first.zip",
+            BaseTime.UtcDateTime, guard, CancellationToken.None));
+        var replayed = await LoadOutputAsync(output["_id"].AsObjectId);
+        Assert.Equal(OutputStatus.Succeeded, replayed.Integer("s"));
+        Assert.Equal(100L, (await ProjectAsync(project["_id"].AsObjectId))["ob"].ToInt64());
+    }
+
+    private static Task ThrowAfterWrite(OutputAccountingWritePhase phase) =>
+        throw new InvalidOperationException("injected lost acknowledgement after " + phase);
+
+    [Fact]
     public async Task Export_ProducesLabelPlusProjectJsonAndImages()
     {
         var clock = new TestClock(BaseTime);
@@ -525,6 +731,27 @@ public sealed class OutputTests(LocalServices services)
                 "outputs/" + fixture.OutputId + "/.work/", null, 100, CancellationToken.None);
             Assert.Empty(staging.Objects);
         }
+    }
+
+    [Fact]
+    public async Task Export_StorageSourceChangedDuringRunFailsWithoutPublishing()
+    {
+        var clock = new TestClock(BaseTime);
+        var fixture = await ExportFixtureAsync(clock, putImage: true);
+        var service = ExportService(clock);
+        service.BeforePublishVerifyAsync = async _ =>
+        {
+            await services.Store.Collection("project").UpdateOneAsync(
+                new BsonDocument("_id", fixture.ProjectId),
+                new BsonDocument("$set", new BsonDocument("csid", ObjectId.GenerateNewId())));
+        };
+
+        var error = await Assert.ThrowsAsync<ApiError>(() =>
+            service.RunAsync(fixture.Payload, CancellationToken.None));
+        Assert.Equal(409, error.Status);
+        Assert.Equal(OutputStatus.Error, (await LoadOutputAsync(fixture.OutputId)).Integer("s"));
+        Assert.Empty((await Storage().ListAsync(
+            "outputs/" + fixture.OutputId + "/", null, 100, CancellationToken.None)).Objects);
     }
 
     [Fact]
@@ -796,6 +1023,45 @@ public sealed class OutputTests(LocalServices services)
     }
 
     // ---------------------------------------------------------------- fixtures
+
+    private static string NewLocalStorageRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "shoreline-output-tests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        return root;
+    }
+
+    private static IConfiguration LocalStorageConfig(string root) =>
+        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Storage:Type"] = "Local",
+            ["Storage:Root"] = root,
+            ["Storage:Domain"] = "http://127.0.0.1",
+            ["Outputs:TempPath"] = Path.Combine(root, ".runs")
+        }).Build();
+
+    private OutputExportService LocalExportService(
+        TestClock clock, ObjectStorage storage, IConfiguration configuration) => new(
+        services.Store,
+        new ProjectLabelLock(services.Store, clock),
+        new LabelRequestContext(),
+        storage,
+        configuration,
+        clock,
+        NullLogger<OutputExportService>.Instance);
+
+    private static string ObjectPath(string root, string key) =>
+        Path.Combine(root, key.Replace('/', Path.DirectorySeparatorChar));
+
+    private static void TryDeleteRoot(string root)
+    {
+        try { Directory.Delete(root, recursive: true); } catch (Exception) { }
+    }
+
+    private Task<long> OutputCountAsync(ObjectId projectId) =>
+        services.Store.Collection("output")
+            .CountDocumentsAsync(new BsonDocument("p", projectId));
 
     private OutputService Outputs(TestClock clock) => new(
         services.Store,

@@ -299,11 +299,26 @@ Replaying a succeeded export returns immediately and adds zero. `fs` uses
 `Math.Round(delta / 1024.0, MidpointRounding.ToEven)` to match Python's
 banker's rounding. The staging object is deleted best-effort in `finally`
 (bounded to 5 seconds); the final object is only written after all fences pass.
-A crash after the final copy but before the artifact record can leave an orphan
-final object keyed by the current download name; a retry overwrites that key,
-while an abandoned job leaves it to later cleanup. The label lock is held while the
-ledger and success marker are committed, but cleanup/target-delete counter
-races remain a later cross-module integration item.
+
+A crash after the final copy but before the artifact record now has explicit
+claim/cleanup semantics. The final key is deterministic
+(`<output prefix>/<output id>/<file_name>`); before copying, the publisher
+heads that key and reuses it when its size matches the staging object (and its
+ETag matches when the provider exposes one), so replay does not rewrite an
+already-copied artifact. It then sweeps any other non-`.work/` object under
+that output id, bounded to four 200-key pages and five seconds. This removes
+orphans left by an earlier crashed attempt whose download name changed; the
+sweep is skipped for staging keys and never fails a publish that already has a
+valid artifact. An abandoned output that is never retried still retains at most
+one object per crashed attempt, and pruning an output whose `file_name` is
+still empty does not know that key (see the unverified items below). Python has
+no equivalent claim step: `output_project.py:158-169,236-246` updates
+`file_name` before uploading straight to the final key, so a crash after upload
+leaves an object that only a later run or `Output.delete_real_files`
+(`app/models/output.py:81-104`, keyed by the current `file_name`) can remove.
+The label lock is held while the ledger and success marker are committed, but
+cleanup/target-delete counter races remain a later cross-module integration
+item.
 
 ## C# files
 
@@ -327,11 +342,12 @@ races remain a later cross-module integration item.
 `AddOutputServices()` registers the scoped services and the singleton job
 handler; `MapOutputs()` maps the routes. The integrator must call both.
 
-## Direct-service facts (31)
+## Direct-service facts (37)
 
-`tests/Shoreline.Tests/OutputTests.cs` contains 31 `[Fact]` tests covering:
-canonical BSON/job payload; unknown storage source fail-closed 409/code 6 and
-pooled export reading/writing through the resolved backend; cooldown 9002 and
+`tests/Shoreline.Tests/OutputTests.cs` contains 37 `[Fact]` tests covering:
+canonical BSON/job payload; unknown storage source fail-closed 409/code 6, pooled
+export reading/writing through the resolved backend, and a storage-source change
+during export failing without publishing; cooldown 9002 and
 all-target skip; prune keeps two and deletes objects before rows;
 physical-delete failure preserves rows/bytes; foreign target 4024; status
 details; exact LabelPlus header/CRLF behavior;
@@ -342,7 +358,12 @@ crash before and after the project ledger; full export (LabelPlus, project
 JSON, image, final name, bytes); missing-image `errors.txt`; replay without
 double accounting; stale revision; deleted target; deleted frozen file metadata
 (409); changed frozen save name (409); concurrent duplicate runs publishing once;
-stale owner after lease expiry; and staging cleanup after success.
+stale owner after lease expiry; staging cleanup after success; crash after the
+final copy followed by replay reusing the artifact (one row, no orphan); the
+same crash followed by a renamed artifact sweeping the old key; and three
+unknown-commit window facts for `OutputAccounting` (artifact record, project
+ledger, success marker) using a post-write observer that throws after the
+server acknowledged the write.
 
 These are direct-service facts. `OutputHttpTests.cs` adds 5 real
 `WebApplicationFactory<Program>` facts for token/permission/foreign-target,
@@ -357,8 +378,49 @@ only the touched feature/endpoint/registration/test files. `dotnet build
 -warnaserror` completed with 0 warnings/0 errors, the focused
 `Output|AdminUser|OcrHttp` run passed 51/51, and the full isolated suite passed
 783/783 with 6 skipped (789 total). The new direct facts are
-`CreateTeam_UnknownStorageSourceFailsClosedWithoutPartialOutput` and
-`Export_PooledProjectReadsAndWritesThroughSourceBackend`.
+`CreateTeam_UnknownStorageSourceFailsClosedWithoutPartialOutput`,
+`Export_PooledProjectReadsAndWritesThroughSourceBackend`, and
+`Export_StorageSourceChangedDuringRunFailsWithoutPublishing`.
+
+## 未验证项（G1 收尾审查）
+
+以下为只读审查结论，除新增的 Output/Presence 测试外没有运行跨模块并发故障
+测试；本轮不扩展生产实现。
+
+- **target 删除与导出/计量并发。**
+  `ProjectService.DeleteTargetAsync` (`src/Shoreline.Api/Features/ProjectService.cs:450-479`)
+  不获取项目 label lock；`ProjectContentCleanup.DeleteTargetCascadesAsync`
+  (`src/Shoreline.Api/Features/ProjectContentCleanup.cs:208-243`) 先 best-effort
+  删对象 (`DeleteTargetOutputsBestEffortAsync:403-441`)，再无条件删除 output
+  行并减 `tc`；`ReleaseOutputBytesAsync:443-469` 先 CAS `sb -> 0`，再
+  `$inc ob/fs`。导出 `PublishAsync`
+  (`src/Shoreline.Api/Features/OutputExportService.cs:330-364`) 持 label lock，
+  但 target 删除不参与该锁。若删除在 publish 读 target/output 之后、record
+  之前插入：输出行被删，publish 仍可能写 final 对象，形成无行引用的孤儿；
+  若删除先读到 `sb=0`，publish 之后写入 `sb/ob`，删除再删行，则 project
+  `ob` 偏高。Python 同样是 best-effort：`Target.clear`
+  (`app/models/target.py:69-74`) + ORM CASCADE，项目清理用 strict
+  `Output.delete_real_files_strict` (`app/services/project_lifecycle.py:223-226`)；
+  Python 没有 C# 的 label lock/publish 窗口，因此不能直接以 Python 行为
+  证明 C# 并发无问题。需要专门的 target-delete/export 交叉故障测试。
+- **snapshot/recovery 与导出任务。**
+  `OutputExportService` 在 claim、freeze、publish 三处都传
+  `recovery: false` (`OutputExportService.cs:105-106,300-301,330-331`)，
+  `ProjectLabelLock.AcquireAsync` 在存在 `label_recovery` 标记时直接抛 busy
+  (`src/Shoreline.Api/Infrastructure/ProjectLabelLock.cs:294-295`)。恢复路径
+  `LabelSnapshotService.RecoverAsync`
+  (`src/Shoreline.Api/Features/LabelSnapshotService.Operations.cs:180-197`)
+  会替换标签并推进 revision，但没有测试证明跨恢复挂起的导出会按预期失败、
+  重试或最终成功；也没有输出侧恢复任务。Python 没有等价的 C# journaled
+  snapshot/recovery，无法逐行对照。
+- **崩溃孤儿与 prune 的边界。**
+  新的 claim/sweep 只在同一 output 的下一次 publish 时运行。
+  `OutputService.PruneAsync` (`OutputService.cs:224-245`) 和
+  `ProjectContentCleanup.DeleteOutputObjectAsync`
+  (`ProjectContentCleanup.cs:396-401`) 只按当前 `file_name` 删对象；崩溃后
+  `file_name` 仍为空的行被 prune 时，其 final 对象不会再被该行引用，也
+  不会被 prune 删除。孤儿数量受崩溃/裁剪次数约束，但没有全局回收任务；
+  要彻底消除需要输出前缀扫描或后台 repair。
 
 ## Open boundaries / integration notes
 

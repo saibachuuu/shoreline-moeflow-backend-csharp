@@ -28,6 +28,12 @@ public sealed class OutputService(
     ProjectStorageRouter? router = null)
 {
     public const string JobKind = "output_project";
+    /// <summary>
+    /// Celery <c>tasks.output_team_projects_task</c> equivalent. The route keeps
+    /// the Python <c>run_sync</c> path, while background/recovery callers can
+    /// enqueue this kind instead of blocking on the whole team walk.
+    /// </summary>
+    public const string TeamJobKind = "output_team_projects";
 
     private readonly ProjectCleanupOptions cleanup = ProjectCleanupOptions.FromConfiguration(configuration);
     private IMongoCollection<BsonDocument> Outputs => store.Collection("output");
@@ -184,6 +190,35 @@ public sealed class OutputService(
             // source surfaces the same way instead of silently reading a
             // different backend.
             await CreateAllAsync(project, actor, ct);
+    }
+
+    /// <summary>
+    /// Python <c>output_team_projects(team_id, current_user_id)</c> async
+    /// branch (app/tasks/output_team_projects.py:69-80). The durable job is
+    /// written before returning; the job handler resolves the same team/actor
+    /// and calls <see cref="CreateTeamAsync"/>. The HTTP route keeps the
+    /// <c>run_sync</c> path because it has always returned after creating the
+    /// per-target output rows in this codebase.
+    /// </summary>
+    public Task<ObjectId> ScheduleTeamAsync(ObjectId teamId, ObjectId actorId, CancellationToken ct) =>
+        jobs.EnqueueAsync(TeamJobKind, new BsonDocument
+        {
+            ["team_id"] = teamId.ToString(),
+            ["current_user_id"] = actorId.ToString()
+        }, ct);
+
+    /// <summary>Job body: <c>tasks.output_team_projects_task</c>.</summary>
+    public async Task RunTeamExportAsync(BsonDocument payload, CancellationToken ct)
+    {
+        if (!ObjectId.TryParse(payload.Text("team_id"), out var teamId)
+            || !ObjectId.TryParse(payload.Text("current_user_id"), out var actorId))
+            throw new ApiError("ValidateError", 2, "Invalid request");
+
+        var team = await store.Collection("team").Find(new BsonDocument("_id", teamId))
+            .FirstOrDefaultAsync(ct) ?? throw new ApiError("TeamNotExistError", 3001, "团队不存在");
+        var actor = await store.Collection("user").Find(new BsonDocument("_id", actorId))
+            .FirstOrDefaultAsync(ct) ?? throw IdentityErrors.UserMissing();
+        await CreateTeamAsync(team, actor, ct);
     }
 
     private async Task PruneAsync(BsonDocument project, ObjectId targetId, CancellationToken ct)

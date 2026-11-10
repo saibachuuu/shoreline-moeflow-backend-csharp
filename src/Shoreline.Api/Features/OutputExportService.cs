@@ -31,6 +31,12 @@ public sealed class OutputExportService(
     private const int BatchSize = 200;
     private static readonly TimeSpan CleanupBudget = TimeSpan.FromSeconds(5);
 
+    // Orphan sweeping is deliberately bounded: one successful publish keeps the
+    // directory at one artifact, and a page cap prevents a corrupt prefix from
+    // turning cleanup into unbounded work.
+    private const int ArtifactCleanupPageSize = 200;
+    private const int MaxArtifactCleanupPages = 4;
+
     private async Task<StorageBackendLease?> LeaseForProjectAsync(
         BsonDocument? project,
         CancellationToken ct)
@@ -44,6 +50,10 @@ public sealed class OutputExportService(
     /// <summary>Test seam: runs while the publish lock is held, before the
     /// frozen pointer check. Production leaves this null.</summary>
     internal Func<CancellationToken, Task>? BeforePublishVerifyAsync { get; set; }
+
+    /// <summary>Test seam: injected failure immediately after the final object
+    /// copy (or reuse) and before the artifact row is recorded.</summary>
+    internal Func<CancellationToken, Task>? AfterFinalCopyAsync { get; set; }
 
     /// <summary>Test seam: injected failure after the artifact row is written.</summary>
     internal Func<CancellationToken, Task>? AfterArtifactAsync { get; set; }
@@ -321,8 +331,6 @@ public sealed class OutputExportService(
             labelContext, projectId, recovery: false, frozen.Revision, ct);
         var project = session.Project;
         if (project.Flag("cip")) throw new InvalidOperationException("Project clear is in progress.");
-        if (ProjectStorageRouter.ReadSourceId(project) != frozen.SourceId)
-            throw OutputStale();
 
         var output = await Outputs.Find(new BsonDocument("_id", outputId)).FirstOrDefaultAsync(ct)
                      ?? throw new InvalidOperationException("Output disappeared.");
@@ -333,10 +341,27 @@ public sealed class OutputExportService(
         _ = await LoadTargetAsync(projectId, output, ct);
         if (BeforePublishVerifyAsync is not null)
             await BeforePublishVerifyAsync(ct);
+        var currentProject = await store.Collection("project")
+            .Find(new BsonDocument("_id", projectId)).FirstOrDefaultAsync(ct);
+        if (currentProject is null ||
+            ProjectStorageRouter.ReadSourceId(currentProject) != frozen.SourceId)
+            throw OutputStale();
         await VerifyFrozenPointersAsync(projectId, frozen.Manifest, ct);
 
         var finalKey = cleanup.OutputPrefix + outputId + "/" + fileName;
-        await projectStorage.CopyAsync(stagingKey, finalKey, ct);
+        // A previous attempt can have copied the artifact and then died before
+        // recording it. The deterministic key plus the lease fence make that
+        // object ours; reuse it when its size (and ETag, when available) still
+        // matches the staging object instead of rewriting it. Otherwise copy
+        // the fresh staging artifact over it.
+        if (!await CanReuseFinalArtifactAsync(projectStorage, stagingKey, finalKey, bytes, ct))
+            await projectStorage.CopyAsync(stagingKey, finalKey, ct);
+        if (AfterFinalCopyAsync is not null)
+            await AfterFinalCopyAsync(ct);
+        // Any other non-staging object under this output id is an artifact left
+        // by an earlier crashed attempt (for example after the download name
+        // changed). Sweep it now that the current object is durable.
+        await CleanupOtherArtifactsAsync(projectStorage, outputId, finalKey, ct);
 
         var guard = OutputLease.PublishFilter(outputId, owner, Now);
         if (!await OutputAccounting.RecordArtifactAsync(
@@ -357,6 +382,72 @@ public sealed class OutputExportService(
                 store, outputId, fileName, Now,
                 OutputLease.PublishFilter(outputId, owner, Now), ct))
             throw LostOwnership();
+    }
+
+    /// <summary>
+    /// True when the deterministic final object already contains the artifact
+    /// this run uploaded. The size check is mandatory; when the provider exposes
+    /// ETags they must also match, which distinguishes a same-size stale object
+    /// from a server-side copy of the current staging object.
+    /// </summary>
+    private static async Task<bool> CanReuseFinalArtifactAsync(
+        IStorageBackend projectStorage,
+        string stagingKey,
+        string finalKey,
+        long bytes,
+        CancellationToken ct)
+    {
+        var existing = await projectStorage.HeadAsync(finalKey, ct);
+        if (existing is null || existing.Size != bytes) return false;
+        var staging = await projectStorage.HeadAsync(stagingKey, ct);
+        if (existing.ETag is not null && staging?.ETag is not null
+            && !string.Equals(existing.ETag, staging.ETag, StringComparison.Ordinal))
+            return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Bounded best-effort removal of artifacts that are not the current final
+    /// key. Staging objects (<c>.work/</c>) are skipped: a concurrent executor
+    /// may still be writing its own staging copy, and the lease fence decides
+    /// whether it can ever publish. Failure to sweep never fails a publish that
+    /// has already recorded a valid artifact; the next attempt retries it.
+    /// </summary>
+    private async Task CleanupOtherArtifactsAsync(
+        IStorageBackend projectStorage,
+        ObjectId outputId,
+        string finalKey,
+        CancellationToken ct)
+    {
+        var prefix = cleanup.OutputPrefix + outputId + "/";
+        var stagingPrefix = prefix + ".work/";
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(CleanupBudget);
+        try
+        {
+            string? startAfter = null;
+            for (var pageIndex = 0; pageIndex < MaxArtifactCleanupPages; pageIndex++)
+            {
+                var page = await projectStorage.ListAsync(
+                    prefix, startAfter, ArtifactCleanupPageSize, budget.Token);
+                foreach (var item in page.Objects)
+                {
+                    if (string.Equals(item.Key, finalKey, StringComparison.Ordinal)) continue;
+                    if (item.Key.StartsWith(stagingPrefix, StringComparison.Ordinal)) continue;
+                    await projectStorage.DeleteAsync(item.Key, budget.Token);
+                }
+                startAfter = page.Next;
+                if (startAfter is null) break;
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("Output artifact cleanup was truncated by its time budget");
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            logger.LogWarning("Output artifact cleanup failed ({ErrorType})", error.GetType().Name);
+        }
     }
 
     private async Task<BsonDocument> LoadTargetAsync(
@@ -880,5 +971,6 @@ public sealed class OutputExportService(
         public required string DownloadName { get; init; }
         public required int Type { get; init; }
         public required long Revision { get; init; }
+        public ObjectId? SourceId { get; init; }
     }
 }
