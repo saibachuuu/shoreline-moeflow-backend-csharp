@@ -63,6 +63,45 @@ public sealed class ProjectCreateLabelPlusHttpTests(LocalServices services)
     }
 
     [Fact]
+    public async Task InvalidTextWinsOverSameSourceTargetAndValidTextStillReturns6002()
+    {
+        var creator = await UserAsync();
+        using var owner = Client(creator);
+        var teamId = await CreateTeamAsync(owner, Name("team"));
+        var beforeProjects = await CountProjectsAsync(teamId);
+        var beforeTargets = await CountAllAsync("target");
+        var beforeJobs = await CountAllAsync("csharp_job");
+
+        // Python Project.create parses labelplus_txt (line 477) BEFORE it
+        // rejects source == target (line 500), so the parse failure 4029 wins
+        // over 6002 and still writes no row.
+        var conflicting = await owner.PostAsJsonAsync("/v1/teams/" + teamId + "/projects",
+            ProjectForm(new[] { "ja" }, InvalidText, sourceLanguage: "ja"));
+        await ErrorAsync(conflicting, 4029);
+        Assert.Equal(beforeProjects, await CountProjectsAsync(teamId));
+        Assert.Equal(beforeTargets, await CountAllAsync("target"));
+        Assert.Equal(beforeJobs, await CountAllAsync("csharp_job"));
+
+        // Valid text with the same source and target keeps 6002.
+        var sameLanguage = await owner.PostAsJsonAsync("/v1/teams/" + teamId + "/projects",
+            ProjectForm(new[] { "ja" }, ValidText, sourceLanguage: "ja"));
+        await ErrorAsync(sameLanguage, 6002);
+        Assert.Equal(beforeProjects, await CountProjectsAsync(teamId));
+        Assert.Equal(beforeTargets, await CountAllAsync("target"));
+        Assert.Equal(beforeJobs, await CountAllAsync("csharp_job"));
+
+        // Schema-level language validation still runs before the parser, as in
+        // Python's CreateProjectSchema -> Project.create order: an unknown
+        // target must report the field error, not 4029.
+        var unknownLanguage = await owner.PostAsJsonAsync("/v1/teams/" + teamId + "/projects",
+            ProjectForm(new[] { "not-a-language" }, InvalidText));
+        await ErrorAsync(unknownLanguage, 2);
+        Assert.Equal(beforeProjects, await CountProjectsAsync(teamId));
+        Assert.Equal(beforeTargets, await CountAllAsync("target"));
+        Assert.Equal(beforeJobs, await CountAllAsync("csharp_job"));
+    }
+
+    [Fact]
     public async Task ValidSingleTargetQueuesAndWorkerExecutesWithRealCounts()
     {
         var creator = await UserAsync();
@@ -168,13 +207,13 @@ public sealed class ProjectCreateLabelPlusHttpTests(LocalServices services)
 
     // ---- helpers ----
 
-    private static object ProjectForm(string[] targets, string labelplus) => new
+    private static object ProjectForm(string[] targets, string labelplus, string sourceLanguage = "ja") => new
     {
         name = Name("project"),
         intro = "",
         allow_apply_type = 1,
         application_check_type = 2,
-        source_language = "ja",
+        source_language = sourceLanguage,
         target_languages = targets,
         labelplus_txt = labelplus
     };

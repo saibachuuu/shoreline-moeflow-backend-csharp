@@ -199,17 +199,19 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
                 ?? throw ApiError.Field("target_languages", "语言不存在");
             targetLanguages.Add(fallback);
         }
-        if (targetLanguages.Any(language => language["_id"] == sourceLanguage["_id"]))
-            throw new ApiError("TargetAndSourceLanguageSameError", 6002, "目标语言不能与源语言相同");
-        // Python's Project.create parses any non-empty labelplus_txt before its
-        // first save, including the multi-target case where no import is
-        // queued. A malformed file must therefore create zero rows.
+        // Python's Project.create parses any non-empty labelplus_txt (line 477)
+        // before it rejects source == target (line 500), so a malformed file
+        // wins over 6002 and no row is written in either case. Parse only after
+        // the schema-level field/language validation above, which Python also
+        // runs first, including the multi-target case where nothing is queued.
         if (labelplusText.Length > 0)
         {
             if (imports is null)
                 throw new InvalidOperationException("LabelPlus import service is not configured");
             imports.ValidateBeforeCreate(labelplusText);
         }
+        if (targetLanguages.Any(language => language["_id"] == sourceLanguage["_id"]))
+            throw new ApiError("TargetAndSourceLanguageSameError", 6002, "目标语言不能与源语言相同");
         var now = clock.GetUtcNow().UtcDateTime;
         var document = new BsonDocument
         {

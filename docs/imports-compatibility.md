@@ -145,8 +145,11 @@ handler；普通项目创建端点也已在 `ProjectService.CreateProjectAsync` 
    `ValidateBeforeCreate` → `CreateProjectAsync` → `InitializeAfterCreateAsync`。
 3. 普通创建端点已接线（`ProjectService.CreateProjectAsync`）：
    - 读取普通 JSON 的 `labelplus_txt`（缺省/null 为空，非字符串按字段校验失败）。
-   - 非空文本在**任何** project/target 写入之前调用 `ValidateBeforeCreate`；即使
-     target 数大于 1 也先解析，坏文件返回 4029 且不产生 project/target/job。
+   - 非空文本在 **schema 字段/语言校验之后、source == target 校验之前**调用
+     `ValidateBeforeCreate`，与 Python `CreateProjectSchema`（先做 schema）→
+     `Project.create:477`（解析）→ `:500`（同源目标）的顺序一致；即使 target 数大于 1
+     也先解析，坏文件返回 4029 且不产生 project/target/job。
+   - 同时无效文本 + 同源目标时返回 4029（不是 6002）；有效文本 + 同源目标仍返回 6002。
    - project、targets、creator member 完成后，仅当文本非空且恰好 1 个 target 时调用
      `InitializeAfterCreateAsync(project, actor, labelplusText, "", ct)`。空文本与多
      target 不写 `it/is/ip`、不入队。
@@ -315,14 +318,16 @@ translation 已提交但确认丢失的重试收敛。旧无 stable-id journal �
   `tests/Shoreline.Tests/TeamDissolutionTests.cs`、本文档。
 - `dotnet restore Shoreline.sln --locked-mode`：成功。
 - `dotnet build Shoreline.sln -warnaserror --no-restore`：0 warnings / 0 errors。
-- 新 HTTP 测试 `ProjectCreateLabelPlusHttpTests`：4 passed / 0 failed / 0 skipped。
+- 新 HTTP 测试 `ProjectCreateLabelPlusHttpTests`：5 passed / 0 failed / 0 skipped。
   - invalid 单/多 target：4029，project/target/csharp_job 计数不变。
+  - invalid 文本 + 同源目标：4029（优先于 6002）且计数不变；有效文本 + 同源目标
+    保持 6002；未知目标语言仍在 parser 之前报字段错误 2。
   - valid 单 target：durable job 入队，`JobWorker` 执行至 `is=2`；实测 1 file、
     2 source、1 translation、1 target。
   - 空文本与多 target：`is=2`、`it=""`、无 job。
   - `beginner`/无 `CREATE_PROJECT` 的团队成员：103，project/target/job 计数不变。
 - 回归子集（`ProjectTests` + `ProjectImportTests` + `TeamDissolutionTests` +
-  新 HTTP 测试）：60 passed / 0 failed / 0 skipped。
+  新 HTTP 测试）：61 passed / 0 failed / 0 skipped。
 - 全量 `dotnet test Shoreline.sln` 曾在本轮 N5 Mongo 上启动，但 Mongo 容器
   (`mem_limit: 512m`) 在约 25 分钟后被 OOM kill（`OOMKilled=true`, exit 137），
   因此**没有**可信的全量通过结果；本文不把它当作验收证据。
