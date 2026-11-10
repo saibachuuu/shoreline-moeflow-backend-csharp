@@ -31,7 +31,7 @@
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
 | 最终合并后的 dotnet build 0/0 | 已验证 | `2650a74` + bootstrap/诊断工作树：`dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error（2026-11-10） |
-| C# 全量 suite | 已验证 | `2ab6863`：`dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --no-build`，**888 passed / 0 failed / 0 skipped**，9 m 39 s；五端口隔离服务（Mongo 27241 / S3 29241 / SMTP 21241 / Mailpit 28241 / API 25241）。包含 19 例 `LegacyRuntimeDifferentialTests`，0 business differences |
+| C# 全量 suite | 已验证 | `505ffa7`：`dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --no-build`，**888 passed / 0 failed / 0 skipped**，8 m 38 s；五端口隔离服务（Mongo 27241 / S3 29241 / SMTP 21241 / Mailpit 28241 / API 25241）。包含 19 例 `LegacyRuntimeDifferentialTests`，0 business differences |
 | Python 全量 suite | 已验证 | `venv-moeflow/bin/pytest -q`：**836 passed, 48 subtests passed**, 446 s（`.env.test`，mongomock/memory broker/local storage） |
 | 真实差分全量 suite | 部分验证 | 只读扩展 19/19、0 business differences；写路径和可选模块差分未覆盖，不能称全量 |
 | 可复现镜像 / lock / digest | 部分验证 | `bc9557f` 内容两次 `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` 冷构建 ImageID 均为 `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`，层摘要相同；SDK 10.0.403/runtime 10.0.8 按 digest 锁定。仅同 builder、平台和源树，不代表跨构建机或跨平台 |
