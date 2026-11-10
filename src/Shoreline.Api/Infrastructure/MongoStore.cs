@@ -59,6 +59,8 @@ public sealed class MongoStore
             new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("status"),
                 new CreateIndexOptions { Name = "team_member_status_v1" })
         ], ct);
+        await EnsureTeamMemberQueryIndexAsync("aliases", "team_member_aliases_v1", ct);
+        await EnsureTeamMemberQueryIndexAsync("worker_qualifications", "team_member_worker_qualifications_v1", ct);
         await Collection("identity_tag_policy").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("team"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
         await Collection("project_member").Indexes.CreateManyAsync([
@@ -83,6 +85,42 @@ public sealed class MongoStore
         await Collection("identity_operation").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("operation_id"),
             new CreateIndexOptions { Unique = true, Name = "identity_operation_project_operation_v1" }), cancellationToken: ct);
+    }
+
+    private async Task EnsureTeamMemberQueryIndexAsync(string field, string name, CancellationToken ct)
+    {
+        var collection = Collection("team_member");
+        var keys = new BsonDocument { ["team"] = 1, [field] = 1 };
+
+        async Task<bool> HasEquivalentAsync()
+        {
+            var indexes = await (await collection.Indexes.ListAsync(ct)).ToListAsync(ct);
+            var candidates = indexes.Where(index => index.GetValue("name", "") == name ||
+                index.GetValue("key", BsonNull.Value).Equals(keys)).ToArray();
+            foreach (var index in candidates)
+            {
+                // Only server metadata and the legacy background hint are ignored.
+                // Unknown options are rejected rather than silently weakening the contract.
+                if (!index.GetValue("key", BsonNull.Value).Equals(keys) ||
+                    index.GetValue("unique", false).ToBoolean() || index.GetValue("sparse", false).ToBoolean() ||
+                    index.Names.Any(option => option is not ("v" or "key" or "name" or "ns" or "background" or "unique" or "sparse")))
+                    throw new InvalidOperationException($"Conflicting team_member index for {name}; no index was removed or replaced.");
+            }
+            return candidates.Length > 0;
+        }
+
+        if (await HasEquivalentAsync()) return;
+        try
+        {
+            await collection.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(keys,
+                new CreateIndexOptions { Name = name }), cancellationToken: ct);
+        }
+        catch (MongoCommandException error) when (error.Code is 85 or 86)
+        {
+            // Another initializer may have created an equivalent spec under a different name.
+            // Never ignore a conflict unless the current catalog proves equivalence.
+            if (!await HasEquivalentAsync()) throw;
+        }
     }
 }
 
