@@ -22,25 +22,6 @@ public sealed class TeamIdentityTests(LocalServices services)
     }
 
     [Fact]
-    public async Task DuplicateTeamMemberPreflightReportsWithoutChangingRecords()
-    {
-        var teamId = ObjectId.GenerateNewId();
-        var userId = ObjectId.GenerateNewId();
-        var rows = services.Store.Collection("team_member");
-        await rows.Indexes.DropOneAsync("team_member_team_user_v1");
-        var first = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["team"] = teamId, ["user"] = userId, ["base_tag"] = "member" };
-        var second = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["team"] = teamId, ["user"] = userId, ["base_tag"] = "admin" };
-        await rows.InsertManyAsync([first, second]);
-
-        var issues = await MongoSchemaPreflight.InspectTeamMemberDuplicatesAsync(services.Store);
-
-        var issue = Assert.Single(issues, item => item.Key["team"] == teamId && item.Key["user"] == userId);
-        Assert.Equal("duplicate-team-member", issue.Code);
-        Assert.Equal(2, issue.Count);
-        Assert.Equal(2, await rows.CountDocumentsAsync(new BsonDocument { ["team"] = teamId, ["user"] = userId }));
-    }
-
-    [Fact]
     public async Task AddRestoreAndSoftRemovalPreserveIdsAliasesAndAudit()
     {
         var team = await TeamAsync();

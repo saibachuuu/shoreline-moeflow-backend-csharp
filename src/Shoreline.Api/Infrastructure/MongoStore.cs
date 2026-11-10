@@ -61,9 +61,7 @@ public sealed class MongoStore
             new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("aliases"),
                 new CreateIndexOptions { Name = "team_member_aliases_v1" }),
             new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("worker_qualifications"),
-                new CreateIndexOptions { Name = "team_member_worker_qualifications_v1" }),
-            new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("status").Ascending("aliases_search"),
-                new CreateIndexOptions { Name = "team_member_alias_search_v1" })
+                new CreateIndexOptions { Name = "team_member_worker_qualifications_v1" })
         ], ct);
         await Collection("identity_tag_policy").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("team"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
