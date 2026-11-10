@@ -11,7 +11,7 @@
 - 不读取 `.env*`、生产环境变量或凭证。生产 SSH 仅采集操作系统和容器资源快照；不修改配置、容器或数据库。
 - 测试机已有隔离栈不是本轮创建的资源；未经确认不删除其数据或重建数据库。
 - 每个子代理独占 worktree、分支和端口段；合并前须 review、构建和聚焦测试。
-- 成本约束：后续子代理默认 `opencode-go/beam-free`，小范围派发；不再自动升级模型，确需升级先取得用户确认。
+- 成本约束：后续子代理默认 `opencode-go/beam-free`，小范围派发；复杂复核可用用户明确确认免费的 `agrt-gateway/gpt-6.1-sol`，不再新增收费模型。
 
 ## 2. 当前证据，不把发现数当通过数
 
@@ -76,12 +76,13 @@ dotnet test Shoreline.sln --no-build --nologo --filter "FullyQualifiedName~Shore
 
 ## 5. 数据与任务审计状态
 
-- 全 collection / alias / BSON 类型 / index / unique / seeds / migrations / Celery 任务映射正在逐项复核；尚无已接受的完整矩阵。
+- 已完成 20 个真实 Celery decorator 的静态映射和关键数据路径复核，详见 [data-job-parity-audit-20261110.md](data-job-parity-audit-20261110.md)；全 collection / alias / BSON 类型 / index / unique 及历史数据运行时矩阵仍未验收。
 - 首轮数据报告包含未证实的任务和 seed 猜测，已拒绝作为缺陷证据；不能因此重写既有功能。
 - 已确认必须显式评估旧 Python `OSS_KEY_PREFIX` 默认 `storage/` 与 C# 默认空 prefix；真实生产为 Cloudflare R2，不可把 S3Mock 测试当作 R2 签名验证。
 - `file_target_cache`、project `m_e` / projectset `et`、`output.file_name`、角色默认权限等必须用当前 Python 源码和测试核对，不沿用历史快照结论。
 - Mongo standalone 跨文档写入不能直接宣称 exactly-once；unknown commit、lease 续约/超时、stable job/item IDs、owner CAS 锁释放、重试和崩溃恢复必须有故障测试。
 - `src/Shoreline.Api/Program.cs:50-54` 默认 `StoragePool:WorkerEnabled=false`；上线形态需要明确开启 handler 或产品接受替代，不能以 HTTP 路由存在代替后台任务验收。
+- 确认普通创建忽略 LabelPlus、fresh install 缺 admin/default team/settings 持久化、用户/日志邮件开关不一致、新 C# 安全码回滚 Python 无法读取，以及启用 MIT 后缺外部消费者；不伪造成功或将条件功能默认为不适用。
 
 ## 6. 测试环境隔离前提
 
@@ -131,8 +132,8 @@ dotnet test Shoreline.sln --no-build --nologo --filter "FullyQualifiedName~Shore
 | 独占 worktree（批准 Temp 下） | 分支 | 模型 / 状态 |
 |---|---|---|
 | `moeflow-readiness-http` | `audit/readiness-http-20261110` | beam-free 首轮及工具；因工具误计，已启动 deepseek-v4.1-flash 修正复核；`985f596` 尚未合并 |
-| `moeflow-readiness-data-jobs` | `audit/readiness-data-jobs-20261110` | beam-free 首轮；因逐任务/数据报告不可靠，已启动 deepseek-v4.1-flash 只读复核；无提交 |
-| `moeflow-readiness-ops` | `audit/readiness-ops-20261110` | beam-free 静态审计完成；无提交；后续自己的 worktree 需补 LSP 验证 |
+| `moeflow-readiness-data-jobs` | `audit/readiness-data-jobs-20261110` | beam-free 首轮；deepseek-v4.1-flash 复核完成；已保留并移动到 workspace 内，由 beam-free 补齐独占路径 LSP / build；无提交 |
+| `moeflow-readiness-ops` | `audit/readiness-ops-20261110` | beam-free 静态审计完成；已保留并移动到 workspace 内，补齐独占路径 LSP / build；无提交 |
 
 首轮备用端口：N=0/1/2 分别使用 Mongo `27201/27211/27221`、S3 `29201/29211/29221`、SMTP `21201/21211/21221`、Mailpit `28201/28211/28221`、API `25201/25211/25221`；本轮未监听。
 

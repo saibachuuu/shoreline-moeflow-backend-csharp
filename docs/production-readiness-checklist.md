@@ -27,7 +27,7 @@
 | 设置、语言/类型/角色种子 | 未验证 | 当前初始化与 Python 逐项复核，不能沿用首轮猜测 |
 | 管理员/默认团队初始化 | 未验证 | 必须 fresh DB + existing DB + concurrent/retry 测试 |
 | 迁移及回滚数据兼容 | 未验证 | production-shaped disposable 副本尚未演练 |
-| 每个 Celery 任务对应 handler/接受替代 | 未验证 | 真实 decorator/参数/装配/测试矩阵待完成；storage worker 默认禁用 |
+| 每个 Celery 任务对应 handler/接受替代 | 未验证 | 已映射 20 个真实 task；MIT 无消费者、普通创建 LabelPlus 断链、storage worker 默认禁用；运行时及替代接受未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 三个审计 worktree `dotnet build Shoreline.sln --nologo` 成功；仅 c29888e 首轮 |
 | 最终合并后的 dotnet build 0/0 | 未验证 | 还未合并修复，不以基线构建替代最终构建 |
@@ -57,5 +57,7 @@
 4. 测试依赖硬编码端口、Python 默认 dotenv/重建测试库必须先安全隔离。
 5. 全 C# / Python / 差分 suite、测试机生产形状部署、备份恢复/回滚、负载长稳、安全自查均未完成。
 6. 未确认可用的生产 dump **副本**位置及所需容量；生产机仅只读，不通过读取生产凭证绕过限制。
+
+数据/任务详细复核：[data-job-parity-audit-20261110.md](data-job-parity-audit-20261110.md)。
 
 更新本表时必须附具体 commit、命令、通过/失败/跳过数及环境；如状态改为“不适用”，必须记录逐项原因和明确的产品接受决定。
