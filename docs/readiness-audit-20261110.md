@@ -3,6 +3,29 @@
 > 状态：第一阶段诊断进行中，**尚不具备替换生产 Python 的证据**。
 > 本报告不是发布批准；README 的 WIP / 不能替代生产表述保持不变。
 
+## 本轮收尾更新
+
+用户准备关机，已停止派新任务，不开始远程部署/压测。以下更新优先于下文第一阶段历史状态：
+
+- HTTP 审计工具已 review 合并；原工具提交 `985f596` 经 `d72e8e5` / `d678f60` 修正，再由主提交 `8b0b940` 修正“含 HTTP 的测试函数”误计。工具自测 **20 通过**。
+- 正确静态分母为 **192**（core 160 + conditional 5 + optional 27），Python 静态命中 139，C# 138，两侧均命中 102；C# 无静态命中 54；Python/C# unresolved 5/1。静态命中不是执行成功，未命中不是证明无测试。
+- 核心 Python/C# 命中 117/127，可选 22/6，通知 19/14，认证 12/9；archive import 3 条与 storage pool 18 条没有 C# 静态 HTTP 命中。逐路由调用及函数级断言证据可由 `tools/Audit-TestParity.py` 重建。
+- 测试端口隔离分支 `test/readiness-isolation-20261110` 已合并；主提交 `c596089` 修复默认端口测试污染环境变量、恢复 Compose 原默认 project name，补充宿主测试需显式导出相同端口的说明。
+- 合并后 `dotnet build Shoreline.sln --nologo` 为 **0 warning / 0 error**；TestEnvironment / Security / StorageCompatibilityUnit / Email / StoragePool / Language / LegacyType 聚焦合集 **99 通过 / 0 失败 / 0 跳过**，TRX 为批准 Temp `moeflow-discovery/merged-isolation-ready.trx`。
+- 首次合并复验因依赖容器停止，**40 通过 / 59 失败**，保留 `merged-isolation.trx`。检查到容器退出不是 OOM；在同一 WSL 会话内启动本轮依赖并调用 Windows dotnet，复验 99/99 通过。独立单元另有 40/40 的 `merged-isolation-unit.trx`。
+- 不因聚焦绿色修改全量 suite / 差分 / 远程验收状态；最终镜像与 bootstrap 分支结果以关机交接为准。
+
+复现已合并聚焦合集：先按 `docs/test-isolation.md` 启动独占依赖，导出该栈的五个 `SHORELINE_TEST_*_PORT`，再执行：
+
+```powershell
+dotnet build Shoreline.sln --nologo
+dotnet test Shoreline.sln --no-build --nologo --filter "FullyQualifiedName~TestEnvironmentTests|FullyQualifiedName~Shoreline.Tests.SecurityTests|FullyQualifiedName~StorageCompatibilityUnitTests|FullyQualifiedName~EmailTests|FullyQualifiedName~StoragePoolTests|FullyQualifiedName~LanguageTests|FullyQualifiedName~LegacyTypeTests"
+python -m unittest discover -s tools/tests -p "test_*.py"
+python tools/Audit-TestParity.py --python-root ../shoreline-moeflow-backend --csharp-root . --output /path/to/approved-temp/parity.json
+```
+
+WSL 后台容器可能在没有 Linux 会话时随 WSL 停止；验收前检查容器状态及宿主端口，不以旧 healthy 记录替代当前检查。
+
 ## 1. 基线与执行边界
 
 - Python：同级 `shoreline-moeflow-backend`，`dev`，`be0b717`；初始工作树干净。

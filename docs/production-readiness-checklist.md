@@ -11,7 +11,7 @@
 | 硬门槛 | 状态 | 证据 / 阻塞 / 仍需执行 |
 |---|---|---|
 | 核心有效路由注册 | 未验证 | 静态 156/160；4 条诊断路由没有实现或批准例外；还须运行时装配验证 |
-| 全核心路由 C# HTTP 行为与权限 | 未验证 | 已有测试但没有接受的逐路由测试/意图矩阵，也未跑全量 |
+| 全核心路由 C# HTTP 行为与权限 | 未验证 | 已接受静态矩阵：核心 127/160 命中；静态不等于执行成功，未跑全量 |
 | archive_import HTTP | 未验证 | 已装配；需 request/body/errors/auth/digest 测试 |
 | partner_search HTTP | 未验证 | 已有 HTTP 测试；需全契约、写/索引排序和 Python oracle |
 | storage_pool HTTP | 未验证 | 已装配；需完整 admin HTTP 及权限/任务状态测试 |
@@ -30,8 +30,8 @@
 | 每个 Celery 任务对应 handler/接受替代 | 未验证 | 已映射 20 个真实 task；MIT 无消费者、普通创建 LabelPlus 断链、storage worker 默认禁用；运行时及替代接受未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 三个审计 worktree `dotnet build Shoreline.sln --nologo` 成功；仅 c29888e 首轮 |
-| 最终合并后的 dotnet build 0/0 | 未验证 | 还未合并修复，不以基线构建替代最终构建 |
-| C# 全量 suite | 未验证 | 仅发现 837；独立单元 18/18；宽泛过滤 23 通过/9 缺依赖失败 |
+| 最终合并后的 dotnet build 0/0 | 未验证 | 审计工具/测试隔离合并后已构建 0/0；还有工作流待 review，不能作为全部修复最终构建 |
+| C# 全量 suite | 未验证 | 基线发现 837；本轮已合并聚焦 99/99；完整 suite 未跑，曾有缺依赖失败并保留证据 |
 | Python 全量 suite | 未验证 | 需无 dotenv、owned DB、isolated catalog/storage/broker 的安全环境 |
 | 真实差分全量 suite | 未验证 | 未运行本轮读写与可选模块扩展 |
 | 可复现镜像 / lock / digest | 未验证 | Dockerfile 缺 Imaging 项目；基础镜像浮动；尚未构建 |
@@ -52,9 +52,9 @@
 ## 明确阻塞
 
 1. 没有满足读写及四可选模块要求的真实运行时差分。
-2. 全业务逐路由 HTTP 意图/执行证据和完整数据/任务矩阵尚未接受。
+2. 静态路由意图矩阵及 20 task 映射已落盘，但全 HTTP 执行、全部 BSON/index 及故障恢复证据仍不足；C# 54 条有效 legacy 路由没有静态 HTTP 命中。
 3. Dockerfile 的项目复制缺口、配置/health/security/observability 需要实现并验收。
-4. 测试依赖硬编码端口、Python 默认 dotenv/重建测试库必须先安全隔离。
+4. C# 测试依赖已统一可配置 loopback 端口并聚焦验收；Python 默认 dotenv/重建测试库仍必须安全隔离。
 5. 全 C# / Python / 差分 suite、测试机生产形状部署、备份恢复/回滚、负载长稳、安全自查均未完成。
 6. 未确认可用的生产 dump **副本**位置及所需容量；生产机仅只读，不通过读取生产凭证绕过限制。
 
