@@ -41,18 +41,18 @@ public class LocalServices : IAsyncLifetime
     {
         var settings = new Dictionary<string, string?>
         {
-            ["Mongo:Uri"] = "mongodb://127.0.0.1:27128/" + DatabaseName,
+            ["Mongo:Uri"] = "mongodb://127.0.0.1:" + TestEnvironment.MongoPort + "/" + DatabaseName,
             ["Auth:Secret"] = SecurityTests.Secret,
             ["Auth:AdminEmail"] = "owner@example.test",
             ["Archive:AllowedHosts:0"] = "api.example.test",
-            ["Storage:Endpoint"] = "http://127.0.0.1:29128",
+            ["Storage:Endpoint"] = "http://127.0.0.1:" + TestEnvironment.S3Port,
             ["Storage:Bucket"] = "shoreline-test",
             ["Storage:AccessKey"] = "local-test-only",
             ["Storage:SecretKey"] = "local-disposable-test-secret",
             ["Storage:ForcePathStyle"] = "true",
             ["Mail:Enabled"] = "true",
             ["Mail:Host"] = "127.0.0.1",
-            ["Mail:Port"] = "21128",
+            ["Mail:Port"] = TestEnvironment.SmtpPort.ToString(),
             ["Mail:StartTls"] = "false",
             ["Mail:From"] = "noreply@example.test"
         };
@@ -75,10 +75,22 @@ public class LocalServices : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        Http.Dispose();
-        await App.DisposeAsync();
+        Http?.Dispose();
+        if (App is not null)
+        {
+            await App.DisposeAsync();
+        }
+
         // Only this randomly named database on the dedicated localhost port is removed.
-        await new MongoClient("mongodb://127.0.0.1:27128").DropDatabaseAsync(DatabaseName);
+        // Guard partially initialized fixtures without swallowing the original failure.
+        try
+        {
+            await new MongoClient("mongodb://127.0.0.1:" + TestEnvironment.MongoPort).DropDatabaseAsync(DatabaseName);
+        }
+        catch (Exception) when (Store is null)
+        {
+            // No store was initialized; there is no database to drop.
+        }
     }
 }
 

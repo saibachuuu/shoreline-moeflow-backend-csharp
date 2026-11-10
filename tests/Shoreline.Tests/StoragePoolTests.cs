@@ -44,7 +44,7 @@ public sealed class StoragePoolTests(LocalServices services)
         using var runtime = Runtime();
         var name = "verify-" + Guid.NewGuid().ToString("N");
         var data = Json($$"""
-            {"name":"{{name}}","endpoint":"http://127.0.0.1:29128","bucket":"shoreline-test",
+            {"name":"{{name}}","endpoint":"http://127.0.0.1:{{TestEnvironment.S3Port}}","bucket":"shoreline-test",
              "sub_path":"probe/","verify_ssl":false,"access_key_id":"local-test-only",
              "secret_access_key":"local-disposable-test-secret"}
             """);
@@ -232,7 +232,7 @@ public sealed class StoragePoolTests(LocalServices services)
     public async Task DifferentEndpointAuthorityFallsBackToStreamCopy()
     {
         using var runtime = Runtime();
-        var sourceId = await runtime.InsertSourceAsync("stream/", "http://127.1:29128");
+        var sourceId = await runtime.InsertSourceAsync("stream/", "http://127.1:" + TestEnvironment.S3Port);
         var projectId = await runtime.InsertProjectAsync();
         var saveName = Guid.NewGuid().ToString("N") + ".png";
         await runtime.InsertImageFileAsync(projectId, ObjectId.GenerateNewId(), saveName);
@@ -928,8 +928,9 @@ internal sealed class StoragePoolRuntime : IDisposable
     }
 
     public async Task<ObjectId> InsertSourceAsync(string? prefix = null,
-        string endpoint = "http://127.0.0.1:29128")
+        string? endpoint = null)
     {
+        endpoint ??= "http://127.0.0.1:" + TestEnvironment.S3Port;
         var id = ObjectId.GenerateNewId();
         var now = DateTime.UtcNow;
         await Store.Collection("storage_pool_source").InsertOneAsync(new BsonDocument

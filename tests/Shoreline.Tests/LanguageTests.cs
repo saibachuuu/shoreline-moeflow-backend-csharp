@@ -87,8 +87,8 @@ public sealed class LanguageTests(LocalServices services)
     {
         var name = "shoreline_csharp_language_test_" + Guid.NewGuid().ToString("N");
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
-            ["Mongo:Uri"] = "mongodb://127.0.0.1:27128/" + name }).Build();
+            ["Mongo:Uri"] = "mongodb://127.0.0.1:" + TestEnvironment.MongoPort + "/" + name }).Build();
         try { await action(new MongoStore(configuration)); }
-        finally { await new MongoClient("mongodb://127.0.0.1:27128").DropDatabaseAsync(name); }
+        finally { await new MongoClient("mongodb://127.0.0.1:" + TestEnvironment.MongoPort).DropDatabaseAsync(name); }
     }
 }

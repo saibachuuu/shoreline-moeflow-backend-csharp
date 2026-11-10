@@ -518,24 +518,24 @@ public sealed class LabelHttpTests
         {
             Http.Dispose();
             await App.DisposeAsync();
-            await new MongoClient("mongodb://127.0.0.1:27128").DropDatabaseAsync(DatabaseName);
+            await new MongoClient("mongodb://127.0.0.1:" + TestEnvironment.MongoPort).DropDatabaseAsync(DatabaseName);
         }
 
         private static Dictionary<string, string?> Settings(string database) => new()
         {
-            ["Mongo:Uri"] = "mongodb://127.0.0.1:27128/" + database,
+            ["Mongo:Uri"] = "mongodb://127.0.0.1:" + TestEnvironment.MongoPort + "/" + database,
             ["Auth:Secret"] = "label-http-test-secret-0123456789abcdef",
             ["Auth:AdminEmail"] = "owner@example.test",
             ["Notifications:WorkerEnabled"] = "false",
             ["Archive:AllowedHosts:0"] = "api.example.test",
-            ["Storage:Endpoint"] = "http://127.0.0.1:29128",
+            ["Storage:Endpoint"] = "http://127.0.0.1:" + TestEnvironment.S3Port,
             ["Storage:Bucket"] = "shoreline-test",
             ["Storage:AccessKey"] = "local-test-only",
             ["Storage:SecretKey"] = "local-disposable-test-secret",
             ["Storage:ForcePathStyle"] = "true",
             ["Mail:Enabled"] = "true",
             ["Mail:Host"] = "127.0.0.1",
-            ["Mail:Port"] = "21128",
+            ["Mail:Port"] = TestEnvironment.SmtpPort.ToString(),
             ["Mail:StartTls"] = "false",
             ["Mail:From"] = "noreply@example.test"
         };

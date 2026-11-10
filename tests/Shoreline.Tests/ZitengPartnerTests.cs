@@ -29,7 +29,7 @@ namespace Shoreline.Tests;
 /// </summary>
 public sealed class ZitengPartnerTests
 {
-    private const string MongoUri = "mongodb://127.0.0.1:27128/";
+    private static string MongoUri => "mongodb://127.0.0.1:" + TestEnvironment.MongoPort + "/";
     private static readonly string Password = PasswordHash.Create("test-password");
 
     [Fact]
@@ -926,14 +926,14 @@ public sealed class ZitengPartnerTests
             ["Auth:Secret"] = "ziteng-http-test-secret-0123456789abcdef",
             ["Auth:AdminEmail"] = "owner@example.test",
             ["Notifications:WorkerEnabled"] = "false",
-            ["Storage:Endpoint"] = "http://127.0.0.1:29128",
+            ["Storage:Endpoint"] = "http://127.0.0.1:" + TestEnvironment.S3Port,
             ["Storage:Bucket"] = "shoreline-test",
             ["Storage:AccessKey"] = "local-test-only",
             ["Storage:SecretKey"] = "local-disposable-test-secret",
             ["Storage:ForcePathStyle"] = "true",
             ["Mail:Enabled"] = "true",
             ["Mail:Host"] = "127.0.0.1",
-            ["Mail:Port"] = "21128",
+            ["Mail:Port"] = TestEnvironment.SmtpPort.ToString(),
             ["Mail:StartTls"] = "false",
             ["Mail:From"] = "noreply@example.test",
         };

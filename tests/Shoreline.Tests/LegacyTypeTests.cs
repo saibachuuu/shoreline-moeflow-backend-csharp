@@ -106,8 +106,8 @@ public sealed class LegacyTypeTests(LocalServices services)
     private static async Task WithDatabaseAsync(Func<MongoStore, Task> action)
     {
         var name = "shoreline_types_test_" + Guid.NewGuid().ToString("N");
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Mongo:Uri"] = "mongodb://127.0.0.1:27128/" + name }).Build();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Mongo:Uri"] = "mongodb://127.0.0.1:" + TestEnvironment.MongoPort + "/" + name }).Build();
         try { await action(new MongoStore(config)); }
-        finally { await new MongoClient("mongodb://127.0.0.1:27128").DropDatabaseAsync(name); }
+        finally { await new MongoClient("mongodb://127.0.0.1:" + TestEnvironment.MongoPort).DropDatabaseAsync(name); }
     }
 }

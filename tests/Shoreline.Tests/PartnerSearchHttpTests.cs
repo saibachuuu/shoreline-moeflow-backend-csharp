@@ -242,7 +242,7 @@ internal sealed class PartnerSearchHttpRuntime : IAsyncDisposable
         var values = services.Configuration.AsEnumerable()
             .Where(pair => pair.Value is not null)
             .ToDictionary(pair => pair.Key, pair => (string?)pair.Value);
-        values["Mongo:Uri"] = "mongodb://127.0.0.1:27128/" + databaseName;
+        values["Mongo:Uri"] = "mongodb://127.0.0.1:" + TestEnvironment.MongoPort + "/" + databaseName;
 
         var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -402,5 +402,5 @@ internal sealed class PartnerSearchHttpRuntime : IAsyncDisposable
     }
 
     private static Task DropAsync(string databaseName) =>
-        new MongoClient("mongodb://127.0.0.1:27128").DropDatabaseAsync(databaseName);
+        new MongoClient("mongodb://127.0.0.1:" + TestEnvironment.MongoPort).DropDatabaseAsync(databaseName);
 }
