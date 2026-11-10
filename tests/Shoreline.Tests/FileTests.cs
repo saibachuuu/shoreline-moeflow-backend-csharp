@@ -994,7 +994,7 @@ public sealed class FileTests(LocalServices services)
             ["_id"] = id,
             ["n"] = "file-source-" + id,
             ["e"] = true,
-            ["ep"] = services.Configuration["Storage:Endpoint"] ?? "http://127.0.0.1:29128",
+            ["ep"] = services.Configuration["Storage:Endpoint"] ?? "http://127.0.0.1:" + TestEnvironment.S3Port,
             ["b"] = services.Configuration["Storage:Bucket"] ?? "shoreline-test",
             ["sp"] = "file-pool/" + Guid.NewGuid().ToString("N") + "/",
             ["r"] = "us-east-1",

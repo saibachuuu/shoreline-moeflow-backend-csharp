@@ -118,7 +118,7 @@ public sealed class ProofreadFeedbackTests : IDisposable
             ["Storage:Domain"] = "https://storage.example.test",
             ["Mail:Enabled"] = "true",
             ["Mail:Host"] = "127.0.0.1",
-            ["Mail:Port"] = "21128",
+            ["Mail:Port"] = global::Shoreline.Tests.TestEnvironment.SmtpPort.ToString(),
             ["Mail:From"] = "noreply@example.test",
         };
         for (var i = 0; i < extra.Length; i++)
@@ -946,7 +946,7 @@ public sealed class ProofreadFeedbackTests : IDisposable
             ["Storage:Domain"] = "https://storage.example.test",
             ["Mail:Enabled"] = "true",
             ["Mail:Host"] = "127.0.0.1",
-            ["Mail:Port"] = "21128",
+            ["Mail:Port"] = global::Shoreline.Tests.TestEnvironment.SmtpPort.ToString(),
             ["Mail:From"] = "noreply@example.test",
         };
         for (var i = 0; i < allowlist.Length; i++)

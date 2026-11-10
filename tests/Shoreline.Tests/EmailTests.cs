@@ -28,7 +28,7 @@ public sealed class EmailTests(LocalServices services)
         Assert.Single(results, r => r);
         var row = await services.Store.Collection("csharp_job").Find(new BsonDocument("code_key", "2:" + email)).SingleAsync();
         Assert.Equal(row["_id"], row["payload"]["code_job_id"]);
-        using var mailpit = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:28128"), Timeout = TimeSpan.FromSeconds(5) };
+        using var mailpit = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + TestEnvironment.MailpitPort), Timeout = TimeSpan.FromSeconds(5) };
         JsonElement messages = default;
         for (var attempt = 0; attempt < 50; attempt++)
         {
