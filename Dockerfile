@@ -1,5 +1,7 @@
 # MCR manifest digests verified 2026-11-10; amd64/arm64 multi-arch indexes.
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e AS build
+# The SDK tag is version-specific: 10.0.403 and the floating 10.0 share this
+# index digest. The pinned SDK image reports dotnet --version 10.0.403.
+FROM mcr.microsoft.com/dotnet/sdk:10.0.403@sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e AS build
 WORKDIR /src
 COPY global.json Directory.Build.props ./
 COPY src/Shoreline.Api/Shoreline.Api.csproj src/Shoreline.Api/packages.lock.json src/Shoreline.Api/
