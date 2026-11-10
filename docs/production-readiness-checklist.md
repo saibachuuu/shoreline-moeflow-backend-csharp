@@ -26,7 +26,7 @@
 | storage key/prefix/R2 | 未验证 | Python 默认 storage/，C# 默认空；真实 R2 尚无验证；不用生产凭证 |
 | 设置、语言/类型/角色种子 | 部分验证 | bootstrap/`LegacyTypes`/`LanguageCatalog` 已与 Python 逐项复核，测试机空库初始化通过；逐个种子集合的完整 BSON 差分仍未执行 |
 | 管理员/默认团队初始化 | 已验证（测试机空库） | 测试机 `moeflow` 原为空库；新镜像启动日志 `Created bootstrap administrator …`、`Created bootstrap Default Team …`，二次重启无重复创建；验证码 + 密码登录 `POST /v1/user/token` 成功，`/v1/user/info`、`/v1/user/teams` 正常 |
-| 迁移及回滚数据兼容 | 未验证 | production-shaped disposable 副本尚未演练 |
+| 迁移及回滚数据兼容 | 部分验证 | 邮件/安全码已双写：C# 签发时同时写入 Python `v_code`，验证消费后删除；测试机实测重置密码验证码在 `v_code` 可见、消费后为 0。完整 schema/数据迁移与回滚仍未演练 |
 | 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
