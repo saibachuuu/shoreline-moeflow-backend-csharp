@@ -112,7 +112,7 @@ public sealed class ProjectTests(LocalServices services)
         var renamed = await BodyAsync(await owner.PutAsJsonAsync("/v1/project-sets/" + setId, new { name = "shelf2" }));
         Assert.Equal("shelf2", renamed.GetProperty("project_set").GetProperty("name").GetString());
         var setList = await BodyAsync(await owner.GetAsync("/v1/teams/" + teamId + "/project-sets"));
-        Assert.Contains(setList.GetProperty("project_sets").EnumerateArray(), row => row.GetProperty("id").GetString() == setId);
+        Assert.Contains(setList.EnumerateArray(), row => row.GetProperty("id").GetString() == setId);
         var project = await CreateProjectAsync(owner, teamId, Name("project"), setId);
         Assert.Equal(setId, project.GetProperty("project_set").GetProperty("id").GetString());
         var deleted = await BodyAsync(await owner.DeleteAsync("/v1/project-sets/" + setId));
