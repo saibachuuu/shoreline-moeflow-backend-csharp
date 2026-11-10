@@ -85,27 +85,38 @@ public sealed class ZitengPartnerStore(MongoStore store, TimeProvider clock)
 
     public async Task EnsureIndexesAsync(CancellationToken ct = default)
     {
+        // Early C# builds used module-specific index names. Python's
+        // MongoEngine creates the default `<field>_1` names, and MongoDB
+        // refuses the same key under a second name (IndexOptionsConflict),
+        // which made a rollback to Python log index failures. Drop the old
+        // names before creating the Python-compatible ones.
+        await DropIndexIfExistsAsync(WorkCollection, "ziteng_work_id_v1", ct).ConfigureAwait(false);
+        await DropIndexIfExistsAsync(WorkCollection, "ziteng_work_state_v1", ct).ConfigureAwait(false);
+        await DropIndexIfExistsAsync(QueryCollection, "ziteng_query_keyword_v1", ct).ConfigureAwait(false);
+        await DropIndexIfExistsAsync(CheckCollection, "ziteng_check_project_v1", ct).ConfigureAwait(false);
+        await DropIndexIfExistsAsync(CheckCollection, "ziteng_check_status_v1", ct).ConfigureAwait(false);
+
         await store.Collection(WorkCollection).Indexes.CreateManyAsync([
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("work_id"),
-                new CreateIndexOptions { Unique = true, Name = "ziteng_work_id_v1" }),
+                new CreateIndexOptions { Unique = true, Name = "work_id_1" }),
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("state"),
-                new CreateIndexOptions { Name = "ziteng_work_state_v1" }),
+                new CreateIndexOptions { Name = "state_1" }),
         ], ct);
         // Deliberately no TTL index: freshness is logical (queried_at + cache
         // TTL) and cached works must never be deleted underneath a query.
         await store.Collection(QueryCollection).Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("keyword"),
-                new CreateIndexOptions { Unique = true, Name = "ziteng_query_keyword_v1" }), cancellationToken: ct);
+                new CreateIndexOptions { Unique = true, Name = "keyword_1" }), cancellationToken: ct);
         await store.Collection(CheckCollection).Indexes.CreateManyAsync([
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("project_id"),
-                new CreateIndexOptions { Unique = true, Name = "ziteng_check_project_v1" }),
+                new CreateIndexOptions { Unique = true, Name = "project_id_1" }),
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("status"),
-                new CreateIndexOptions { Name = "ziteng_check_status_v1" }),
+                new CreateIndexOptions { Name = "status_1" }),
         ], ct);
     }
 
@@ -419,4 +430,16 @@ public sealed class ZitengPartnerStore(MongoStore store, TimeProvider clock)
         document.Text("circle"),
         document.Text("state"),
         document.Text("stage"));
+
+    private async Task DropIndexIfExistsAsync(string collection, string name, CancellationToken ct)
+    {
+        try
+        {
+            await store.Collection(collection).Indexes.DropOneAsync(name, ct).ConfigureAwait(false);
+        }
+        catch (MongoCommandException ex) when (ex.Code is 26 or 27)
+        {
+            // NamespaceNotFound / IndexNotFound: nothing to migrate.
+        }
+    }
 }

@@ -128,7 +128,7 @@ public sealed class BootstrapService(MongoStore store, SiteSettings settings, Pa
             ["i"] = DefaultTeamIntro,
             ["dr"] = memberRole["_id"],
             ["u"] = 100000,
-            ["m_u"] = 100000, // GroupMixin.max_user
+            ["u"] = 100000,
             ["m_uc"] = 0,
             ["m_a"] = 2, // AllowApplyType.ALL
             ["m_t"] = 2, // ApplicationCheckType.ADMIN_CHECK

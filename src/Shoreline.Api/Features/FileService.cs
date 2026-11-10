@@ -154,17 +154,34 @@ public sealed partial class FileService
     /// </summary>
     public async Task InitializeAsync(CancellationToken ct = default)
     {
+        // Early C# builds used descriptive names for indexes that Python's
+        // MongoEngine creates as `<field>_1`. MongoDB refuses the same key
+        // under a second name, which broke a rollback to Python, so migrate
+        // the old names first. Python-created deployments already have the
+        // default names and are left untouched.
+        foreach (var legacy in new[]
+                 {
+                     "file_activated_name_parent_project", "file_type_sort_name",
+                     "file_type_sort_name_desc", "file_dir_type_sort_name",
+                     "file_dir_type_sort_name_desc", "file_target_cache_file_target",
+                     "t_1_-sn_1", "dn_1_t_1_-sn_1",
+                 })
+        {
+            await DropIndexIfExistsAsync(_files, legacy, ct);
+            await DropIndexIfExistsAsync(_caches, legacy, ct);
+        }
+
         await _files.Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys
                     .Ascending("ac").Ascending("n").Ascending("f").Ascending("p"),
-                new CreateIndexOptions { Name = "file_activated_name_parent_project" }),
+                new CreateIndexOptions { Name = "ac_1_n_1_f_1_p_1" }),
             cancellationToken: ct);
 
         await _files.Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("t").Ascending("sn"),
-                new CreateIndexOptions { Name = "file_type_sort_name" }),
+                new CreateIndexOptions { Name = "t_1_sn_1" }),
             cancellationToken: ct);
 
         await _files.Indexes.CreateOneAsync(
@@ -178,19 +195,19 @@ public sealed partial class FileService
         await _files.Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("t").Descending("sn"),
-                new CreateIndexOptions { Name = "file_type_sort_name_desc" }),
+                new CreateIndexOptions { Name = "t_1_sn_-1" }),
             cancellationToken: ct);
 
         await _files.Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("dn").Ascending("t").Ascending("sn"),
-                new CreateIndexOptions { Name = "file_dir_type_sort_name" }),
+                new CreateIndexOptions { Name = "dn_1_t_1_sn_1" }),
             cancellationToken: ct);
 
         await _files.Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("dn").Ascending("t").Descending("sn"),
-                new CreateIndexOptions { Name = "file_dir_type_sort_name_desc" }),
+                new CreateIndexOptions { Name = "dn_1_t_1_sn_-1" }),
             cancellationToken: ct);
 
         await _files.Indexes.CreateOneAsync(
@@ -233,8 +250,31 @@ public sealed partial class FileService
         await _caches.Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("f").Ascending("t"),
-                new CreateIndexOptions { Name = "file_target_cache_file_target" }),
+                new CreateIndexOptions { Name = "f_1_t_1" }),
             cancellationToken: ct);
+    }
+
+    private static async Task DropIndexIfExistsAsync(
+        IMongoCollection<BsonDocument> collection, string name, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await collection.Indexes.DropOneAsync(name, ct);
+                return;
+            }
+            catch (MongoCommandException ex) when (ex.Code is 26 or 27)
+            {
+                // NamespaceNotFound / IndexNotFound: nothing to migrate.
+                return;
+            }
+            catch (MongoCommandException ex) when (ex.Code == 125 && attempt < 5)
+            {
+                // BackgroundOperationInProgress: retry after the current build.
+                await Task.Delay(50, ct);
+            }
+        }
     }
 
     // ---------------------------------------------------------------- queries

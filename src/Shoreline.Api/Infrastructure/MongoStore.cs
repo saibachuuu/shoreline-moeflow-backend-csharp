@@ -45,25 +45,35 @@ public sealed class MongoStore
         await Collection("csharp_job").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("reserved_name"), new CreateIndexOptions<BsonDocument>
             { Unique = true, PartialFilterExpression = new BsonDocument("reserved_name", new BsonDocument("$exists", true)) }), cancellationToken: ct);
+        await DropIndexIfExistsAsync("team", "csharp_team_name_unique_v1", ct);
         await Collection("team").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
-            Builders<BsonDocument>.IndexKeys.Ascending("n"), new CreateIndexOptions<BsonDocument>
-            { Name = "csharp_team_name_unique_v1", Unique = true, PartialFilterExpression = new BsonDocument("n", new BsonDocument("$type", "string")) }), cancellationToken: ct);
+            Builders<BsonDocument>.IndexKeys.Ascending("n"),
+            new CreateIndexOptions { Name = "n_1", Unique = true }), cancellationToken: ct);
         await Collection("project_set").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("t").Ascending("d")), cancellationToken: ct);
         await Collection("csharp_captcha").Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("expires_at"),
                 new CreateIndexOptions { ExpireAfter = TimeSpan.Zero }), cancellationToken: ct);
-        await Collection("team_member").Indexes.CreateManyAsync([
-            new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("user"),
-                new CreateIndexOptions { Unique = true, Name = "team_member_team_user_v1" }),
-            new(Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("status"),
-                new CreateIndexOptions { Name = "team_member_status_v1" })
-        ], ct);
-        await EnsureTeamMemberQueryIndexAsync(["team", "aliases"], "team_member_aliases_v1", ct);
-        await EnsureTeamMemberQueryIndexAsync(["team", "worker_qualifications"], "team_member_worker_qualifications_v1", ct);
+        await Collection("team_member").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("team").Ascending("user"),
+            new CreateIndexOptions { Unique = true, Name = "team_member_team_user_v1" }), cancellationToken: ct);
+        // Drop the descriptive names used by earlier C# builds; MongoEngine
+        // creates these keys under its default names at Python startup.
+        foreach (var legacy in new[]
+                 {
+                     "team_member_status_v1", "team_member_aliases_v1",
+                     "team_member_worker_qualifications_v1",
+                 })
+        {
+            await DropIndexIfExistsAsync("team_member", legacy, ct);
+        }
+        await EnsureTeamMemberQueryIndexAsync(["team", "status"], "team_1_status_1", ct);
+        await EnsureTeamMemberQueryIndexAsync(["team", "aliases"], "team_1_aliases_1", ct);
+        await EnsureTeamMemberQueryIndexAsync(["team", "worker_qualifications"], "team_1_worker_qualifications_1", ct);
         await EnsureTeamMemberQueryIndexAsync(["team", "status", "asrch"], "team_member_alias_search_v1", ct);
         await Collection("identity_tag_policy").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("team"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
+        await DropIndexIfExistsAsync("project_member", "project_member_display_name_search_v1", ct);
         await Collection("project_member").Indexes.CreateManyAsync([
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("ik"),
                 new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_identity_key_v1",
@@ -80,12 +90,36 @@ public sealed class MongoStore
                 new CreateIndexOptions { Name = "project_member_tags_v1" }),
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("display_name"),
                 new CreateIndexOptions { Name = "project_member_display_name_v1" }),
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("status").Ascending("display_name_search"),
+            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("status").Ascending("dns"),
                 new CreateIndexOptions { Name = "project_member_display_name_search_v1" })
         ], cancellationToken: ct);
+        await DropIndexIfExistsAsync("identity_operation", "identity_operation_project_operation_v1", ct);
         await Collection("identity_operation").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("operation_id"),
-            new CreateIndexOptions { Unique = true, Name = "identity_operation_project_operation_v1" }), cancellationToken: ct);
+            new CreateIndexOptions { Unique = true, Name = "project_1_operation_id_1" }), cancellationToken: ct);
+    }
+
+    private async Task DropIndexIfExistsAsync(string collection, string name, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await Collection(collection).Indexes.DropOneAsync(name, ct);
+                return;
+            }
+            catch (MongoCommandException ex) when (ex.Code is 26 or 27)
+            {
+                // NamespaceNotFound / IndexNotFound: nothing to migrate.
+                return;
+            }
+            catch (MongoCommandException ex) when (ex.Code == 125 && attempt < 5)
+            {
+                // BackgroundOperationInProgress: another initializer is building
+                // an index on this collection; retry once it completes.
+                await Task.Delay(50, ct);
+            }
+        }
     }
 
     private async Task EnsureTeamMemberQueryIndexAsync(string[] fields, string name, CancellationToken ct)
@@ -93,6 +127,16 @@ public sealed class MongoStore
         var collection = Collection("team_member");
         var keys = new BsonDocument();
         foreach (var field in fields) keys[field] = 1;
+
+        // Early C# builds used this name for a key that Python does not own
+        // (`aliases_search`); the runtime queries `asrch`. The name belongs to
+        // C#, so replace a mismatching definition instead of failing startup.
+        var catalog = await (await collection.Indexes.ListAsync(ct)).ToListAsync(ct);
+        var named = catalog.FirstOrDefault(index => index.GetValue("name", "") == name);
+        if (named is not null && !named.GetValue("key", BsonNull.Value).Equals(keys))
+        {
+            await DropIndexIfExistsAsync("team_member", name, ct);
+        }
 
         async Task<bool> HasEquivalentAsync()
         {

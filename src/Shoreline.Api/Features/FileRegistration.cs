@@ -28,5 +28,8 @@ public static class FileRegistration
     ///   await app.Services.GetRequiredService&lt;FileService&gt;().InitializeAsync();
     /// </summary>
     public static Task InitializeFileIndexesAsync(this IServiceProvider services, CancellationToken ct = default)
-        => services.GetRequiredService<FileService>().InitializeAsync(ct);
+    {
+        using var scope = services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<FileService>().InitializeAsync(ct);
+    }
 }

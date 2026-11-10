@@ -122,18 +122,18 @@ public sealed class ZitengPartnerTests
         await using var world = await DirectWorld.CreateAsync();
         var workIndexes = await ListDocumentsAsync(
             await world.Store.Collection(ZitengPartnerStore.WorkCollection).Indexes.ListAsync());
-        Assert.Contains(workIndexes, index => index["name"].AsString == "ziteng_work_id_v1");
-        Assert.Contains(workIndexes, index => index["name"].AsString == "ziteng_work_state_v1");
+        Assert.Contains(workIndexes, index => index["name"].AsString == "work_id_1");
+        Assert.Contains(workIndexes, index => index["name"].AsString == "state_1");
 
         var queryIndexes = await ListDocumentsAsync(
             await world.Store.Collection(ZitengPartnerStore.QueryCollection).Indexes.ListAsync());
-        Assert.Contains(queryIndexes, index => index["name"].AsString == "ziteng_query_keyword_v1");
+        Assert.Contains(queryIndexes, index => index["name"].AsString == "keyword_1");
         Assert.All(queryIndexes, index => Assert.False(index.Contains("expireAfterSeconds")));
 
         var checkIndexes = await ListDocumentsAsync(
             await world.Store.Collection(ZitengPartnerStore.CheckCollection).Indexes.ListAsync());
-        Assert.Contains(checkIndexes, index => index["name"].AsString == "ziteng_check_project_v1");
-        Assert.Contains(checkIndexes, index => index["name"].AsString == "ziteng_check_status_v1");
+        Assert.Contains(checkIndexes, index => index["name"].AsString == "project_id_1");
+        Assert.Contains(checkIndexes, index => index["name"].AsString == "status_1");
 
         await world.Store.Collection(ZitengPartnerStore.WorkCollection)
             .InsertOneAsync(new BsonDocument("work_id", "duplicate"));

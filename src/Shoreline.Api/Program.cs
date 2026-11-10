@@ -124,7 +124,7 @@ app.Use(async (context, next) =>
     catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { }
     catch (Exception e)
     {
-        app.Logger.LogError("Request failed ({ErrorType})", e.GetType().Name);
+        app.Logger.LogError(e, "Request failed");
         context.Response.StatusCode = 500;
         await context.Response.WriteAsJsonAsync(new { error = "InternalServerError", code = 1, message = "Internal server error" });
     }
