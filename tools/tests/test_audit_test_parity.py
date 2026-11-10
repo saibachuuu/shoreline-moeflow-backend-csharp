@@ -390,6 +390,38 @@ class T(MoeAPITestCase):
         self.assertTrue(evidence["header_assertions"])
 
 
+class ReportStatisticsTests(unittest.TestCase):
+    def test_http_method_counts_exclude_non_http_tests(self):
+        csharp = _cs_calls('''
+class T
+{
+    [Fact]
+    public async Task HttpTest()
+    {
+        using var client = new HttpClient();
+        await client.GetAsync("/v1/real");
+    }
+
+    [Fact]
+    public void PureTest()
+    {
+        Assert.Equal(1, 1);
+    }
+}
+''')
+        csharp["files"] = ["Synthetic.cs"]
+        python = {"calls": [], "functions": [], "files": [], "unresolved": []}
+        report = audit.build_report(
+            Path("."), Path("."), None, None,
+            {"routes": [], "csharp_routes": []}, None, python, csharp,
+        )
+        self.assertEqual(report["summary"]["csharp_test_methods_with_http"], 1)
+        self.assertEqual(
+            [fn["function"] for fn in report["csharp_functions_with_http"]],
+            ["HttpTest"],
+        )
+
+
 class FileScanTests(unittest.TestCase):
     def test_build_output_directories_are_skipped(self):
         with tempfile.TemporaryDirectory() as temp:

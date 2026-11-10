@@ -2745,7 +2745,9 @@ def build_report(
             if fn.get("is_test_function") and fn.get("http_call_count")
         ),
         "csharp_test_methods_with_http": sum(
-            1 for fn in csharp_tests["functions"] if fn.get("is_test_method")
+            1
+            for fn in csharp_tests["functions"]
+            if fn.get("is_test_method") and fn.get("http_call_count")
         ),
         "python_assertion_calls_total": sum(
             fn.get("evidence", {}).get("assertion_count", 0) for fn in python_tests["functions"]
@@ -2788,8 +2790,12 @@ def build_report(
         "options_routes": options,
         "handler_unknown_routes": handler_unknown,
         "csharp_extra_routes": extra,
-        "python_functions_with_http": python_tests["functions"],
-        "csharp_functions_with_http": csharp_tests["functions"],
+        "python_functions_with_http": [
+            fn for fn in python_tests["functions"] if fn.get("http_call_count")
+        ],
+        "csharp_functions_with_http": [
+            fn for fn in csharp_tests["functions"] if fn.get("http_call_count")
+        ],
         "python_http_calls": py_calls,
         "csharp_http_calls": cs_calls,
         "python_unresolved": python_tests["unresolved"],
@@ -2800,6 +2806,7 @@ def build_report(
             "C# tests are tokenized, not compiled or executed by this tool.",
             "Route registration and normalization are reused from tools/Audit-LegacyRoutes.py.",
             "A static hit is not a passing test. A missing static hit does not prove the route has no test.",
+            "Assertion totals describe all parsed functions; they are not route coverage or passing-test counts.",
             "Unresolved calls are retained and counted; they are never silently dropped.",
             "registered_only_405, disabled_comment, OPTIONS and handler_unknown routes are diagnostics and are excluded from the business denominator.",
             "C# extra routes are reported separately; they are not part of the legacy business denominator.",
