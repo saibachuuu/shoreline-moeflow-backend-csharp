@@ -56,6 +56,62 @@ public sealed class MongoSchemaReadinessTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task InitializationReusesEquivalentGeneratedNames()
+    {
+        var rows = store.Collection("team_member");
+        await rows.Indexes.CreateManyAsync([
+            new(new BsonDocument { ["team"] = 1, ["aliases"] = 1 }),
+            new(new BsonDocument { ["team"] = 1, ["worker_qualifications"] = 1 })
+        ]);
+        await store.InitializeAsync(CancellationToken.None);
+        await store.InitializeAsync(CancellationToken.None);
+        var indexes = await (await rows.Indexes.ListAsync()).ToListAsync();
+        AssertIndex(indexes, "team_1_aliases_1", new BsonDocument { ["team"] = 1, ["aliases"] = 1 });
+        AssertIndex(indexes, "team_1_worker_qualifications_1", new BsonDocument { ["team"] = 1, ["worker_qualifications"] = 1 });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConcurrentInitializersReuseEquivalentIndexes(bool existing)
+    {
+        var rows = store.Collection("team_member");
+        if (existing)
+            await rows.Indexes.CreateManyAsync([
+                new(new BsonDocument { ["team"] = 1, ["aliases"] = 1 }),
+                new(new BsonDocument { ["team"] = 1, ["worker_qualifications"] = 1 })
+            ]);
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => store.InitializeAsync(CancellationToken.None)));
+        await store.InitializeAsync(CancellationToken.None);
+        var indexes = await (await rows.Indexes.ListAsync()).ToListAsync();
+        AssertIndex(indexes, existing ? "team_1_aliases_1" : "team_member_aliases_v1", new BsonDocument { ["team"] = 1, ["aliases"] = 1 });
+        AssertIndex(indexes, existing ? "team_1_worker_qualifications_1" : "team_member_worker_qualifications_v1", new BsonDocument { ["team"] = 1, ["worker_qualifications"] = 1 });
+    }
+
+    [Theory]
+    [InlineData("unique")]
+    [InlineData("sparse")]
+    [InlineData("partial")]
+    [InlineData("wrong-key")]
+    public async Task ConflictingIndexFailsClosedWithoutDroppingIt(string kind)
+    {
+        var rows = store.Collection("team_member");
+        var keys = new BsonDocument { ["team"] = 1, [kind == "wrong-key" ? "other" : "aliases"] = 1 };
+        var options = new CreateIndexOptions<BsonDocument>
+        {
+            Name = kind == "wrong-key" ? "team_member_aliases_v1" : "old_alias_index",
+            Unique = kind == "unique",
+            Sparse = kind == "sparse",
+            PartialFilterExpression = kind == "partial" ? new BsonDocument("aliases", new BsonDocument("$exists", true)) : null
+        };
+        await rows.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(keys, options));
+        var before = (await (await rows.Indexes.ListAsync()).ToListAsync()).Single(index => index["name"] == options.Name);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.InitializeAsync(CancellationToken.None));
+        var after = (await (await rows.Indexes.ListAsync()).ToListAsync()).Single(index => index["name"] == options.Name);
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
     public async Task DuplicatePreflightReportsWithoutModifyingRecords()
     {
         var teamId = ObjectId.GenerateNewId();
