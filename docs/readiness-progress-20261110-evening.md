@@ -79,7 +79,15 @@ Mongo's 63-character limit; it was shortened before the 47/47 rerun.
   three requests without Flask's no-Origin expose header. The two set-derived method
   headers are compared as token sets because Python's set iteration order varies;
   missing/extra methods still fail. No business mismatch is classified as accepted.
-- Security-code delivery and rollback interoperability, the third legacy index,
+- Security-code delivery and rollback interoperability remain a hard blocker:
+  C# stores the verification record and durable mail job atomically in one
+  `csharp_job` document, while Python `VCode` reads only `v_code`. Naive dual-write
+  would create a cross-document crash/unknown-commit window; standalone Mongo cannot
+  make those writes transactional. Do not claim exactly-once or enable rollback
+  without a reviewed stable-ID recovery protocol (or coordinated Python support).
+  The separate email branch also has unresolved template/site URL, SMTP acceptance,
+  TLS and retry classification differences.
+- The third legacy index,
   historical migrations, real R2, retry/lease/crash coverage for all jobs, optional
   routes, MIT consumers, SSRF/trusted proxies and resource/security controls remain
   unaccepted. No product exception is assumed.
