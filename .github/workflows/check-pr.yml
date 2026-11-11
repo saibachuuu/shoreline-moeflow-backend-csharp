@@ -21,10 +21,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  # test-reporter 要把结果写成 check run，PR 上还要能评论。
+  checks: write
+  pull-requests: write
+
 jobs:
   test:
     runs-on: ubuntu-24.04
-    # 本地实测全量 1150+ 用例约 110 秒，加还原/构建/起容器，25 分钟是宽松上限。
+    # 本地实测全量 1150+ 用例约 100 秒，加还原/构建/起容器，25 分钟是宽松上限。
     timeout-minutes: 25
 
     steps:
@@ -53,6 +59,8 @@ jobs:
       - name: Build
         run: dotnet build Shoreline.sln --no-restore -c Release --nologo
 
+      # 覆盖率用测试项目里已有的 coverlet.collector，实测对总耗时几乎无影响
+      # （1154 个用例仍约 100 秒），所以 PR 和 main 都收集。
       - name: Test
         env:
           SHORELINE_TEST_MONGO_PORT: '27128'
@@ -62,8 +70,32 @@ jobs:
         run: >
           dotnet test Shoreline.sln
           --no-build -c Release
+          --collect:"XPlat Code Coverage"
           --logger "trx;LogFileName=full.trx"
           --results-directory "${{ runner.temp }}/trx"
+
+      # 在 Actions 的 Checks 页签里直接看到通过/失败数和失败用例，
+      # 不必下载 artifact 才能判断红在哪里。fork PR 上没有写 check 的权限，
+      # 所以不让它把整条流水线拖红。
+      - name: Publish test results
+        if: always()
+        continue-on-error: true
+        uses: dorny/test-reporter@v1
+        with:
+          name: dotnet tests
+          path: ${{ runner.temp }}/trx/*.trx
+          reporter: dotnet-trx
+          fail-on-error: false
+
+      # 生成与老仓库 report.html 对齐的自包含 HTML 覆盖率报告，
+      # 并把汇总写进本次 run 的 Summary 页。
+      - name: Generate coverage report
+        if: always() && hashFiles(format('{0}/trx/**/coverage.cobertura.xml', runner.temp)) != ''
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.4.4
+        with:
+          reports: '${{ runner.temp }}/trx/**/coverage.cobertura.xml'
+          targetdir: '${{ runner.temp }}/coverage'
+          reporttypes: 'HtmlInline;Cobertura;MarkdownSummaryGithub'
 
       - name: Dependency logs
         if: failure()
@@ -75,6 +107,14 @@ jobs:
         with:
           name: test-results
           path: ${{ runner.temp }}/trx
+          if-no-files-found: warn
+
+      - name: Save coverage report
+        if: always() && hashFiles(format('{0}/coverage/index.html', runner.temp)) != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ${{ runner.temp }}/coverage
           if-no-files-found: warn
 
       - name: Stop dependencies
