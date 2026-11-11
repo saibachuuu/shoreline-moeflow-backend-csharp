@@ -7,6 +7,14 @@ public sealed class JobWorker(JobQueue queue, IEnumerable<IJobHandler> handlers,
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Optional kill-switch for API-only instances: they enqueue jobs but never
+        // consume them. Independent of StoragePool:WorkerEnabled, whose semantics
+        // (storage pool background worker) are untouched.
+        if (!configuration.GetValue("Jobs:WorkerEnabled", true))
+        {
+            logger.LogInformation("Job worker disabled via Jobs:WorkerEnabled=false; this instance runs no queue consumer.");
+            return Task.CompletedTask;
+        }
         var registry = handlers.ToDictionary(h => h.Kind);
         var concurrency = Math.Clamp(configuration.GetValue("Jobs:Concurrency", 1), 1, 8);
         return Task.WhenAll(Enumerable.Range(0, concurrency).Select(_ => RunAsync(registry, stoppingToken)));
@@ -35,23 +43,56 @@ public sealed class JobWorker(JobQueue queue, IEnumerable<IJobHandler> handlers,
         }
     }
 
-    private async Task ExecuteJobAsync(BsonDocument job, string owner, IJobHandler handler, CancellationToken ct)
+    private async Task ExecuteJobAsync(BsonDocument job, string owner, IJobHandler handler, CancellationToken shutdownToken)
     {
         var id = job["_id"].AsObjectId;
-        using var execution = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        using var heartbeat = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var kind = job["kind"].AsString;
+        var attempts = job["attempts"].AsInt32;
+        // In-flight execution is deliberately NOT linked to the shutdown token:
+        // stopping the host stops *claiming*, while a running handler keeps its
+        // own token so HostOptions.ShutdownTimeout bounds completion instead of
+        // cancelling work mid-write. Only the lease-renewal heartbeat below
+        // observes shutdown.
+        using var execution = new CancellationTokenSource();
+        using var heartbeat = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
         var renewal = RenewAsync(id, owner, execution, heartbeat.Token);
         try
         {
-            await handler.ExecuteAsync(id, job["attempts"].AsInt32, job["payload"].AsBsonDocument, execution.Token);
+            await handler.ExecuteAsync(id, attempts, job["payload"].AsBsonDocument, execution.Token);
             execution.Token.ThrowIfCancellationRequested();
-            await queue.CompleteAsync(id, owner, ct);
+            // Bounded, non-cancelled settle token: a finished job must never be
+            // left "running" just because shutdown was requested mid-write.
+            using var settle = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await queue.CompleteAsync(id, owner, settle.Token);
+            logger.LogInformation("Job {JobId} {Kind} attempt {Attempt} completed", id, kind, attempts);
         }
-        catch (OperationCanceledException) when (execution.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (execution.IsCancellationRequested && !shutdownToken.IsCancellationRequested)
+        {
+            // Lease lost mid-execution (renewal failed or row reclaimed). The job
+            // row still names us as owner with an expired lease, so another
+            // worker reclaims it after expiry — do not Fail it here.
+            logger.LogWarning("Job {JobId} {Kind} attempt {Attempt} lost its lease; leaving for reclaim", id, kind, attempts);
+        }
+        catch (OperationCanceledException) when (shutdownToken.IsCancellationRequested)
+        {
+            // Shutdown raced completion: the job stays "running" under our owner
+            // and its lease expires naturally, after which it is reclaimed.
+            logger.LogInformation("Job {JobId} {Kind} attempt {Attempt} interrupted by shutdown; lease will expire", id, kind, attempts);
+        }
         catch (Exception e)
         {
-            logger.LogWarning("Job {JobId} failed ({ErrorType})", id, e.GetType().Name);
-            await queue.FailAsync(id, owner, job["attempts"].AsInt32, ct);
+            logger.LogWarning("Job {JobId} {Kind} attempt {Attempt} failed ({ErrorType})", id, kind, attempts, e.GetType().Name);
+            try
+            {
+                using var settle = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                await queue.FailAsync(id, owner, attempts, settle.Token);
+            }
+            catch (Exception failError)
+            {
+                // Failing to record the failure must not crash the loop; the
+                // expired lease still returns the job to the queue.
+                logger.LogWarning("Job {JobId} {Kind} attempt {Attempt} could not record failure ({ErrorType})", id, kind, attempts, failError.GetType().Name);
+            }
         }
         finally
         {
@@ -60,17 +101,19 @@ public sealed class JobWorker(JobQueue queue, IEnumerable<IJobHandler> handlers,
         }
     }
 
-    private async Task RenewAsync(ObjectId id, string owner, CancellationTokenSource execution, CancellationToken ct)
+    private async Task RenewAsync(ObjectId id, string owner, CancellationTokenSource execution, CancellationToken heartbeatToken)
     {
         try
         {
             while (true)
             {
-                await Task.Delay(TimeSpan.FromSeconds(30), ct);
-                if (!await queue.RenewAsync(id, owner, ct)) { await execution.CancelAsync(); return; }
+                await Task.Delay(TimeSpan.FromSeconds(30), heartbeatToken);
+                if (!await queue.RenewAsync(id, owner, heartbeatToken)) { await execution.CancelAsync(); return; }
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch (Exception) { await execution.CancelAsync(); }
+        // Shutdown: stop renewing but leave the in-flight execution alone; the
+        // lease expires naturally if the handler does not finish in time.
+        catch (OperationCanceledException) when (heartbeatToken.IsCancellationRequested) { }
+        catch (Exception) { try { await execution.CancelAsync(); } catch (ObjectDisposedException) { } }
     }
 }

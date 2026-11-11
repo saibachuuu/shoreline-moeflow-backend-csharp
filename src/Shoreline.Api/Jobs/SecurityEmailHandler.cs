@@ -74,16 +74,44 @@ public sealed class SecurityEmailHandler(MongoStore store, IConfiguration config
                 new UpdateOptions { IsUpsert = true }, ct);
         }
 
+        // Exactly-once send fence: claim the send on the job's own verification
+        // document BEFORE touching SMTP. A redelivered job observes
+        // sent == true and skips, so a crash between Send and queue Complete
+        // never resends (the code stays valid for 48h). Pre-existing rows have
+        // no sent field and match $ne: true, so they send exactly once.
+        var sent = await store.Collection("csharp_job").UpdateOneAsync(
+            new BsonDocument { ["_id"] = row["_id"], ["verification.sent"] = new BsonDocument("$ne", true) },
+            Builders<BsonDocument>.Update.Set("verification.sent", true), cancellationToken: ct);
+        if (sent.MatchedCount != 1) return;
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
 
         using var client = new SmtpClient();
-        await client.ConnectAsync(host, port, socketOptions, timeout.Token);
-        if (configuration["Mail:Username"] is { Length: > 0 } username)
+        try
         {
-            await client.AuthenticateAsync(username, configuration["Mail:Password"] ?? "", timeout.Token);
+            await client.ConnectAsync(host, port, socketOptions, timeout.Token);
+            if (configuration["Mail:Username"] is { Length: > 0 } username)
+            {
+                await client.AuthenticateAsync(username, configuration["Mail:Password"] ?? "", timeout.Token);
+            }
+            await client.SendAsync(message, timeout.Token);
+            await client.DisconnectAsync(true, timeout.Token);
         }
-        await client.SendAsync(message, timeout.Token);
-        await client.DisconnectAsync(true, timeout.Token);
+        catch (Exception)
+        {
+            // The send did not go out on this attempt: release the claim so a
+            // queue retry may send it. Best effort — if the reset itself fails,
+            // the original send error still propagates and the job retries.
+            try
+            {
+                await store.Collection("csharp_job").UpdateOneAsync(
+                    new BsonDocument { ["_id"] = row["_id"], ["verification.sent"] = true },
+                    Builders<BsonDocument>.Update.Set("verification.sent", false),
+                    cancellationToken: CancellationToken.None);
+            }
+            catch { }
+            throw;
+        }
     }
 }
