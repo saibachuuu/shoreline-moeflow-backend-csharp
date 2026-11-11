@@ -16,7 +16,7 @@ public sealed class PresenceService(MongoStore store, IConfiguration configurati
 {
     public const int PresenceTimeoutSeconds = 45;
     private const int MaxActionCodePoints = 64;
-    private static readonly TimeSpan AvatarValidity = TimeSpan.FromHours(1);
+    private static readonly TimeSpan AvatarValidity = ObjectStorage.DefaultSignedUrlValidity;
 
     private IMongoCollection<BsonDocument> Presences => store.Collection("project_presence");
     private IMongoCollection<BsonDocument> Users => store.Collection("user");

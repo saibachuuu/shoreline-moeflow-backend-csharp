@@ -20,7 +20,7 @@ public sealed class AvatarService(
     ILogger<AvatarService> logger)
 {
     public const long DefaultMaxUploadBytes = 20L * 1024 * 1024;
-    private static readonly TimeSpan UrlValidity = TimeSpan.FromHours(1);
+    private static readonly TimeSpan UrlValidity = ObjectStorage.DefaultSignedUrlValidity;
 
     // A deliberately small seam for the unknown-outcome persistence test. It is
     // not used by production DI and does not mirror the storage/database API.

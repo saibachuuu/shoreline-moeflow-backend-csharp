@@ -501,7 +501,7 @@ public sealed partial class ProofreadFeedbackService(
     private static string FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
 
-    private static readonly TimeSpan UrlValidity = TimeSpan.FromHours(1);
+    private static readonly TimeSpan UrlValidity = ObjectStorage.DefaultSignedUrlValidity;
     private const string FileKeyPrefix = "files/";
 
     private static double DoubleValue(BsonDocument document, string key, double fallback = 0) =>

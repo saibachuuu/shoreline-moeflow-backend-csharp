@@ -15,6 +15,14 @@ namespace Shoreline.Api.Storage;
 /// </summary>
 public sealed class ObjectStorage : IStorageBackend
 {
+    /// <summary>
+    /// Default lifetime for read URLs. Python signs every storage URL with
+    /// 604800 seconds (7 days, <c>app/services/oss.py</c>), so the C# build uses
+    /// the same window: a link copied from a project page must keep working
+    /// exactly as long as it does on the legacy backend.
+    /// </summary>
+    public static readonly TimeSpan DefaultSignedUrlValidity = TimeSpan.FromDays(7);
+
     private readonly IStorageBackend backend;
 
     public ObjectStorage(IConfiguration configuration)

@@ -400,3 +400,16 @@ public sealed class StorageContractS3Tests(LocalServices services)
         }
     }
 }
+
+// Python signs every storage URL with 604800 seconds (app/services/oss.py:464,480),
+// so a link copied from a project page must keep working for seven days on both
+// backends. Every signed-URL call site now references this single constant.
+public sealed class StorageSignedUrlLifetimeTests
+{
+    [Fact]
+    public void SignedUrlDefaultsToSevenDays()
+    {
+        Assert.Equal(TimeSpan.FromDays(7), ObjectStorage.DefaultSignedUrlValidity);
+        Assert.Equal(604800, (int)ObjectStorage.DefaultSignedUrlValidity.TotalSeconds);
+    }
+}

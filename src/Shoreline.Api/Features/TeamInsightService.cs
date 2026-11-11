@@ -20,7 +20,7 @@ public sealed class TeamInsightService(
     IConfiguration configuration)
 {
     private const string NoInsightMessage = "您没有权限查看本团队项目统计";
-    private static readonly TimeSpan SignedUrlValidity = TimeSpan.FromHours(1);
+    private static readonly TimeSpan SignedUrlValidity = ObjectStorage.DefaultSignedUrlValidity;
 
     private IMongoCollection<BsonDocument> TeamMembers => store.Collection("team_member");
     private IMongoCollection<BsonDocument> ProjectMembers => store.Collection("project_member");

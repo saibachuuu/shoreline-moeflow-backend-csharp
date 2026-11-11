@@ -17,7 +17,7 @@
 | 过期秒数 | 默认 `expires=604800`（7 天），`int(expires)`（`oss.py:464,480`；pool `backend.py:144` 同值） | 调用方传 `TimeSpan`；`Expires = UtcNow + validity`（`S3StorageBackend.cs:152`） | `SignedUrlExpiresMatchesRequestedValidity`（300s → `X-Amz-Expires=300`） | parity（机制）；默认值见 GAP-5 |
 | disposition / Content-Type | `download=True` → `ResponseContentDisposition: attachment`（`oss.py:485`；`output.py:199-203` 导出用 `download=True`） | `contentDisposition` → `ResponseHeaderOverrides.ContentDisposition`（`S3StorageBackend.cs:155-158`） | 同上（`response-content-disposition=attachment` 断言） | parity |
 | CDN 模式 | `OSS_VIA_CDN=True` 时直接拼 `oss_domain + path + quote(filename)`，不签名、无有效期（`oss.py:476-479`；pool `backend.py:150-153` 同逻辑） | `viaCdn` 时返回 `domain/key`，忽略 `validity`；`domain` 为空抛错（`S3StorageBackend.cs:134-145`） | `CdnModeIgnoresValidityAndIsUnsigned` | parity |
-| 默认有效期 | 文件/头像/导出统一 604800s（`file.py:744`、`output.py:199` 均不传 `expires`） | 文件/头像 1h（`FileService.cs:54` 等），导出 7d（`OutputService.cs:371`） | — | 见 GAP-5（待决策） |
+| 默认有效期 | 文件/头像/导出统一 604800s（`file.py:744`、`output.py:199` 均不传 `expires`） | 统一 `ObjectStorage.DefaultSignedUrlValidity` = 7 天（`ObjectStorage.cs`） | `SignedUrlDefaultsToSevenDays` | parity（已修，GAP-5） |
 
 ## 2. S3 客户端
 
@@ -59,7 +59,7 @@
 - GAP-2（未修）：大文件无 multipart。`src/Shoreline.Api/Storage/S3StorageBackend.cs:33` 单次 `PutObjectAsync` 全量进内存；Python `upload_fileobj` 自动分片流式（`oss.py:222-227`）。当前文件体量下 roundtrip 一致；若出现 ≥100MB 上传会有 OOM/超时风险。建议后续切 `TransferUtility` + 大文件测试，本次不动。
 - GAP-3（待决策）：source 缺失/禁用时 C# fail-closed（409/6）vs Python 回落全局 `oss`。证据：`ProjectStorageRouter.cs` vs `storage_pool/__init__.py::_resolve` + 调用方 `or oss`（`file.py:773`、`output.py:198`）。风险与建议见 §6。
 - GAP-4（待决策，minor）：resample 无 oss 回退。`FileService.Serialization.cs:150` vs `file.py:788-794`。迁移窗口内旧重采样图在 C# 侧显示 `generating` 占位而非旧图。建议补一次 `oss.is_exist` 回退（读路径，低风险）。
-- GAP-5（待决策）：签名默认有效期。Python 全场景 604800s；C# 文件/头像 1h（`FileService.cs:54` 等）、导出 7d（`OutputService.cs:371`）。更短更安全，但依赖长缓存/外部分享链接的客户端行为会变。
+- GAP-5（**已修**）：签名默认有效期。Python 全场景 604800s；C# 曾为文件/头像 1h、导出 7d。现统一为 `ObjectStorage.DefaultSignedUrlValidity`（7 天），与 Python 一致。
 - GAP-6（fail-fast，有意）：阿里云 oss2 分支 Python 独有；C# 遇到 aliyun 配置直接抛（`ObjectStorage.cs:169`）。不影响 R2/自建 S3 部署；若将来要接阿里云需另立项实现 `AliyunStorageBackend`。
 - GAP-7（parity，加注）：默认 region。Python `auto`（`oss.py`）；C# `us-east-1`（`ObjectStorage.cs`）。R2/自建端点下 endpoint 决定签名域，无影响；直连 AWS S3 且 bucket 不在 us-east-1 时以显式配置为准。测试 `DefaultRegionIsDocumentedForR2StyleEndpoints` 锁定。
 - GAP-8（fail-closed，有意，与 GAP-3 同根）：resolver 异常 Python 吞掉继续 fallback；C# 向上传播。测试 `ResolverExceptionPropagatesInsteadOfFallingBack` 锁定。

@@ -195,7 +195,7 @@ public sealed class TeamService(MongoStore store, TeamMemberService members, Ide
             ["id"] = team["_id"].ToString(),
             ["name"] = team.Text("n"),
             ["avatar"] = avatar.Length == 0 ? configuration["Site:DefaultTeamAvatar"] : await storage.SignGetAsync(
-                (configuration["Storage:TeamAvatarPrefix"] ?? "team-avatars/").TrimEnd('/') + "/" + avatar.TrimStart('/'), TimeSpan.FromHours(1)),
+                (configuration["Storage:TeamAvatarPrefix"] ?? "team-avatars/").TrimEnd('/') + "/" + avatar.TrimStart('/'), ObjectStorage.DefaultSignedUrlValidity),
             ["has_avatar"] = avatar.Length != 0,
             ["worker_qualification_mode"] = team.Text("wqm", "qualified"),
             ["base_tag"] = snapshot.SourceTags.FirstOrDefault(),

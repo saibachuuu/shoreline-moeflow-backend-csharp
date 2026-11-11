@@ -51,7 +51,7 @@ public sealed partial class FileService
     public const int ThumbnailSucceeded = 3;
     public const int ThumbnailFailed = 4;
 
-    private static readonly TimeSpan UrlValidity = TimeSpan.FromHours(1);
+    private static readonly TimeSpan UrlValidity = ObjectStorage.DefaultSignedUrlValidity;
     private static readonly TimeSpan OrderLease = TimeSpan.FromMinutes(5);
     private static readonly char[] InvalidFilenameChars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
     private static readonly Regex SortNameParts = new(@"\d+|\D+", RegexOptions.Compiled);
