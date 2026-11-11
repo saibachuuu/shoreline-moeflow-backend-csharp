@@ -5,6 +5,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Security;
+using Shoreline.Api.Storage;
 
 namespace Shoreline.Api.Features;
 
@@ -14,7 +15,7 @@ namespace Shoreline.Api.Features;
 // route through the invitation adapter (ProjectInvitationAdapter).
 public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, IdentityPermissions permissions,
     IdentityAuditWriter audit, ProjectService projects, ProjectInvitationService invitations,
-    InvitationMutationGate invitationGate)
+    InvitationMutationGate invitationGate, ObjectStorage storage, IConfiguration configuration)
 {
     private IMongoCollection<BsonDocument> Members => store.Collection("project_member");
     private IMongoCollection<BsonDocument> Operations => store.Collection("identity_operation");
@@ -792,6 +793,13 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
             rows = rows.Where(m => m.GetValue("tags", new BsonArray()).AsBsonArray
                 .Any(v => v.IsString && v.AsString == tag)).ToList();
         var needle = SearchText.Normalize(word ?? "");
+        var memberUserIds = rows
+            .Where(m => m.GetValue("user", BsonNull.Value).IsObjectId)
+            .Select(m => m["user"].AsObjectId).Distinct().ToArray();
+        var memberUsers = memberUserIds.Length == 0 ? new Dictionary<ObjectId, BsonDocument>()
+            : (await store.Collection("user").Find(new BsonDocument("_id",
+                new BsonDocument("$in", new BsonArray(memberUserIds.Select(id => (BsonValue)id).ToArray())))).ToListAsync(ct))
+                .ToDictionary(u => u["_id"].AsObjectId);
         if (needle.Length > 0)
         {
             var teamMembers = await store.Collection("team_member").Find(new BsonDocument
@@ -801,13 +809,7 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
             var relations = teamMembers
                 .Where(m => m.GetValue("user", BsonNull.Value).IsObjectId)
                 .ToDictionary(m => m["user"].AsObjectId, m => m);
-            var userIds = rows
-                .Where(m => m.GetValue("user", BsonNull.Value).IsObjectId)
-                .Select(m => m["user"].AsObjectId).Distinct().ToArray();
-            var users = userIds.Length == 0 ? new Dictionary<ObjectId, BsonDocument>()
-                : (await store.Collection("user").Find(new BsonDocument("_id",
-                    new BsonDocument("$in", new BsonArray(userIds.Select(id => (BsonValue)id).ToArray())))).ToListAsync(ct))
-                    .ToDictionary(u => u["_id"].AsObjectId);
+            var users = memberUsers;
             rows = rows.Where(member =>
             {
                 var values = new List<string> { member.Text("display_name") };
@@ -829,7 +831,17 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
             var cmp = string.Compare(a.Text("display_name"), b.Text("display_name"), StringComparison.OrdinalIgnoreCase);
             return cmp != 0 ? cmp : string.Compare(a["_id"].ToString(), b["_id"].ToString(), StringComparison.Ordinal);
         });
-        return rows.Select(m => (object)MemberToApi(m, project, null, includePermissions: false)).ToArray();
+        // app/services/project_member.py:1050-1085 resolves each member's user
+        // and derives is_owner; passing null here made every row look external.
+        var result = new List<object>(rows.Count);
+        foreach (var m in rows)
+        {
+            var user = m.GetValue("user", BsonNull.Value).IsObjectId
+                && memberUsers.TryGetValue(m["user"].AsObjectId, out var found) ? found : null;
+            result.Add(MemberToApi(m, project, user, includePermissions: false,
+                avatar: user is null ? null : await AvatarUrlAsync(user)));
+        }
+        return result.ToArray();
     }
 
     public async Task<object> MemberToApiAsync(BsonDocument member, BsonDocument project, CancellationToken ct)
@@ -841,11 +853,20 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
             user = await store.Collection("user").Find(new BsonDocument("_id", userId)).FirstOrDefaultAsync(ct);
             if (user is not null) snapshot = await permissions.ProjectSnapshotAsync(user, project, ct);
         }
-        return MemberToApi(member, project, user, includePermissions: true, snapshot);
+        return MemberToApi(member, project, user, includePermissions: true, snapshot,
+            user is null ? null : await AvatarUrlAsync(user));
+    }
+
+    private async Task<string?> AvatarUrlAsync(BsonDocument user)
+    {
+        var name = user.Text("a");
+        if (name.Length == 0) return configuration["Storage:DefaultUserAvatar"];
+        return await storage.SignGetAsync(AvatarStoragePrefixes.User(configuration) + name,
+            ObjectStorage.DefaultSignedUrlValidity);
     }
 
     private static Dictionary<string, object?> MemberToApi(BsonDocument member, BsonDocument project, BsonDocument? user,
-        bool includePermissions, PermissionSnapshot? snapshot = null)
+        bool includePermissions, PermissionSnapshot? snapshot = null, string? avatar = null)
     {
         var tags = member.GetValue("tags", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray();
         var owner = user is not null
@@ -857,7 +878,7 @@ public sealed class ProjectMemberService(MongoStore store, TimeProvider clock, I
         {
             ["id"] = userId,
             ["name"] = user.Text("n"),
-            ["avatar"] = user.Text("a"),
+            ["avatar"] = avatar,
             ["has_avatar"] = user.Text("a").Length != 0,
             ["aliases"] = user.GetValue("as", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray()
         };

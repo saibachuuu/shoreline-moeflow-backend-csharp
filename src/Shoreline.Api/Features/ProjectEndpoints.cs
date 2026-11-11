@@ -25,9 +25,11 @@ public static class ProjectEndpoints
                 var teamSnapshot = await permissions.TeamSnapshotAsync(actor, team, ct);
                 if (!teamSnapshot.Has("team:ACCESS")) throw ApiError.Forbidden();
             }
-            var view = await projects.ViewAsync(document, actor, Chinese(context), ct);
-            var summary = await projects.MemberSummariesAsync(document, compact: false, ct);
-            return new { project = view, member_summary = summary };
+            var view = (Dictionary<string, object?>)await projects.ViewAsync(document, actor, Chinese(context), ct);
+            // app/apis/project.py:66-70 returns the project object itself and
+            // attaches member_summary; it is NOT wrapped in {"project": ...}.
+            view["member_summary"] = await projects.MemberSummariesAsync(document, compact: false, ct);
+            return view;
         });
         project.MapPut("", async (string projectId, JsonElement data, HttpContext context, CurrentUser current, ProjectService projects, CancellationToken ct) =>
         {
@@ -45,10 +47,15 @@ public static class ProjectEndpoints
             var document = await projects.GetProjectAsync(projectId, ct);
             var snapshot = await permissions.ProjectSnapshotAsync(actor, document, ct);
             if (!snapshot.Has("project:ACCESS")) throw ApiError.Forbidden();
+            var page = Pagination.From(context.Request);
             var rows = await store.Collection("target").Find(new BsonDocument("t", document["_id"]))
-                .Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
+                .Sort(new BsonDocument("_id", 1)).Skip(page.Skip).Limit(page.Limit).ToListAsync(ct);
+            var count = await store.Collection("target").CountDocumentsAsync(new BsonDocument("t", document["_id"]), cancellationToken: ct);
             var views = await Task.WhenAll(rows.Select(row => projects.TargetViewAsync(row, Chinese(context), ct)));
-            return new { count = views.Length, targets = views };
+            // app/apis/project.py:150-156 uses MoePagination.set_objects: a bare
+            // list body, count in the X-Pagination-* headers.
+            page.Apply(context.Response, (int)count);
+            return views;
         });
         project.MapPost("/targets", async (string projectId, JsonElement data, HttpContext context, CurrentUser current, ProjectService projects, CancellationToken ct) =>
         {

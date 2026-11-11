@@ -342,8 +342,7 @@ public sealed partial class LabelService
         {
         }
 
-        var name = language.Text("c");
-        var localized = chinese ? name : language.Text("e", name);
+        var localized = LanguageCatalog.DisplayName(language, chinese);
         return new Dictionary<string, object?>
         {
             ["id"] = IdValue(language).ToString(),

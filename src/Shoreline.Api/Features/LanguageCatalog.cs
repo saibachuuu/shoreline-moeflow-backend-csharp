@@ -12,7 +12,10 @@ public sealed class LanguageCatalog(MongoStore store)
     private sealed record SeedLanguage(string Code, string EnName, string LoName, string GTraCode,
         string GOcrCode, bool NoSpace, string LocalizedEn);
     private static readonly SeedLanguage[] Defaults = LoadDefaults();
-    private static readonly FrozenDictionary<string, string> English = Defaults.ToFrozenDictionary(l => l.LoName, l => l.LocalizedEn, StringComparer.Ordinal);
+    // Python translates language names from the gettext catalog; the English
+    // name is not always row.c (some legacy rows store a Chinese label), so key
+    // the fallback catalog by the stable language code instead of the label.
+    private static readonly FrozenDictionary<string, string> English = Defaults.ToFrozenDictionary(l => l.Code, l => l.LocalizedEn, StringComparer.Ordinal);
 
     private static SeedLanguage[] LoadDefaults()
     {
@@ -73,12 +76,17 @@ public sealed class LanguageCatalog(MongoStore store)
             .Sort(new BsonDocument { ["s"] = 1, ["_id"] = 1 }).ToListAsync(ct);
         return rows.Select(row =>
         {
-            var name = row.Text("c");
-            var localized = chinese ? name : English.GetValueOrDefault(name, name);
+            var localized = DisplayName(row, chinese);
             return (object)new { id = row["_id"].AsObjectId.ToString(), en_name = row.Text("e"), lo_name = localized,
                 i18n_name = localized, no_space = row.Flag("n"), code = row.Text("co"), g_tra_code = row.Text("gt"),
                 g_ocr_code = row.Text("go"), sort = row.GetValue("s", 0).ToInt32() };
         }).ToArray();
+    }
+
+    public static string DisplayName(BsonDocument row, bool chinese)
+    {
+        var name = row.Text("c");
+        return chinese ? name : English.GetValueOrDefault(row.Text("co"), row.Text("e", name));
     }
 
     public static bool ChinesePreferred(IList<StringWithQualityHeaderValue>? accepted)

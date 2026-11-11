@@ -551,52 +551,52 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         var status = project.Integer("st", 0);
         var statusName = status switch { 0 => "NORMAL", 1 => "CLEARED", 5 => "COMPLETED", _ => null };
         var identityStatus = statusName;
-        return new
+        return new Dictionary<string, object?>
         {
-            group_type = "project",
-            id = project["_id"].ToString(),
-            name = project.Text("n"),
-            intro = project.Text("i"),
-            max_user = project.Integer("u", 100000),
-            status,
-            identity_status = identityStatus,
-            status_name = statusName,
-            status_version = project.Integer("stv"),
-            owner_user_id = project.GetValue("ou", BsonNull.Value).IsObjectId ? project["ou"].ToString() : null,
-            owner_version = project.Integer("ouv"),
-            user_count = project.Integer("m_uc"),
-            default_role = project.GetValue("dr", BsonNull.Value).IsObjectId ? project["dr"].ToString() : null,
-            allow_apply_type = project.Integer("m_a", 1),
-            application_check_type = project.Integer("m_t", 2),
-            is_need_check_application = project.Integer("m_t", 2) != 1,
-            role,
-            auto_become_project_admin = autoAdmin,
-            effective_permissions = snapshot.EffectivePermissions.Order(StringComparer.Ordinal).ToArray(),
-            permission_sources = snapshot.PermissionSources,
-            can_order_files = CanOrderFiles(project, snapshot),
-            staff_list_page = project.GetValue("slp", BsonNull.Value).IsNumeric ? (object?)project.Integer("slp") : null,
-            position_lock_enabled = project.Flag("ple"),
-            position_lock_tags = project.GetValue("plt", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray(),
-            create_time = project.Timestamp("m_c"),
-            edit_time = project.Timestamp("m_e"),
-            source_language = source is null ? null : LanguageView(source, chinese),
-            target_count = project.Integer("tc"),
-            file_size = project.GetValue("fs", 0L).ToInt64(),
-            cover_bytes = project.GetValue("cover_bytes", 0L).ToInt64(),
-            resample_bytes = project.GetValue("resample_bytes", 0L).ToInt64(),
-            output_bytes = project.GetValue("ob", 0L).ToInt64(),
-            source_count = project.Integer("sc"),
-            translated_source_count = project.Integer("tsc"),
-            checked_source_count = project.Integer("csc"),
-            import_from_labelplus_status = project.Integer("is", 1),
-            import_from_labelplus_percent = project.Integer("ip"),
-            import_from_labelplus_error_type = project.Integer("ie"),
-            import_from_labelplus_error_type_name = LabelplusErrorTypeName((int)project.Integer("ie")),
-            storage_source_id = project.GetValue("csid", BsonNull.Value) is { } csid && csid.IsObjectId ? csid.ToString() : null,
-            storage_source_switched_time = project.GetValue("csw", BsonNull.Value).BsonType == BsonType.DateTime ? project.Timestamp("csw") : null,
-            storage_pool_locked = project.Flag("splk"),
-            team = await teams.ViewAsync(team, actor, chinese, ct),
-            project_set = ProjectSetView(set)
+            ["group_type"] = "project",
+            ["id"] = project["_id"].ToString(),
+            ["name"] = project.Text("n"),
+            ["intro"] = project.Text("i"),
+            ["max_user"] = project.Integer("u", 100000),
+            ["status"] = status,
+            ["identity_status"] = identityStatus,
+            ["status_name"] = statusName,
+            ["status_version"] = project.Integer("stv"),
+            ["owner_user_id"] = project.GetValue("ou", BsonNull.Value).IsObjectId ? project["ou"].ToString() : null,
+            ["owner_version"] = project.Integer("ouv"),
+            ["user_count"] = project.Integer("m_uc"),
+            ["default_role"] = project.GetValue("dr", BsonNull.Value).IsObjectId ? project["dr"].ToString() : null,
+            ["allow_apply_type"] = project.Integer("m_a", 1),
+            ["application_check_type"] = project.Integer("m_t", 2),
+            ["is_need_check_application"] = project.Integer("m_t", 2) != 1,
+            ["role"] = role,
+            ["auto_become_project_admin"] = autoAdmin,
+            ["effective_permissions"] = snapshot.EffectivePermissions.Order(StringComparer.Ordinal).ToArray(),
+            ["permission_sources"] = snapshot.PermissionSources,
+            ["can_order_files"] = CanOrderFiles(project, snapshot),
+            ["staff_list_page"] = project.GetValue("slp", BsonNull.Value).IsNumeric ? (object?)project.Integer("slp") : null,
+            ["position_lock_enabled"] = project.Flag("ple"),
+            ["position_lock_tags"] = project.GetValue("plt", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray(),
+            ["create_time"] = project.Timestamp("m_c"),
+            ["edit_time"] = project.Timestamp("m_e"),
+            ["source_language"] = source is null ? null : LanguageView(source, chinese),
+            ["target_count"] = project.Integer("tc"),
+            ["file_size"] = project.GetValue("fs", 0L).ToInt64(),
+            ["cover_bytes"] = project.GetValue("cover_bytes", 0L).ToInt64(),
+            ["resample_bytes"] = project.GetValue("resample_bytes", 0L).ToInt64(),
+            ["output_bytes"] = project.GetValue("ob", 0L).ToInt64(),
+            ["source_count"] = project.Integer("sc"),
+            ["translated_source_count"] = project.Integer("tsc"),
+            ["checked_source_count"] = project.Integer("csc"),
+            ["import_from_labelplus_status"] = project.Integer("is", 1),
+            ["import_from_labelplus_percent"] = project.Integer("ip"),
+            ["import_from_labelplus_error_type"] = project.Integer("ie"),
+            ["import_from_labelplus_error_type_name"] = LabelplusErrorTypeName((int)project.Integer("ie"), chinese),
+            ["storage_source_id"] = project.GetValue("csid", BsonNull.Value) is { } csid && csid.IsObjectId ? csid.ToString() : null,
+            ["storage_source_switched_time"] = project.GetValue("csw", BsonNull.Value).BsonType == BsonType.DateTime ? project.Timestamp("csw") : null,
+            ["storage_pool_locked"] = project.Flag("splk"),
+            ["team"] = await teams.ViewAsync(team, actor, chinese, ct),
+            ["project_set"] = ProjectSetView(set),
         };
     }
 
@@ -665,8 +665,8 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
     {
         ["id"] = language["_id"].ToString(),
         ["en_name"] = language.Text("e"),
-        ["lo_name"] = language.Text("c"),
-        ["i18n_name"] = language.Text("c"),
+        ["lo_name"] = LanguageCatalog.DisplayName(language, chinese),
+        ["i18n_name"] = LanguageCatalog.DisplayName(language, chinese),
         ["no_space"] = language.Flag("n"),
         ["code"] = language.Text("co"),
         ["g_tra_code"] = language.Text("gt"),
@@ -674,11 +674,18 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         ["sort"] = language.GetValue("s", 0).ToInt32()
     };
 
-    private static string LabelplusErrorTypeName(int value) => value switch
+    // app/constants/project.py:40-59
+    private static string LabelplusErrorTypeName(int value, bool chinese) => (value, chinese) switch
     {
-        0 => "未知错误",
-        1 => "文件解析失败",
-        _ => "未知错误"
+        (0, true) => "从 Labelplus 文本导入中断，请重试，如仍出现同样错误，请联系开发团队",
+        (0, false) => "Import from Labelplus text interrupted, please try again. If the same error occurs, please contact the development team.",
+        (1, true) => "从 Labelplus 文本导入时，没有有效的翻译目标语言",
+        (1, false) => "No valid target translation language when importing text from Labelplus.",
+        (2, true) => "从 Labelplus 文本导入时，项目没有创建人",
+        (2, false) => "When importing text from Labelplus, the project has no creator.",
+        (3, true) => "Labelplus 文本解析失败，请联系开发团队",
+        (3, false) => "Labelplus text parsing failed, please contact the development team.",
+        _ => ""
     };
 
     private static bool CanOrderFiles(BsonDocument project, PermissionSnapshot snapshot)
@@ -687,6 +694,17 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         if (!snapshot.Has("project:ACCESS")) return false;
         var allowed = new HashSet<string> { "team_inherited:creator", "team_inherited:admin", "project_tag:creator", "project_tag:admin" };
         return snapshot.PermissionSources.Values.Any(sources => sources.Any(allowed.Contains));
+    }
+
+    // app/models/user.py:308-313: avatar is a signed/CDN URL, never the raw
+    // stored object key.
+    private async Task<string?> AvatarUrlAsync(BsonDocument user)
+    {
+        var name = user.Text("a");
+        if (name.Length == 0) return configuration?["Storage:DefaultUserAvatar"];
+        if (storage is null) return name;
+        return await storage.SignGetAsync(AvatarStoragePrefixes.User(configuration!) + name,
+            ObjectStorage.DefaultSignedUrlValidity);
     }
 
     // ---- member summaries ----
@@ -713,11 +731,15 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
             if (users.TryGetValue(uid, out var user))
                 snapshots[uid] = await permissions.ProjectSnapshotAsync(user, project, ct);
         }
-        return rows.Select(row => (object)MemberSummary(row, project, users, snapshots, compact)).ToArray();
+        var result = new List<object>(rows.Count);
+        foreach (var row in rows)
+            result.Add(await MemberSummaryAsync(row, project, users, snapshots, compact, ct));
+        return result.ToArray();
     }
 
-    private static Dictionary<string, object?> MemberSummary(BsonDocument row, BsonDocument project,
-        Dictionary<ObjectId, BsonDocument> users, Dictionary<ObjectId, PermissionSnapshot> snapshots, bool compact)
+    private async Task<Dictionary<string, object?>> MemberSummaryAsync(BsonDocument row, BsonDocument project,
+        Dictionary<ObjectId, BsonDocument> users, Dictionary<ObjectId, PermissionSnapshot> snapshots, bool compact,
+        CancellationToken ct)
     {
         var user = users.GetValueOrDefault(row.GetValue("user", BsonNull.Value).IsObjectId ? row["user"].AsObjectId : default);
         var tags = row.GetValue("tags", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray();
@@ -740,7 +762,7 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
             {
                 ["id"] = userId,
                 ["name"] = user.Text("n"),
-                ["avatar"] = user.Text("a"),
+                ["avatar"] = await AvatarUrlAsync(user),
                 ["has_avatar"] = user.Text("a").Length != 0,
                 ["aliases"] = user.GetValue("as", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray()
             };
@@ -754,7 +776,7 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
             ["user"] = userView,
             ["display_name"] = row.Text("display_name"),
             ["tags"] = tags,
-            ["effective_permissions"] = snapshot?.EffectivePermissions.Order(StringComparer.Ordinal).ToArray() ?? [],
+            ["effective_permissions"] = Array.Empty<string>(),
             ["status"] = row.Text("status", "active"),
             ["version"] = row.Integer("version"),
             ["is_owner"] = isOwner,

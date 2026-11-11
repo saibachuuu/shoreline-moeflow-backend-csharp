@@ -210,7 +210,7 @@ public sealed class TeamInsightService(
         var membersByProject = relations
             .GroupBy(relation => relation["project"].AsObjectId)
             .ToDictionary(group => group.Key, group => group.ToList());
-        var memberUserIds = relations.Select(relation => relation["user"])
+        var memberUserIds = relations.Select(relation => relation.GetValue("user", BsonNull.Value))
             .Where(value => value.IsObjectId).Select(value => value.AsObjectId).Distinct().ToArray();
         var memberUsers = await LoadUsersAsync(memberUserIds, ct);
         var avatars = await LoadAvatarsAsync(memberUsers.Values, ct);
