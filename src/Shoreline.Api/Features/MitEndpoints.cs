@@ -18,13 +18,20 @@ namespace Shoreline.Api.Features;
 /// blueprint. The legacy implementation is not part of either backend: Python's
 /// <c>app/tasks/mit.py</c> bodies are stubs and the real work lives in an
 /// external <c>manga_translator/moeflow_worker.py</c> Celery worker on the
-/// <c>mit</c> queue. C# jobs are only executed by the in-process
+/// <c>mit</c> queue. C# jobs are normally executed by the in-process
 /// <see cref="Jobs.JobWorker"/>, which claims registered
-/// <see cref="Jobs.IJobHandler.Kind"/> values exclusively. There is no supported
-/// bridge that would hand <c>csharp_job</c> documents to an external worker, so
-/// enabling <c>Mit:StorageRoot</c> without a registered consumer must fail
-/// closed: the routes stay unmapped instead of accepting work that can never
-/// run. Actual MIT parity remains unsupported until a real consumer exists.
+/// <see cref="Jobs.IJobHandler.Kind"/> values exclusively, so the routes stay
+/// unmapped unless a consumer exists. Two consumers are accepted:
+/// <list type="bullet">
+/// <item>in-process <see cref="Jobs.IJobHandler"/> implementations for all of
+/// <see cref="RequiredJobKinds"/>; or</item>
+/// <item>the opt-in Celery bridge (<see cref="Modules.Mit.MitBridgePublisher"/>),
+/// enabled by <c>RabbitMq:Enabled=true</c> plus a non-empty <c>RabbitMq:Url</c>,
+/// which publishes Celery protocol v2 messages to the durable <c>mit</c> queue
+/// and polls <c>celery_taskmeta</c> for results.</item>
+/// </list>
+/// Without either consumer the routes must fail closed instead of accepting
+/// work that can never run.
 /// </summary>
 public static class MitEndpoints
 {
