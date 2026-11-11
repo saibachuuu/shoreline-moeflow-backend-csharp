@@ -10,7 +10,7 @@
 | 硬门槛 | 状态 | 证据 / 阻塞 / 仍需执行 |
 |---|---|---|
 | 核心有效路由注册 | 已验证（静态 + 测试机抽查） | 静态 160/160；`/urls`、`/error`、`/warning`、`/docs/<path>` 在测试机容器内经 nginx 返回 200/500/500/404；`/ping`、`/health/*`、`/v1/site/homepage` 均 200 |
-| 全核心路由 C# HTTP 行为与权限 | 已验证 | 静态 160/160；全量 suite 1149/1149；端点×身份授权矩阵 38/38（矩阵 9 + 读门 4 + 写门 5 + 扩展 12 + 团队申请 3 + 邀请层级/标签门 5），计划外差异仅 3 条且均有 oracle 依据 |
+| 全核心路由 C# HTTP 行为与权限 | 已验证 | 静态 160/160；全量 suite 1154/1154；端点×身份授权矩阵 43/43（矩阵 9 + 读门 4 + 写门 5 + 扩展 12 + 团队申请 3 + 邀请层级/标签门 5 + 标签能力矩阵与并发窗口 5），计划外差异仅 3 条且均有 oracle 依据 |
 | archive_import HTTP | 部分验证 | 已装配；legacy `ARCHIVE_MAX_*` 按 MB 换算（`1933b9a`）；`ARCHIVE_PROVIDER_API_ALLOWED_HOSTS` allowlist（`94a06a8`）；`PublicNetworkGuard` + `UseProxy=false`（`8efc6c7`）。**Python oracle 差分未做** |
 | partner_search HTTP | 部分验证 | 已有 HTTP 测试；写/索引排序与 Python oracle 未逐条对拍 |
 | storage_pool HTTP | 部分验证 | 已装配；每日扫描 `lsd` 原子 claim（`06c1d6a`）；`StoragePool:WorkerEnabled` 可关；跨天/真实 OSS 未验 |
@@ -30,7 +30,7 @@
 | 重试/lease/幂等/崩溃恢复 | 部分验证 | `Jobs:MaxAttempts=5`、`RetryDelay=min(300s, 5·2^n)`、优雅停机（`30ea5ea`,`e176e0d`）；邮件 `verification.sent` CAS 防重发（`30878c5`）；通知扫描 lease 语义由 `NotificationE2ETests` 14/14 锁定；`JobFaultRecoveryTests` 6 例锁定租约过期回收、达 `Jobs:MaxAttempts` 终止、过期租约被扫成 failed、退避 5→300s 封顶、停机只停认领。**真实 kill -9 与 30s 停机超时丢弃路径未做** |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | `96eef2a`：`dotnet build Shoreline.sln --nologo` 0/0 |
 | 最终合并后的 dotnet build 0/0 | 已验证 | 同上（本轮每次合并后均复跑） |
-| C# 全量 suite | 已验证 | `62ba5c2`：`tools/Run-FullSuite.ps1 -BasePort 33210` → **1149 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；1028 → 1092 → 1101 → 1129 → 1138 → 1144 → 1149） |
+| C# 全量 suite | 已验证 | `9d37ae8` + r6 合并：`tools/Run-FullSuite.ps1 -BasePort 33270` → **1154 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；1028 → 1092 → 1101 → 1129 → 1138 → 1144 → 1149） |
 | Python 全量 suite | 已验证 | `836 passed, 48 subtests passed`，446 s（`.env.test`，mongomock/memory broker/local storage） |
 | 真实差分全量 suite | 部分验证 | 只读 19/19；写路径与可选模块未覆盖 |
 | 可复现镜像 / lock / digest | 已验证（层内容） | 两次 `--no-cache` 冷构建：19 个层的 Layer ID、大小（497130313 bytes）、`CreatedBy` 全部一致；ImageID 因 image config 的 `created` 时间戳不同而不相等（Docker 默认行为），需要 bit-identical 时用 buildx `--rewrite-timestamp`（需 ≥ 0.14；本机 0.13.1 不支持该 flag，已实测报错）。另有空库 `Migrations:Mode=apply` 首启冒烟与「Python 库已有同名索引」接管冒烟，均 `/ping`、`/health/live`、`/health/ready` 200。见 `docs/image-reproducibility.md`（`b4f77f9`, `bacd343`） |
@@ -45,7 +45,7 @@
 | 认证 / 越权 / 授权竞争窗口 | 已验证（授权）/ 部分验证（竞争窗口） | 授权矩阵 38/38（矩阵 9 + 读门 4 + 写门 5 + 扩展 12 + 团队申请 3 + 邀请层级/标签门 5）；3 条已知差异均有 oracle 依据。`admin=false` 不绕过业务权限、项目 `st!=0` 时 normal-only 权限失效、批量端点 `failed.error_code` 形状已文档化。并发租约/竞争窗口仍只有单次验证 |
 | SSRF / allowlist / DNS / redirects | 部分验证 | `PublicNetworkGuard`（29 测试）+ Ziteng 注册 client（5）+ archive transport；`UseProxy=false` 防环境代理绕过（`8efc6c7`）。其余出站路径（邮件/存储 SDK）未系统覆盖 |
 | 上传限制 / 内存放大 | 部分验证 | >16 MB 走 multipart 分片，消除全量进内存；1 GiB 边界与并发资源未验 |
-| 真实 HTTP 限流 / XFF 防伪造 | 未验证 | limiter/routing 顺序、反代身份与 client_key 未真实请求验证 |
+| 真实 HTTP 限流 / XFF 防伪造 | 部分验证 | `AuthRateLimitTests`（429 触发与按 client_key 分桶）+ `TrustedProxyTests`（受信代理才采信 XFF）已并入 suite；未用真实边缘 IP 链路验证 |
 | 部署 / 迁移 / 回滚 runbook | 部分验证（已固化） | `docs/production-deploy-runbook.md`：启动顺序（mongo → api 跑迁移 → worker → nginx）、回滚删 csharp 迁移行、bind mount `chown`、前端 restart 解 502、告警阈值表；`scripts/verify-deploy.ps1` 只读自检。**未在测试机复跑本轮版本** |
 
 ## 明确阻塞（2026-11-11 夜）
