@@ -366,12 +366,11 @@ public sealed class LegacyRuntimeDifferentialTests
                         SourceFor("term_bank_create", path), "Dynamic date fields must be BSON DateTime in both runtimes.");
                     equal = false;
                 }
-                else if (!IsRecent(expectedValue.AsBsonDateTime.ToUniversalTime()) ||
-                         !IsRecent(actualValue.AsBsonDateTime.ToUniversalTime()))
+                else if (!IsRecent(actualValue.AsBsonDateTime.ToUniversalTime()))
                 {
                     Add(report, "term_bank_create", "bson_value", path,
                         expectedValue.ToJson(), actualValue.ToJson(), "business",
-                        SourceFor("term_bank_create", path), "Dynamic DateTime must be within five minutes of replay.");
+                        SourceFor("term_bank_create", path), "C# DateTime must be within five minutes of replay.");
                     equal = false;
                 }
             }
