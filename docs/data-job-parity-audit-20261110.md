@@ -25,13 +25,13 @@ Python 路径相对同级 `shoreline-moeflow-backend`；C# 路径相对本仓库
 | `app/modules/storage_pool/tasks.py:52` `storage_pool_scan` | `src/Shoreline.Api/Jobs/StoragePoolWorker.cs:15-85` | worker 默认关闭，需部署开关与调度验证 |
 | `app/modules/storage_pool/tasks.py:216` `storage_pool_run` | `src/Shoreline.Api/Modules/StoragePool/StoragePoolTransferService.cs:87`；`src/Shoreline.Api/Jobs/StoragePoolWorker.cs:63-75` | 默认关闭影响 active transfer 恢复 |
 | `app/modules/ziteng_partner/tasks.py:20` `tasks.ziteng_partner.check_project` | `src/Shoreline.Api/Jobs/ZitengCheckJobHandler.cs:14` | 生产 `src/Shoreline.Api/Features/ZitengPartnerService.cs:35,53` |
-| `app/tasks/mit.py:18` `tasks.mit.detect_text` | 无 handler；`src/Shoreline.Api/Features/MitEndpoints.cs:267` 入队 | 条件启用时缺消费者 |
+| `app/tasks/mit.py:18` `tasks.mit.detect_text` | 无 handler；`src/Shoreline.Api/Features/MitEndpoints.cs:297` 入队，但无消费者时路由不装配 | 条件启用仍缺消费者；C# 现为 fail closed |
 | `app/tasks/mit.py:23` `tasks.mit.ocr` | 无 handler | 同上 |
-| `app/tasks/mit.py:28` `tasks.mit.translate` | 无 handler；`src/Shoreline.Api/Features/MitEndpoints.cs:279` 入队 `mit_translate` | 同上 |
+| `app/tasks/mit.py:28` `tasks.mit.translate` | 无 handler；`src/Shoreline.Api/Features/MitEndpoints.cs:309` 入队 `mit_translate` | 同上 |
 | `app/tasks/mit.py:33` `tasks.mit.inpaint` | 无 handler | 同上 |
 | `app/tasks/mit.py:109` `tasks.preprocess_mit` | 无 handler | 同上 |
 
-MIT 文件头说明真实任务实现位于外部 `manga_translator/moeflow_worker.py`。`tests/Shoreline.Tests/MitHttpTests.cs:209,237-243` 只证明入队 pending，不证明完成；须外部 worker 桥接或产品明确接受禁用，不能伪造 AI 完成。
+MIT 文件头说明真实任务实现位于外部 `manga_translator/moeflow_worker.py`。C# 侧 2026-11-11 已改为 fail closed（`eb13ab4` 测试、`c5b9218` 修复）：`src/Shoreline.Api/Program.cs:181-200` 仅在 `MitEndpoints.FindMissingConsumers`（`src/Shoreline.Api/Features/MitEndpoints.cs:44-50`，要求 `mit_detect_text` / `mit_ocr` / `mit_translate` 全部有 `IJobHandler`）为空时才 `MapMitEndpoints()`；否则 `/v1/mit` 保持 404 并记录一条 warning。因此启用 `MIT_STORAGE_ROOT` 不再静默入队永远不执行的 job，但这**不是 MIT 功能实现**：真实 parity 仍需要进程内 handler 或受支持的 `manga-image-translator` Celery（`mit` 队列）桥接，目前都不存在。`tests/Shoreline.Tests/MitHttpTests.cs` 的 `MitEndpoints_WithoutRegisteredConsumers_Returns404AndInsertsNoJob` / `MitEndpoints_PartialConsumerCoverage_KeepsModuleUnavailable` 断言 404、`csharp_job` 零插入、上传目录零新增文件；既有 lifecycle 用例用夹具 handler 证明原契约仍可入队。
 队列 `src/Shoreline.Api/Jobs/JobQueue.cs:31,34,61,110,141`：attempts < 5、lease 2 分钟、退避 `min(300,5*2^attempts)`。
 `src/Shoreline.Api/Jobs/JobWorker.cs:11,24-26` 单池默认并发 1，clamp 1..8；不同于 Python `app/factory.py:138-153` 多队列。重任务阻塞邮件、lease / crash / unknown-commit 均仍需实际验收。
 

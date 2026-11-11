@@ -65,7 +65,7 @@ dotnet test Shoreline.sln --no-build --nologo --filter "FullyQualifiedName~Shore
 - 首轮 `tools/Audit-LegacyRoutes.py` 的静态结果：核心有效路由 160，匹配 156，缺失 4；四个可选模块有效路由 27，匹配 27；另有 2 个注册但无方法实现的 405 契约。
 - 上述是静态注册匹配，不是 HTTP 行为或授权正确性的证明；需真实运行时注册表及逐路由 HTTP 测试复核。
 - `src/Shoreline.Api/Program.cs:48-54` 注册四模块服务，`src/Shoreline.Api/Program.cs:154-157` 映射四模块 endpoint；不能把已有实现重复判成缺失。
-- MIT 另有条件装配：`src/Shoreline.Api/Program.cs:158-162`，配置 `Mit:StorageRoot` 或 `MIT_STORAGE_ROOT`，排除 `/MIT_STORAGE_ROOT_UNDEFINED`。必须分别验收启用和禁用形态。
+- MIT 另有条件装配：`src/Shoreline.Api/Program.cs:181-200`，配置 `Mit:StorageRoot` 或 `MIT_STORAGE_ROOT`，排除 `/MIT_STORAGE_ROOT_UNDEFINED`；**并且**要求 `mit_detect_text` / `mit_ocr` / `mit_translate` 三个 kind 都有注册的 `IJobHandler`（`MitEndpoints.FindMissingConsumers`），否则 `/v1/mit` 不装配、只记录 warning。必须分别验收启用和禁用形态；当前默认无消费者，所以启用形态是 fail closed 的 404，不是可用的 MIT。
 - `ZitengPartnerTests` 已有 HTTP 用例，包括 config 授权、disabled key、外部用户、POST shape、项目不存在错误码。首轮按 `*HttpTests.cs` 文件名猜测覆盖不可靠，已纠正。
 - archive import / storage pool 的直接 HTTP 覆盖是重点候选缺口；最终清单须经全测试调用解析和人工复核，不能只凭测试类名判断。
 - 第二轮 beam-free 的 `tools/Audit-TestParity.py` 提交暂不合并：漏 `PostAsJsonAsync` / `PutAsJsonAsync` / `PatchAsJsonAsync`、重复计算同一调用、未剥离 query、模块分类不一致，且把部分非有效业务路由混入分母。其 327 / 94 / 68 等覆盖数字不是接受的验收证据。
@@ -105,7 +105,7 @@ dotnet test Shoreline.sln --no-build --nologo --filter "FullyQualifiedName~Shore
 - `file_target_cache`、project `m_e` / projectset `et`、`output.file_name`、角色默认权限等必须用当前 Python 源码和测试核对，不沿用历史快照结论。
 - Mongo standalone 跨文档写入不能直接宣称 exactly-once；unknown commit、lease 续约/超时、stable job/item IDs、owner CAS 锁释放、重试和崩溃恢复必须有故障测试。
 - `src/Shoreline.Api/Program.cs:50-54` 默认 `StoragePool:WorkerEnabled=false`；上线形态需要明确开启 handler 或产品接受替代，不能以 HTTP 路由存在代替后台任务验收。
-- 确认普通创建忽略 LabelPlus、fresh install 缺 admin/default team/settings 持久化、用户/日志邮件开关不一致、新 C# 安全码回滚 Python 无法读取，以及启用 MIT 后缺外部消费者；不伪造成功或将条件功能默认为不适用。
+- 确认普通创建忽略 LabelPlus、fresh install 缺 admin/default team/settings 持久化、用户/日志邮件开关不一致、新 C# 安全码回滚 Python 无法读取，以及启用 MIT 后缺外部消费者；不伪造成功或将条件功能默认为不适用。MIT 已改为无消费者时不装配 `/v1/mit`（`c5b9218`），仅消除静默入队，不构成功能实现。
 
 ## 6. 测试环境隔离前提
 
@@ -170,7 +170,7 @@ dotnet test Shoreline.sln --no-build --nologo --filter "FullyQualifiedName~Shore
 
 ## 10. 夜间更新（bootstrap 与诊断路由）
 
-- 参考 Python 固定为 `be0b717`（含 label snapshots）。用该提交的独立 worktree 重新生成 `docs/route-coverage.md`：核心有效路由 **160/160**，可选模块 **27/27**，MIT 条件路由 **5/5**，缺失 **0**；此前 4 条缺失均为根诊断路由。
+- 参考 Python 固定为 `be0b717`（含 label snapshots）。用该提交的独立 worktree 重新生成 `docs/route-coverage.md`：核心有效路由 **160/160**，可选模块 **27/27**，MIT 条件路由 **5/5**，缺失 **0**；此前 4 条缺失均为根诊断路由。以上是静态注册覆盖，不是运行时广告：MIT 的 5 条路由现在只有在三个 `mit_*` 消费者全部注册时才装配（`src/Shoreline.Api/Program.cs:181-200`）。
 - 4 条诊断路由已由 `LegacyDiagnosticsEndpoints` 实现，`LegacyDiagnosticsTests` 断言 `/urls` 200、`/error` 500、`/warning` 500、缺失文档 404。
 - `BootstrapService` 已实现 Python `init_db` 等价流程；`Testing` 环境默认关闭，部署默认开启。`BootstrapTests` 4/4。
 - 当前工作树全量：**888 passed / 0 failed / 0 skipped**（10 m 01 s，TRX `/tmp/opencode/full-post-bootstrap.trx`），包含 8 例 Python/C# 差分（0 business differences）。
