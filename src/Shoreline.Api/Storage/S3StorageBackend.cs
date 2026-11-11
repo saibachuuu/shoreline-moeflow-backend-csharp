@@ -1,7 +1,6 @@
 using System.Net;
 using Amazon.S3;
 using Amazon.S3.Model;
-using Amazon.S3.Transfer;
 
 namespace Shoreline.Api.Storage;
 
@@ -17,9 +16,9 @@ internal sealed class S3StorageBackend : IStorageBackend
     // dropped connection, so mirror the threshold here.
     private const long MultipartThresholdBytes = 16L * 1024 * 1024;
     private const long MultipartPartSizeBytes = 16L * 1024 * 1024;
+    private const int MultipartMaxParts = 10000;
 
     private readonly AmazonS3Client client;
-    private readonly TransferUtility transfer;
     private readonly string bucket;
     private readonly string keyPrefix;
     private readonly bool viaCdn;
@@ -33,7 +32,6 @@ internal sealed class S3StorageBackend : IStorageBackend
         string? domain)
     {
         this.client = client;
-        this.transfer = new TransferUtility(client);
         this.bucket = bucket;
         this.keyPrefix = keyPrefix;
         this.viaCdn = viaCdn;
@@ -52,16 +50,7 @@ internal sealed class S3StorageBackend : IStorageBackend
         var remaining = content.CanSeek ? content.Length - content.Position : -1;
         if (remaining > MultipartThresholdBytes)
         {
-            var upload = new TransferUtilityUploadRequest
-            {
-                BucketName = bucket,
-                Key = PhysicalKey(key),
-                InputStream = content,
-                ContentType = contentType,
-                AutoCloseStream = false,
-                PartSize = MultipartPartSizeBytes,
-            };
-            await transfer.UploadAsync(upload, cancellationToken).ConfigureAwait(false);
+            await PutMultipartAsync(key, content, contentType, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -72,9 +61,117 @@ internal sealed class S3StorageBackend : IStorageBackend
             InputStream = content,
             ContentType = contentType,
             AutoCloseStream = false,
+            // Cloudflare R2 rejects the aws-chunked streaming signature
+            // ("STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented"). A plain
+            // signed PUT works whenever the length is known, which is the case
+            // for every seekable upload stream.
+            UseChunkEncoding = false,
         };
 
         await client.PutObjectAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Manual multipart upload. The SDK's <c>TransferUtility</c> path always signs
+    /// parts with the aws-chunked streaming signature, which Cloudflare R2 rejects
+    /// ("STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented"). Driving the three
+    /// S3 calls here lets every part opt out of chunk encoding instead.
+    /// </summary>
+    private async Task PutMultipartAsync(
+        string key,
+        Stream content,
+        string contentType,
+        CancellationToken cancellationToken)
+    {
+        var physicalKey = PhysicalKey(key);
+        var init = await client.InitiateMultipartUploadAsync(new InitiateMultipartUploadRequest
+        {
+            BucketName = bucket,
+            Key = physicalKey,
+            ContentType = contentType,
+        }, cancellationToken).ConfigureAwait(false);
+
+        var parts = new List<PartETag>();
+        var buffer = new byte[MultipartPartSizeBytes];
+        var partNumber = 1;
+        try
+        {
+            while (partNumber <= MultipartMaxParts)
+            {
+                var read = await FillAsync(content, buffer, cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                using var part = new MemoryStream(buffer, 0, read, writable: false);
+                var response = await client.UploadPartAsync(new UploadPartRequest
+                {
+                    BucketName = bucket,
+                    Key = physicalKey,
+                    UploadId = init.UploadId,
+                    PartNumber = partNumber,
+                    PartSize = read,
+                    InputStream = part,
+                    UseChunkEncoding = false,
+                }, cancellationToken).ConfigureAwait(false);
+
+                parts.Add(new PartETag(partNumber, response.ETag));
+                partNumber++;
+                if (read < buffer.Length)
+                {
+                    break;
+                }
+            }
+
+            await client.CompleteMultipartUploadAsync(new CompleteMultipartUploadRequest
+            {
+                BucketName = bucket,
+                Key = physicalKey,
+                UploadId = init.UploadId,
+                PartETags = parts,
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            try
+            {
+                await client.AbortMultipartUploadAsync(new AbortMultipartUploadRequest
+                {
+                    BucketName = bucket,
+                    Key = physicalKey,
+                    UploadId = init.UploadId,
+                }, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best effort: the original exception is the one worth surfacing.
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<int> FillAsync(
+        Stream source,
+        byte[] buffer,
+        CancellationToken cancellationToken)
+    {
+        var total = 0;
+        while (total < buffer.Length)
+        {
+            var read = await source
+                .ReadAsync(buffer.AsMemory(total, buffer.Length - total), cancellationToken)
+                .ConfigureAwait(false);
+            if (read == 0)
+            {
+                break;
+            }
+
+            total += read;
+        }
+
+        return total;
     }
 
     public async Task<ObjectDownload> GetAsync(string key, CancellationToken cancellationToken)

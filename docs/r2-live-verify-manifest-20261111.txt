@@ -1,0 +1,13 @@
+# bucket=shoreline
+# endpoint=https://c6b5b41faaa3c04f923958182b189f2a.r2.cloudflarestorage.com/
+# prefix=_csharp-verify-20261111-225841/
+# when=2026-11-11T15:05:30.1484756Z
+# format: bucket<TAB>key<TAB>bytes<TAB>sha256
+shoreline	smoke/20261111T150530Z/small-58f88fae7c334cc093a5ad64124a26ec.bin	1024	c3c574444bfe53063592e235007747c99c85f1b74554424e4cdca04182d41784
+shoreline	smoke/20261111T150530Z/large-cef4633fdf12492aada6c962e74e6c74.bin	20971520	3745e05dfa0be4bb9e0519bf47c9fcaa91b59d3d563a2fad93b215abac03ce58
+# inventory under prefix
+shoreline	smoke/20261111T150231Z/small-94af56d08672497480912cf07f379c44.bin	1024	-
+shoreline	smoke/20261111T150347Z/large-5530a88e1e494ef38bb8d3f2ffc484d1.bin	20971520	-
+shoreline	smoke/20261111T150347Z/small-acd5c1a617984f348ff655e553d06c59.bin	1024	-
+shoreline	smoke/20261111T150530Z/large-cef4633fdf12492aada6c962e74e6c74.bin	20971520	-
+shoreline	smoke/20261111T150530Z/small-58f88fae7c334cc093a5ad64124a26ec.bin	1024	-
