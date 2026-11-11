@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -176,10 +177,12 @@ public static class StoragePoolEndpoints
 
     private static async Task<JsonElement> OptionalBodyAsync(HttpRequest request, CancellationToken ct)
     {
-        if (request.ContentLength is null or 0) return default;
+        using var reader = new StreamReader(request.Body, Encoding.UTF8);
+        var text = await reader.ReadToEndAsync(ct);
+        if (text.Length == 0) return default;
         try
         {
-            using var document = await JsonDocument.ParseAsync(request.Body, cancellationToken: ct);
+            using var document = JsonDocument.Parse(text);
             return document.RootElement.Clone();
         }
         catch (JsonException)

@@ -20,8 +20,8 @@ namespace Shoreline.Tests;
 /// transfer state machine codes, settings/scan shapes and the legacy Chinese
 /// display names the admin console renders verbatim.
 /// </summary>
-[Collection("local-services")]
-public sealed class StoragePoolHttpTests(LocalServices services)
+[Collection("local-services-thumbnail")]
+public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
 {
     private const string Base = "/v1/admin/storage-pool";
     private static readonly CancellationToken Ct = CancellationToken.None;
@@ -484,8 +484,18 @@ public sealed class StoragePoolHttpTests(LocalServices services)
         Assert.Equal(HttpStatusCode.NotFound, unknownLock.StatusCode);
         AssertError(await BodyAsync(unknownLock), "ProjectNotExistError", 1001, "项目不存在");
 
-        // The in-flight migration from the migrate assertion blocks locking.
-        var activeLock = await admin.PostAsync($"{Base}/projects/{projectId}/lock", null, Ct);
+        // The API dispatches newly created migrations asynchronously. Use a
+        // separate project and a seeded durable active row so the lock assertion
+        // is independent of whether the earlier transfer has reached a terminal
+        // state.
+        var activeProject = await InsertProjectAsync();
+        await services.Store.Collection(StoragePoolConstants.TransferCollection).InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = ObjectId.GenerateNewId(),
+            ["p"] = activeProject,
+            ["st"] = StoragePoolConstants.Pending,
+        }, cancellationToken: Ct);
+        var activeLock = await admin.PostAsync($"{Base}/projects/{activeProject}/lock", null, Ct);
         Assert.Equal(HttpStatusCode.Conflict, activeLock.StatusCode);
         AssertError(await BodyAsync(activeLock), "StoragePoolNotAllowed", 5, "项目有进行中的迁移，不能锁定");
 
@@ -637,6 +647,12 @@ public sealed class StoragePoolHttpTests(LocalServices services)
         Assert.Equal(HttpStatusCode.BadRequest, malformedScan.StatusCode);
         AssertError(await BodyAsync(malformedScan), "ValidateError", 2, "请求体不能为空");
 
+        using var chunkedBody = new StreamContent(new NonSeekableStream(Encoding.UTF8.GetBytes("{oops")));
+        chunkedBody.Headers.ContentType = new("application/json");
+        var chunkedScan = await admin.PostAsync(Base + "/scan", chunkedBody, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, chunkedScan.StatusCode);
+        AssertError(await BodyAsync(chunkedScan), "ValidateError", 2, "请求体不能为空");
+
         var projectId = await InsertProjectAsync();
         var malformedLock = await admin.PostAsync($"{Base}/projects/{projectId}/lock",
             new StringContent("nope", Encoding.UTF8, "application/json"), Ct);
@@ -714,6 +730,11 @@ public sealed class StoragePoolHttpTests(LocalServices services)
     }
 
     private static string Unique(string prefix) => prefix + "-" + Guid.NewGuid().ToString("N");
+
+    private sealed class NonSeekableStream(byte[] content) : MemoryStream(content)
+    {
+        public override bool CanSeek => false;
+    }
 
     private static Dictionary<string, object?> SourcePayload(string name, string? endpoint = null) => new()
     {
