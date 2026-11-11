@@ -629,14 +629,14 @@ public sealed class ZitengPartnerTests
         await using var world = await HttpWorld.CreateAsync();
         var response = await world.ForeignHttp.GetAsync(
             $"/v1/projects/{world.ProjectId}/ziteng-check");
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(103, body.RootElement.GetProperty("code").GetInt32());
 
         var post = await world.ForeignHttp.PostAsync(
             $"/v1/projects/{world.ProjectId}/ziteng-check",
             new StringContent("{}", Encoding.UTF8, "application/json"));
-        Assert.Equal(HttpStatusCode.Forbidden, post.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, post.StatusCode);
     }
 
     [Fact]
