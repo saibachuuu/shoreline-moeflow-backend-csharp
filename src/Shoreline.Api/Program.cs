@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Shoreline.Api;
 using Shoreline.Api.Features;
 using Shoreline.Api.Infrastructure;
+using Shoreline.Api.Infrastructure.Migrations;
 using Shoreline.Api.Jobs;
 using Shoreline.Api.Modules.ArchiveImport;
 using Shoreline.Api.Modules.PartnerSearch;
@@ -17,6 +18,7 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamin
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MongoStore>();
+builder.Services.AddSingleton<MigrationStartupState>();
 builder.Services.AddSingleton<LegacyToken>();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddSingleton<CaptchaService>();
@@ -203,11 +205,21 @@ if (!string.IsNullOrWhiteSpace(mitStorageRoot) && mitStorageRoot != "/MIT_STORAG
     }
 }
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
-app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
+app.MapGet("/health/ready", async (MongoStore store, MigrationStartupState migrations, CancellationToken ct) =>
 {
+    if (!MigrationReadiness.IsReady(migrations, out var pendingIds))
+    {
+        // check mode with pending migrations: stay up for inspection but
+        // never report ready, mirroring the Python --check deploy gate.
+        return Results.Json(new { status = "migrations-pending", pending = pendingIds }, statusCode: 503);
+    }
     await store.Database.RunCommandAsync<MongoDB.Bson.BsonDocument>(new MongoDB.Bson.BsonDocument("ping", 1), cancellationToken: ct);
     return Results.Ok(new { status = "ok" });
 });
+// Versioned schema migrations run before the startup index initializers so a
+// fresh database converges through the same chain Python applies; check mode
+// (the default) is strictly read-only and never modifies the database.
+await app.Services.RunLegacyMigrationsAsync(app.Logger, CancellationToken.None);
 await app.Services.GetRequiredService<MongoStore>().InitializeAsync(CancellationToken.None);
 await app.Services.InitializeFileIndexesAsync();
 await app.Services.InitializeTeamDissolutionAsync();
