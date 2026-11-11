@@ -35,39 +35,43 @@
 
 ## 3. 测试证据
 
-- 全量（本轮合并后）：`tools/Run-FullSuite.ps1 -BasePort 33110` → **1129 passed / 0 failed / 0 skipped**，Mongo 4.4.1 隔离栈（`ae56433`；1028 → 1092 → 1101 → 1129）。
-- 迁移：`MigrationsTests` 8/8；默认 `Mode=check` 在全新空库上的 503 行为有 `DeployHealthTests` 覆盖（夹具侧关闭迁移开关以免互相污染）。
-- 任务语义：`JobRetrySemantics` / `EmailTests.ReplayedJob…`（由 2 封改 1 封）全绿。
+- 全量（本轮合并后）：`tools/Run-FullSuite.ps1 -BasePort 33210` → **1149 passed / 0 failed / 0 skipped**，Mongo 4.4.1 隔离栈（HEAD `62ba5c2`；1028 → 1092 → 1101 → 1129 → 1138 → 1144 → 1149）。
+- 迁移：`MigrationsTests` 8/8、`MigrationsParityTests` 29/29（含 0004 的 7 个 parity 修复）；`MongoStoreIndexCompatTests` 锁定「Python 库已有同名索引」的接管启动。
+- 任务语义与故障恢复：`JobFaultRecoveryTests` 6 例（租约过期回收、`Jobs:MaxAttempts` 终止态、过期租约被扫成 failed、退避 5→300s 封顶、`FailAsync` 的 `available_at`、停机只停认领），Job 相关 51/51。
+- 授权：38/38（矩阵 9 / 读门 4 / 写门 5 / 扩展 12 / 团队申请 3 / 邀请层级与标签门 5）。
 - 存储：`StorageContract` 23/23（含 20 MB multipart roundtrip）、`Storage` 139/139。
 - 模块：`ProofreadFilter` 48/48、模块 parity focused 140/140。
-- SSRF：`ZitengPartnerSsrf|PublicNetworkGuard|ArchiveImport` 77/77。
+- 通知与邮件：`Notification` 107/107、`NotificationE2ETests` 14/14、`SecurityEmailTlsTests` 5/5。
+- 镜像：两次 `--no-cache` 冷构建 19 个层 ID / 大小 / `CreatedBy` 全一致；空库 `apply` 首启与 Python 索引接管两种冒烟三端点 200；`check` 空库 503 带 pending 列表、`apply` 200、已迁移 `check` 200、`Migrations__Enabled=false` 200。
+- 排空工具：一次性 `rabbitmq:3-management` 上实测 `celery-drain-check.sh` 的 0/1/2 三种退出码（修复前会把 1 条 ready 消息误报为 DRAINED）。
 
 ## 4. 明确仍未验证（不因本轮而改变）
 
-1. **真实生产数据上的迁移**：本轮只有空库/happy-path 与边界测试；生产 dump 副本上的 `m0004` 等尚未执行（正在单独做逐字段对拍）。
+1. **真实生产数据上的迁移**：本轮只有空库/happy-path、边界测试与逐字段对拍；生产 dump 副本上的 `dry-run → apply → Python 回滚读` 仍未执行。
 2. **真实 R2 / SMTP+TLS**：按用户要求不读生产凭证；需在隔离测试机用独立凭据验收。
-3. **RabbitMQ 排空演练**：方案已定，未在真实 broker 上演练 ready/unacked 归零与回滚。
-4. **MIT 功能**：spike 完成，仍 fail-closed（若产品需要，按方案 A 接线）。
-5. **授权矩阵**：矩阵文档与测试仍在收尾（端点×身份），未全部落地。
-6. **通知端到端**：站内通知 + 邮件 + 扫描器语义的端到端断言仍在收尾。
-7. **观测性/限流/压测**：无 metrics、无限流真实请求矩阵、无 load/soak 基线。
+3. **RabbitMQ 排空演练**：工具已在一次性 broker 上验证退出码，但未在真实 Celery 生产队列上做 ready/unacked 归零与回滚演练。
+4. **MIT 功能**：桥已 opt-in 实现，未与真实 MIT worker 联调；`inpaint` 经 oracle 确认为非缺口。
+5. **授权**：单条路径已覆盖 38 例；capabilities 组合矩阵与并发竞争窗口未做。
+6. **镜像 bit-identical**：本机 buildx 0.13.1 不支持 `--rewrite-timestamp`，只验证到「层内容可复现」。
+7. **观测性/限流/压测**：Python 老版同样无 metrics 导出，属可选增强。
+8. **故障注入**：未做真实 kill -9 worker 与 30s `ShutdownTimeout` 超时丢弃路径。
 
 ## 5. 替代判据（当前口径）
 
 可以切换的**必要条件**（全部满足才谈切换）：
 
-- 全量 suite 0 failed（当前满足，但需在最终合并后再跑一次）。
-- `Migrations:Mode=check` 在**生产 dump 副本**上返回 ready，且 `dry-run` 改动行数与预期一致。
-- 授权矩阵覆盖全部写/管理端点，且与 Python oracle 对齐。
-- `/health/ready`、登录、团队/项目/文件/译文/导出、邀请/申请、密码重置在测试机 E2E 全绿。
-- 回滚路径演练：`legacy-rollback-strip.js` 后 Python 可直接读（已有 2026-11-10 证据，需在新 schema 上复跑）。
+- 全量 suite 0 failed：✅ 1149/1149（`62ba5c2`）。
+- `Migrations:Mode=check` 在**生产 dump 副本**上返回 ready，且 `dry-run` 改动行数与预期一致：⛔ 未执行（需生产副本）。
+- 授权矩阵覆盖全部写/管理端点，且与 Python oracle 对齐：✅ 38 例，3 条已知差异均有 oracle 依据。
+- `/health/ready`、登录、团队/项目/文件/译文/导出、邀请/申请、密码重置在测试机 E2E 全绿：✅ 11-10 测试机 + 本轮容器冒烟（首启/接管/闸门矩阵）。
+- 回滚路径演练：`legacy-rollback-strip.js` 后 Python 可直接读：✅ 脚本层（11-10 证据 + 本轮补 `runner:"csharp"` 行与 `migrate` 锁清理）。
 
-**尚不满足**，因此本轮结束后仍不能替换生产 Python。
+**结论**：代码侧与本地可验证范围已收敛；唯一实质阻塞是「生产 dump 副本迁移演练」与「真实 R2/SMTP 隔离验收」，两者都需要用户提供不敏感副本/独立凭据。预发环境可 GO，生产切换仍 NO-GO。
 
 ## 6. 明日/下一轮建议顺序
 
-1. 生产 dump 副本上跑迁移 `dry-run` → `check` → `apply` → Python 回滚读。
-2. 收尾授权矩阵与通知端到端，纳入全量。
-3. 真实 R2/SMTP 的隔离测试机验收（独立凭据）。
-4. RabbitMQ 排空冷切换演练（staging 栈）。
-5. 观测性最小集：结构化日志字段、`/health/ready` 依赖、失败率告警阈值。
+1. 生产 dump 副本上跑迁移 `dry-run` → `check` → `apply` → Python 回滚读（唯一剩余数据门）。
+2. 真实 R2/SMTP 的隔离测试机验收（独立凭据）；同时演练 Celery 排空 + 冷切换。
+3. 并发授权竞争窗口与 capabilities 组合矩阵（低风险补强）。
+4. 升级 buildx 到 ≥ 0.14 后复验 bit-identical ImageID（若部署需要按 digest 校验）。
+5. 观测性最小集：结构化日志字段、`/health/ready` 依赖、失败率告警阈值（可选增强）。
