@@ -57,7 +57,7 @@
 
 - GAP-1（已修）：`NormalizePrefix` 尾部多斜杠。`src/Shoreline.Api/Storage/StorageBackendFactory.cs:75-81`（修前）vs Python `models.py::normalize_sub_path`。`"/storage//"` 修前得 `"storage//"`，Python 得 `"storage/"` —— 物理 key 前缀错位。修：`Trim('/')` 后补单 `/`；测试 `NormalizePrefixMatchesPythonNormalizeSubPath`（本文件新增）。
 - GAP-2（未修）：大文件无 multipart。`src/Shoreline.Api/Storage/S3StorageBackend.cs:33` 单次 `PutObjectAsync` 全量进内存；Python `upload_fileobj` 自动分片流式（`oss.py:222-227`）。当前文件体量下 roundtrip 一致；若出现 ≥100MB 上传会有 OOM/超时风险。建议后续切 `TransferUtility` + 大文件测试，本次不动。
-- GAP-3（待决策）：source 缺失/禁用时 C# fail-closed（409/6）vs Python 回落全局 `oss`。证据：`ProjectStorageRouter.cs` vs `storage_pool/__init__.py::_resolve` + 调用方 `or oss`（`file.py:773`、`output.py:198`）。风险与建议见 §6。
+- GAP-3（**决定：保持 fail-closed**）：source 缺失/禁用时 C# fail-closed（409/6）vs Python 回落全局 `oss`。证据：`ProjectStorageRouter.cs` vs `storage_pool/__init__.py::_resolve` + 调用方 `or oss`（`file.py:773`、`output.py:198`）。理由是切到默认桶会读到 stale 副本、造成静默数据错乱；宁可 409。上线前用 `tools/check-storage-sources.js`（只读）列出受影响项目，修复或书面接受后再切换。
 - GAP-4（待决策，minor）：resample 无 oss 回退。`FileService.Serialization.cs:150` vs `file.py:788-794`。迁移窗口内旧重采样图在 C# 侧显示 `generating` 占位而非旧图。建议补一次 `oss.is_exist` 回退（读路径，低风险）。
 - GAP-5（**已修**）：签名默认有效期。Python 全场景 604800s；C# 曾为文件/头像 1h、导出 7d。现统一为 `ObjectStorage.DefaultSignedUrlValidity`（7 天），与 Python 一致。
 - GAP-6（fail-fast，有意）：阿里云 oss2 分支 Python 独有；C# 遇到 aliyun 配置直接抛（`ObjectStorage.cs:169`）。不影响 R2/自建 S3 部署；若将来要接阿里云需另立项实现 `AliyunStorageBackend`。
