@@ -53,6 +53,21 @@ mongo (external, reachable) → api (runs the schema gate) → worker → nginx 
   bundled frontend image does), restart it after replacing the api container:
   `docker compose restart <frontend>`. Otherwise the edge keeps the old
   container IP and keeps returning 502 — observed on the 2026-11-10 test host.
+- The edge must strip the `/api` prefix before proxying. Measured on 2026-11-11
+  with a throwaway `nginx:alpine` in front of the api container:
+
+  ```
+  /api/ping              -> 200 pong
+  /api/health/live       -> 200 {"status":"ok"}
+  /api/health/ready      -> 200 {"status":"ok"}
+  /api/v1/site/homepage  -> 200 {"html":"",...}
+  /ping                  -> 200 frontend-static   (never reaches the api)
+  /v1/site/homepage      -> 200 frontend-static   (same)
+  ```
+
+  Without the `/api` segment the request falls through to the SPA fallback, so
+  a misconfigured edge looks like "the api 404s on a valid path" rather than a
+  proxy error.
 
 Rolling update: start the new worker, then the new api, move nginx upstream,
 then stop the old pair. Never run old + new workers against the same

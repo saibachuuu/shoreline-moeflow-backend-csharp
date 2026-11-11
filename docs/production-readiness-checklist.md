@@ -38,7 +38,7 @@
 | health / readiness / 配置校验 | 已验证（容器实测） | 一次性栈上四种组合：`check` + 空库 → 503 `{"status":"migrations-pending","pending":["0000"…"0009"]}`；同库 `apply` → 200；已迁移后再 `check` → 200；`Migrations__Enabled=false`（worker 角色）→ 200。`/health/live` 恒 200。反代形状仍只靠 11-10 测试机证据 |
 | 日志 / metrics / 告警 | 可选增强（非 parity 阻塞） | Python 老版同样无 metrics 导出（`app/**/*.py` 无 prometheus/statsd 匹配）；runbook 已有阈值表与排查路径。接入监控属运维增强，不构成替换阻塞 |
 | 备份 / 副本恢复 / 恢复后的业务 smoke | 已验证（测试机） | 11-10：`mongodump --gzip --archive` 158 文档，恢复到 `moeflow_restore` 后登录/团队/成员/项目/文件/术语库均 200；生产规模计时未做 |
-| TLS / 反代 / trusted proxy | 未验证 | 不读生产 env/凭证；需 disposable 测试栈验收 |
+| TLS / 反代 / trusted proxy | 部分验证 | 一次性 `nginx:alpine` + api：`/api/ping`、`/api/health/live`、`/api/health/ready`、`/api/v1/site/homepage` 全 200；不带 `/api` 的 `/ping`、`/v1/site/homepage` 落到前端 fallback，证明前缀必需（`docs/production-deploy-runbook.md` §1）。TLS 证书与真实前端镜像未验 |
 | 资源限制 / graceful stop / rollback | 部分验证 | `compose.prod.example.yml` 有 `mem_limit 512m`、`stop_grace_period 40s`、`Jobs:WorkerEnabled` 开关与 shutdown 测试（`cc1ae8c`）；未做真实 SIGTERM 下 lease reclaim 演练 |
 | 测试机负载 / 长稳 / 内存比较 | 未验证 | 无等负载基准 |
 | 密钥与依赖安全 | 未验证 | 依赖扫描非完整安全结论；`RabbitMq:Url` 含明文密码需 secret 管理；禁止读取真实密钥 |
