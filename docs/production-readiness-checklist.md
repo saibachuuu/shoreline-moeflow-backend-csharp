@@ -1,6 +1,6 @@
 # 生产替换硬门槛检查表
 
-日期：2026-11-11（深夜更新）。C# main `96eef2a`（本轮 13 个分支全部 `--no-ff` 合并）；Python 参考 `be0b717`。
+日期：2026-11-11（深夜更新）。C# main `d841a92`（本轮 14 个分支全部 `--no-ff` 合并）；Python 参考 `be0b717`。
 本轮增量、分支 hash 与证据：[readiness-20261111.md](readiness-20261111.md)。迁移逐字段对拍：[migration-parity.md](migration-parity.md)。存储契约：[storage-contract.md](storage-contract.md)。可选模块：[module-parity.md](module-parity.md)。通知：[notification-contract.md](notification-contract.md)。
 
 **发布结论：仍然阻塞，不能替换生产 Python。**
@@ -30,7 +30,7 @@
 | 重试/lease/幂等/崩溃恢复 | 部分验证 | `Jobs:MaxAttempts=5`、`RetryDelay=min(300s, 5·2^n)`、优雅停机（`30ea5ea`,`e176e0d`）；邮件 `verification.sent` CAS 防重发（`30878c5`）；通知扫描 lease 语义由 `NotificationE2ETests` 14/14 锁定。**故障注入（kill -9 / 网络分区）未做** |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | `96eef2a`：`dotnet build Shoreline.sln --nologo` 0/0 |
 | 最终合并后的 dotnet build 0/0 | 已验证 | 同上（本轮每次合并后均复跑） |
-| C# 全量 suite | 已验证 | `523ebeb` 后 `tools/Run-FullSuite.ps1 -BasePort 33090`：**1028 passed / 0 failed / 0 skipped**，1m27s，Mongo 4.4.1 隔离栈。本轮之后新增 MIT/通知/迁移测试，最终合并后需再跑一次 |
+| C# 全量 suite | 已验证 | `d841a92`：`tools/Run-FullSuite.ps1 -BasePort 33091` → **1092 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；本轮首跑 1028，合并 MIT 桥/通知/迁移对拍/Authz 后 1092） |
 | Python 全量 suite | 已验证 | `836 passed, 48 subtests passed`，446 s（`.env.test`，mongomock/memory broker/local storage） |
 | 真实差分全量 suite | 部分验证 | 只读 19/19；写路径与可选模块未覆盖 |
 | 可复现镜像 / lock / digest | 部分验证 | 11-10 两次 `--no-cache` 冷构建 ImageID 相同；本轮新增 RabbitMQ.Client 后**未重建镜像/未复验 digest** |
