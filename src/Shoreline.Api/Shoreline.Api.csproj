@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Shoreline.Tests" />
     <EmbeddedResource Include="Features/system-languages.json" LogicalName="Shoreline.SystemLanguages" />
     <EmbeddedResource Include="Features/system-types.json" LogicalName="Shoreline.SystemTypes" />
     <PackageReference Include="AWSSDK.S3" Version="4.0.104.11" />

@@ -877,6 +877,8 @@ public sealed class StoragePoolTests(LocalServices services)
 internal sealed class StoragePoolRuntime : IDisposable
 {
     public MongoStore Store { get; }
+    public string MongoUri { get; }
+    public TimeProvider Clock { get; }
     public ObjectStorage Default { get; }
     public StorageBackendFactory Factory { get; } = new();
     public ProjectStorageResolverRegistry Registry { get; } = new();
@@ -889,7 +891,7 @@ internal sealed class StoragePoolRuntime : IDisposable
     public StoragePoolScanService Scan { get; }
     public ProjectStorageRouter Router { get; }
 
-    public StoragePoolRuntime(LocalServices services)
+    public StoragePoolRuntime(LocalServices services, TimeProvider? clock = null)
     {
         var baseUri = services.Configuration["Mongo:Uri"]
             ?? throw new InvalidOperationException("Mongo:Uri is required for storage-pool tests");
@@ -897,6 +899,7 @@ internal sealed class StoragePoolRuntime : IDisposable
         {
             DatabaseName = "shoreline_storage_pool_test_" + Guid.NewGuid().ToString("N"),
         }.ToMongoUrl().ToString();
+        MongoUri = isolatedUri;
         var isolatedConfiguration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Mongo:Uri"] = isolatedUri })
             .Build();
@@ -914,16 +917,16 @@ internal sealed class StoragePoolRuntime : IDisposable
                     }))
             .GetAwaiter().GetResult();
         Default = new ObjectStorage(services.Configuration);
-        var clock = TimeProvider.System;
-        Sources = new StoragePoolSourceService(Store, Factory, clock);
-        Settings = new StoragePoolSettingsService(Store, clock);
-        Locks = new StoragePoolLockService(Store, clock);
-        var labels = new ProjectLabelLock(Store, clock);
+        Clock = clock ?? TimeProvider.System;
+        Sources = new StoragePoolSourceService(Store, Factory, Clock);
+        Settings = new StoragePoolSettingsService(Store, Clock);
+        Locks = new StoragePoolLockService(Store, Clock);
+        var labels = new ProjectLabelLock(Store, Clock);
         Engine = new StoragePoolTransferEngine(Store, Factory, Default, labels, Locks,
-            services.Configuration, clock);
+            services.Configuration, Clock);
         Transfers = new StoragePoolTransferService(Store, Engine);
         Projects = new StoragePoolProjectService(Store, Sources, Engine, Transfers);
-        Scan = new StoragePoolScanService(Store, Settings, Engine, Transfers, clock);
+        Scan = new StoragePoolScanService(Store, Settings, Engine, Transfers, Clock);
         Router = new ProjectStorageRouter(Default, Factory, Registry);
     }
 
