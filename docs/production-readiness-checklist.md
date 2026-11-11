@@ -35,7 +35,7 @@
 | 真实差分全量 suite | 部分验证 | 只读 19/19；写路径与可选模块未覆盖 |
 | 可复现镜像 / lock / digest | 已验证（层内容） | 两次 `--no-cache` 冷构建：19 个层的 Layer ID、大小（497130313 bytes）、`CreatedBy` 全部一致；ImageID 因 image config 的 `created` 时间戳不同而不相等（Docker 默认行为），需要 bit-identical 时用 buildx `--rewrite-timestamp`（需 ≥ 0.14；本机 0.13.1 不支持该 flag，已实测报错）。另有空库 `Migrations:Mode=apply` 首启冒烟与「Python 库已有同名索引」接管冒烟，均 `/ping`、`/health/live`、`/health/ready` 200。见 `docs/image-reproducibility.md`（`b4f77f9`, `bacd343`） |
 | 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | UID 1654；bind mount 需 `chown -R 1654:1654 storage`，否则首传 500；已写入 runbook §0 第 7 条（`16a6fab`） |
-| health / readiness / 配置校验 | 部分验证 | `/health/live` 200、`/health/ready` 200；迁移闸门 503 `migrations-pending` 已实现并有测试；反代/部署形状未验收 |
+| health / readiness / 配置校验 | 已验证（容器实测） | 一次性栈上四种组合：`check` + 空库 → 503 `{"status":"migrations-pending","pending":["0000"…"0009"]}`；同库 `apply` → 200；已迁移后再 `check` → 200；`Migrations__Enabled=false`（worker 角色）→ 200。`/health/live` 恒 200。反代形状仍只靠 11-10 测试机证据 |
 | 日志 / metrics / 告警 | 可选增强（非 parity 阻塞） | Python 老版同样无 metrics 导出（`app/**/*.py` 无 prometheus/statsd 匹配）；runbook 已有阈值表与排查路径。接入监控属运维增强，不构成替换阻塞 |
 | 备份 / 副本恢复 / 恢复后的业务 smoke | 已验证（测试机） | 11-10：`mongodump --gzip --archive` 158 文档，恢复到 `moeflow_restore` 后登录/团队/成员/项目/文件/术语库均 200；生产规模计时未做 |
 | TLS / 反代 / trusted proxy | 未验证 | 不读生产 env/凭证；需 disposable 测试栈验收 |
