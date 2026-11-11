@@ -145,7 +145,11 @@ Python `PROJECT_TAG_PERMISSIONS / TEAM_BASE_PERMISSIONS` 逐项核对一致）�
 | POST /v1/projects/{id}/snapshots/{id}/restore | 仅 manager | PP（能建不能恢）/S | 同上 |
 | POST /v1/projects/{id}/label-clear | manager/proofreader | PT/S | 同上 |
 | GET/POST /v1/projects/{id}/label-merge | GET: manager/proofreader/output；POST: manager 或 (proofreader&check&add) | PT/S | 同上 |
-| POST /v1/projects/{id}/label-recover | manager/proofreader/output（待确认 L-2） | 无权限者 | 同上 |
+| POST /v1/projects/{id}/label-recover | 仅 manager | PP/PT/S | 同上（L-2 已关闭：`label_snapshot.py:180` 按 `restore` 门） |
+
+顺序：label 写入在 `label_revision>0` 时须带 `X-Label-Revision`，revision 守卫先于
+capabilities 门（Python `label_lock.py:345-365`，两端一致；revision 为 0 或已带正确
+版本号时守卫通过，无权限者仍得 400/103）。
 
 ## 7. 输出（Outputs）
 
@@ -229,7 +233,8 @@ team `member` 只有 ACCESS，连 term-bank 列表都不可见。
 - P-3：hard-delete 是否仅限外部成员（Python `:859` 条件）。
 - F-1：已关闭（见 G-2）：快照 `team_access` 使 team 兜底两端等价。
 - L-1：tips 创建的 owner 判定细节（`tip.py`）。
-- L-2：label-recover 的 capabilities 组合。
+- L-2：已关闭：label-recover 按 `restore`（仅 manager）门（`label_snapshot.py:176-182`），
+  `AuthzTailGateTests.LabelClear_ProofreadVsFullGates_RecoverRequiresManager` 按此断言。
 - I-1：邀请 DELETE 是否允许受邀人自删。
 - A-1：申请 DELETE 是否允许 manager 删除。
 - M-1：`GET /v1/admin/languages`（或语言目录管理路由）是否存在及权限。
@@ -245,6 +250,7 @@ team `member` 只有 ACCESS，连 term-bank 列表都不可见。
 | `AuthzWriteGateTests.cs` | §4 批量成员变更/转让/完结、§7 团队导出 | `ProjectMemberChanges_RequireManagerForMutations`, `ProjectOwnerTransfer_RequiresOwnerOrManager`, `ProjectComplete_RequiresCompletePermission`, `TeamOutputs_RequireTeamManagement`, `BannedIdentity_WritesAreRejectedBeforeValidation` |
 | `AuthzMemberFileGateTests.cs` | §4 bind/merge/hard-delete；§5 文件改名/移动/删除；§7 输出创建 | `ProjectMemberBind_RequiresManager`, `ProjectMemberMerge_RequiresManager`, `ProjectMemberHardDelete_RequiresOwnerOrTeamCreator`, `FileRenameMoveDelete_RequireFilePermissions`, `ProjectOutputsPost_RequiresOutputPermission` |
 | `AuthzJoinAdminGateTests.cs` | §8 邀请、§9 申请、§11 terms、§10 管理员 | `ProjectInvitations_MutationGates`, `TeamInvitations_ListAndCreateGates`, `ProjectApplications_FlowGates`, `ProjectApplications_DeleteOnlyByApplicant`, `TeamApplications_ListRequiresCheckUser`, `Terms_MutationGates`, `AdminEndpoints_RequireSiteAdmin` |
+| `AuthzTailGateTests.cs` | §8 PUT 邀请角色层级、§6 快照恢复/合并/clear/recover 门、§10 admin-status 配置 owner 门 | `InvitationsPut_TeamRoleHierarchy_OwnerRaises_AdminCannotRaisePeer_TranslatorDenied`, `InvitationsPut_ProjectTagsRequireInviteUser`, `Snapshots_RestoreRequiresManager_MergeRequiresProofreadTriple`, `LabelClear_ProofreadVsFullGates_RecoverRequiresManager`, `AdminStatus_OnlyConfiguredOwnerMayGrant_BannedOwnerDenied` |
 
 ## 15. 已知差异（Known differences — C# 现行行为，测试按此断言）
 
