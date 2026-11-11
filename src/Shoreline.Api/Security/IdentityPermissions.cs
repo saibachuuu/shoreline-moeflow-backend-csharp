@@ -30,9 +30,13 @@ public sealed record PermissionSnapshot(string? ProjectMemberId, string? UserId,
 public sealed partial class IdentityPermissions(MongoStore store, TimeProvider clock)
 {
     private const string ProjectNames = "ACCESS CHANGE COMPLETE_PROJECT ADD_FILE MOVE_FILE RENAME_FILE DELETE_FILE OUTPUT_TRA ADD_LABEL MOVE_LABEL DELETE_LABEL ADD_TRA DELETE_TRA PROOFREAD_TRA CHECK_TRA ADD_TARGET CHANGE_TARGET DELETE_TARGET CHECK_USER INVITE_USER CHANGE_USER_REMARK CHANGE_USER_ROLE DELETE_USER MANAGE_MEMBERS";
-    // AUTO_BECOME_PROJECT_ADMIN is part of Python's creator/admin team roles
-    // (app/models/team.py:146,177). It is required by POST /v1/teams/<id>/outputs.
-    private const string TeamNames = "ACCESS DELETE CHANGE AUTO_BECOME_PROJECT_ADMIN CREATE_ROLE DELETE_ROLE CHECK_USER INVITE_USER DELETE_USER CHANGE_USER_ROLE CHANGE_USER_REMARK CREATE_PROJECT CREATE_PROJECT_SET CHANGE_PROJECT_SET DELETE_PROJECT_SET USE_OCR_QUOTA USE_MT_QUOTA INSIGHT ACCESS_TERM_BANK CREATE_TERM_BANK CHANGE_TERM_BANK DELETE_TERM_BANK CREATE_TERM CHANGE_TERM DELETE_TERM";
+    // app/models/identity_tag.py TEAM_BASE_PERMISSIONS (the authority used by
+    // identity_permission.team_snapshot) deliberately omits
+    // team:AUTO_BECOME_PROJECT_ADMIN, so the legacy team role documents that
+    // still list 1010 grant nothing today. Keep it out or insight responses
+    // grow an `outputs` key and team outputs become reachable, diverging from
+    // Python.
+    private const string TeamNames = "ACCESS DELETE CHANGE CREATE_ROLE DELETE_ROLE CHECK_USER INVITE_USER DELETE_USER CHANGE_USER_ROLE CHANGE_USER_REMARK CREATE_PROJECT CREATE_PROJECT_SET CHANGE_PROJECT_SET DELETE_PROJECT_SET USE_OCR_QUOTA USE_MT_QUOTA INSIGHT ACCESS_TERM_BANK CREATE_TERM_BANK CHANGE_TERM_BANK DELETE_TERM_BANK CREATE_TERM CHANGE_TERM DELETE_TERM";
     private const string FileNames = "ACCESS ADD_FILE MOVE_FILE RENAME_FILE DELETE_FILE";
     private const string TranslationNames = "OUTPUT_TRA ADD_LABEL MOVE_LABEL DELETE_LABEL ADD_TRA DELETE_TRA";
     private static string[] Codes(string prefix, string names) => names.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(n => prefix + n).ToArray();
@@ -54,6 +58,11 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
         ["admin"] = Codes("team:", TeamNames).Where(p => p != "team:DELETE").ToArray(),
         ["member"] = ["team:ACCESS"]
     }.ToFrozenDictionary(StringComparer.Ordinal);
+    // AUTO_BECOME_PROJECT_ADMIN drives permission checks but is deliberately
+    // absent from the public tag policy payload (app/models/identity_tag.py
+    // TEAM_BASE_PERMISSIONS, lines 182-209).
+    private static readonly FrozenSet<string> HiddenTagPermissions = new[] { "team:AUTO_BECOME_PROJECT_ADMIN" }
+        .ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> NormalOnly = Codes("project:",
         "ADD_FILE MOVE_FILE RENAME_FILE DELETE_FILE OUTPUT_TRA ADD_LABEL MOVE_LABEL DELETE_LABEL ADD_TRA DELETE_TRA PROOFREAD_TRA CHECK_TRA ADD_TARGET CHANGE_TARGET DELETE_TARGET").ToFrozenSet(StringComparer.Ordinal);
 
@@ -65,7 +74,7 @@ public sealed partial class IdentityPermissions(MongoStore store, TimeProvider c
             {
                 ["name"] = p.Key,
                 ["code"] = p.Key,
-                ["permissions"] = new BsonArray(p.Value.Order(StringComparer.Ordinal)),
+                ["permissions"] = new BsonArray(p.Value.Where(permission => !HiddenTagPermissions.Contains(permission)).Order(StringComparer.Ordinal)),
                 ["assignable"] = scope == "project" && p.Key != "creator",
                 ["source"] = "site"
             })));
