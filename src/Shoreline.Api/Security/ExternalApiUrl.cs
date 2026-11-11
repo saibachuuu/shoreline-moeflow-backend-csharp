@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Configuration;
 
 namespace Shoreline.Api.Security;
 
@@ -12,6 +13,24 @@ public static class ExternalApiUrl
 
     // This validates a stored URL only. Outbound clients must also validate DNS
     // results at connection time and must not forward credentials on redirects.
+    // Reads the archive provider allowlist: appsettings
+    // <c>Archive:AllowedHosts</c> wins; otherwise the legacy
+    // <c>ARCHIVE_PROVIDER_API_ALLOWED_HOSTS</c> env var (comma-separated) is
+    // honored, mirroring Python's provider_api_allowed_hosts(). Entry
+    // normalization matches normalize_external_api_url(): strip, lowercase,
+    // drop trailing dots; empties are ignored at match time.
+    public static IReadOnlyList<string> ReadArchiveAllowedHosts(IConfiguration configuration)
+    {
+        var configured = configuration.GetSection("Archive:AllowedHosts").Get<string[]>();
+        if (configured is { Length: > 0 }) return configured;
+        var legacy = configuration["ARCHIVE_PROVIDER_API_ALLOWED_HOSTS"];
+        if (string.IsNullOrWhiteSpace(legacy)) return Array.Empty<string>();
+        return legacy.Split(',')
+            .Select(item => item.Trim().ToLowerInvariant().TrimEnd('.'))
+            .Where(item => item.Length != 0)
+            .ToArray();
+    }
+
     public static string Normalize(string value, IReadOnlyList<string> allowedHosts, bool requireAllowlist = true)
     {
         value = value.Trim();
