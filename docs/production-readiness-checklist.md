@@ -36,7 +36,7 @@
 | 可复现镜像 / lock / digest | 部分验证 | 11-10 两次 `--no-cache` 冷构建 ImageID 相同；本轮新增 RabbitMQ.Client 后**未重建镜像/未复验 digest** |
 | 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | UID 1654；bind mount 需 `chown -R 1654:1654 storage`，否则首传 500；已写入 runbook §0 第 7 条（`16a6fab`） |
 | health / readiness / 配置校验 | 部分验证 | `/health/live` 200、`/health/ready` 200；迁移闸门 503 `migrations-pending` 已实现并有测试；反代/部署形状未验收 |
-| 日志 / metrics / 告警 | 未验证 | 无 metrics 导出、无告警阈值落地 |
+| 日志 / metrics / 告警 | 可选增强（非 parity 阻塞） | Python 老版同样无 metrics 导出（`app/**/*.py` 无 prometheus/statsd 匹配）；runbook 已有阈值表与排查路径。接入监控属运维增强，不构成替换阻塞 |
 | 备份 / 副本恢复 / 恢复后的业务 smoke | 已验证（测试机） | 11-10：`mongodump --gzip --archive` 158 文档，恢复到 `moeflow_restore` 后登录/团队/成员/项目/文件/术语库均 200；生产规模计时未做 |
 | TLS / 反代 / trusted proxy | 未验证 | 不读生产 env/凭证；需 disposable 测试栈验收 |
 | 资源限制 / graceful stop / rollback | 部分验证 | `compose.prod.example.yml` 有 `mem_limit 512m`、`stop_grace_period 40s`、`Jobs:WorkerEnabled` 开关与 shutdown 测试（`cc1ae8c`）；未做真实 SIGTERM 下 lease reclaim 演练 |
@@ -54,7 +54,7 @@
 2. **授权矩阵仍缺写/管理端点的系统覆盖**：读门 4 例 + 写门 5 例已固化，项目成员/邀请/申请/文件标签/团队管理 × 身份的扩展用例在 `agents/r3-authz-extend-20261111` 收尾中。
 3. **真实 R2 / SMTP+TLS 未验收**（按约定不读生产凭证）；通知邮件 TLS 策略已与 Python 对齐并新增显式 `Mail:SecureSocketOptions` opt-out（`4d87c2e`），但 TLS 证书/中继认证仍只能在真实 SMTP 上验证。
 4. **RabbitMQ 排空演练未做**；MIT 桥未与真实 worker 联调。
-5. **镜像 digest/可复现构建**在本轮新增依赖后未复验；观测性、限流/XFF、load/soak 仍空白。
+5. **镜像 digest/可复现构建**在本轮新增依赖后未复验；限流/XFF、load/soak 仍空白（Python 老版亦无压测基线，属同等水平）。
 
 ## 测试机生产形状部署（2026-11-10，历史证据）
 

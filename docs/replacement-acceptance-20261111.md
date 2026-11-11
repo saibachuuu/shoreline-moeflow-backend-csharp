@@ -42,25 +42,26 @@
 | 健康检查 | `/ping`、`/health/live`、`/health/ready` 语义明确，ready 受 Mongo 与迁移门控 | ✅ | `DeployHealthTests` |
 | 切换前排队排空 | Celery 队列 `ready`/`unacked` 均为 0 才停 worker | ✅ 工具就绪 | `tools/celery-drain-check.sh` |
 | 切换方案 | 排空冷切换（方案 A）步骤可执行 | ✅ | `docs/celery-cutover-analysis.md` |
-| 观察指标 | `csharp_job` 深度/失败率、邮件投递、5xx 率 | 🟡 指标定义已有，生产监控接入未做 | runbook 告警阈值表 |
+| 观察指标 | `csharp_job` 深度/失败率、邮件投递、5xx 率 | ⚪ 可选增强 | Python 老版同样没有 metrics/prometheus 导出（`app/**/*.py` 无匹配），因此**不构成 parity 阻塞**；runbook 已给出阈值表与排查路径，接入监控属运维增强 |
 
 ## 5. D 组：残余风险（需产品/运维显式接受）
 
 1. **真实 R2/SMTP 未验证**：签名 URL、multipart、CDN 直出只在 S3Mock/Mailpit 上验证；切换前必须在预发用真实桶与真实 SMTP 跑一遍上传/下载/发信。
-2. **无压测**：并发上传、批量成员变更、通知风暴未做容量验证。
+2. **无压测**：并发上传、批量成员变更、通知风暴未做容量验证（Python 老版同样没有压测基线，属"同等水平"而非回归）。
 3. **MIT 桥**：报文格式来自实测采样；publisher 无 confirm、`celery_taskmeta` 无 TTL、broker 密码在配置中明文（应交由 secret 管理）。
 4. **通知 TLS**：策略已与 Python 对齐（含 `Mail:SecureSocketOptions` 显式 opt-out），但真实 SMTP 服务器（TLS 证书、中继认证）仍未实测。
 5. **多实例 worker**：lease 竞争与 SIGTERM 回收只在测试环境验证过一次，生产需单实例起步。
 6. **迁移的单向性**：C# 写 int64 + 自有 checksum，Python 无法识别；回滚必须走 strip 脚本。
 
-## 6. GO / NO-GO 结论（2026-11-11 19:48）
+## 6. GO / NO-GO 结论（2026-11-11 19:55）
 
-- A 组：**全部满足**（授权 30/30、MIT `inpaint` 确认为非缺口）。
+- A 组：**全部满足**（授权 30/30、MIT `inpaint` 确认为非缺口、通知 TLS 对齐 legacy）。
 - B 组：**满足**。
-- C 组：部署/健康/排空工具满足；生产监控接入未做 → **部分满足**。
-- D 组：需显式接受，尤其第 1、2 项。
+- C 组：**满足**（部署/健康/排空工具齐备；metrics 与压测经核查 Python 老版同样缺失，属可选增强）。
+- D 组：需显式接受；其中 D1（真实 R2/SMTP）是唯一必须在切换前实测的环境项。
 
-**当前判定：NO-GO（预发可开始验收，生产切换需补完 D1/D2，并接入 C 组观测指标）。**
+**当前判定：预发验收 GO —— 可以开始在预发环境用真实 R2/SMTP 做一次完整 walkthrough（上传/下载/发信/迁移/回滚）。**
+**生产切换条件：该 walkthrough 通过 + D 组风险被显式接受；不接受时回到 NO-GO。**
 
 完成 D1/D2 后，以本表逐项打勾作为 GO 依据；任何一项回退即回到 NO-GO。
 
