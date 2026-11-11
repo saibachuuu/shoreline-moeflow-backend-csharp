@@ -7,6 +7,14 @@ public sealed class JobWorker(JobQueue queue, IEnumerable<IJobHandler> handlers,
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Operator kill switch for split API/worker deployments: API-only
+        // instances set Jobs:WorkerEnabled=false so HTTP stays up while a
+        // dedicated worker instance drains the Mongo queue. Enqueueing is
+        // unaffected (JobQueue stays registered); only this consumer stops.
+        // A missing or unparsable value keeps the historical default: enabled.
+        if (bool.TryParse(configuration["Jobs:WorkerEnabled"], out var workerEnabled) && !workerEnabled)
+            return Task.CompletedTask;
+
         var registry = handlers.ToDictionary(h => h.Kind);
         var concurrency = Math.Clamp(configuration.GetValue("Jobs:Concurrency", 1), 1, 8);
         return Task.WhenAll(Enumerable.Range(0, concurrency).Select(_ => RunAsync(registry, stoppingToken)));

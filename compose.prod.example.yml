@@ -1,0 +1,95 @@
+# Production deployment shape for the C# backend (single-process image, split roles).
+#
+# This is an EXAMPLE, not a live stack: MongoDB and RabbitMQ are external /
+# managed services here (placeholders below). Do NOT add local mongo/rabbitmq
+# services to this file; production data lives outside compose.
+#
+# Roles:
+#   api    - HTTP only.  Jobs:WorkerEnabled=false, no job consumption.
+#   worker - queue drain. Jobs:WorkerEnabled=true, no published ports.
+# Run at least one api and one worker. Do NOT run two workers against the
+# same database unless you accept duplicate lease contention (Mongo-backed
+# leases make it safe but noisy); the default here is exactly one worker.
+#
+# All secrets come from the shell environment (or a .env file that is NEVER
+# committed). Every required value fails fast with a descriptive error when
+# unset, so `docker compose config` is a valid pre-deploy check.
+#
+# Image pinning: replace the floating tag with the digest recorded at deploy
+# time (see docs/production-deploy-runbook.md) for rollback-by-digest.
+
+name: ${SHORELINE_PROD_STACK_NAME:-shoreline-csharp-prod}
+
+services:
+  api:
+    image: ${SHORELINE_IMAGE:?set SHORELINE_IMAGE to the pinned C# image (e.g. registry.example.com/shoreline-csharp:<tag>@sha256:<digest>)}
+    restart: unless-stopped
+    # Behind the external nginx reverse proxy. Publish on loopback only; the
+    # proxy forwards to this port. Never expose 8080 to the public interface.
+    ports: ["127.0.0.1:${SHORELINE_API_PORT:-8080}:8080"]
+    environment:
+      Mongo__Uri: ${MONGO_URI:?set MONGO_URI to the external MongoDB connection string (mongodb://user:pass@host:27017/moeflow?authSource=admin)}
+      Auth__Secret: ${AUTH_SECRET:?set AUTH_SECRET (min 32 chars)}
+      Auth__AdminEmail: ${AUTH_ADMIN_EMAIL:?set AUTH_ADMIN_EMAIL}
+      Bootstrap__Enabled: ${BOOTSTRAP_ENABLED:-false}
+      Auth__AdminInitialPassword: ${AUTH_ADMIN_INITIAL_PASSWORD:-}
+      Storage__Endpoint: ${STORAGE_ENDPOINT:?set STORAGE_ENDPOINT (e.g. https://<accountid>.r2.cloudflarestorage.com)}
+      Storage__Bucket: ${STORAGE_BUCKET:?set STORAGE_BUCKET}
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:?set STORAGE_ACCESS_KEY}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:?set STORAGE_SECRET_KEY}
+      Storage__ForcePathStyle: ${STORAGE_FORCE_PATH_STYLE:-false}
+      Mail__Enabled: ${MAIL_ENABLED:-true}
+      Mail__Host: ${MAIL_HOST:?set MAIL_HOST}
+      Mail__Port: ${MAIL_PORT:-587}
+      Mail__StartTls: ${MAIL_START_TLS:-true}
+      Mail__From: ${MAIL_FROM:?set MAIL_FROM}
+      Mail__Username: ${MAIL_USERNAME:-}
+      Mail__Password: ${MAIL_PASSWORD:-}
+      Cors__Origins__0: ${CORS_ORIGIN_0:?set CORS_ORIGIN_0 to the public frontend origin}
+      Jobs__Concurrency: ${JOBS_CONCURRENCY:-2}
+      # API instances never consume the queue; the worker instance drains it.
+      Jobs__WorkerEnabled: "false"
+      Security__TrustedProxies__0: ${TRUSTED_PROXY_0:-}
+    mem_limit: 512m
+    stop_grace_period: 40s
+    depends_on:
+      - worker
+
+  worker:
+    image: ${SHORELINE_IMAGE:?set SHORELINE_IMAGE to the pinned C# image (e.g. registry.example.com/shoreline-csharp:<tag>@sha256:<digest>)}
+    restart: unless-stopped
+    # No published ports: the worker needs MongoDB + object storage + SMTP
+    # only. Keep it off the HTTP path so rolling the api never interrupts a
+    # lease renewal.
+    environment:
+      Mongo__Uri: ${MONGO_URI:?set MONGO_URI to the external MongoDB connection string (mongodb://user:pass@host:27017/moeflow?authSource=admin)}
+      Auth__Secret: ${AUTH_SECRET:?set AUTH_SECRET (min 32 chars)}
+      Auth__AdminEmail: ${AUTH_ADMIN_EMAIL:?set AUTH_ADMIN_EMAIL}
+      Bootstrap__Enabled: "false"
+      Storage__Endpoint: ${STORAGE_ENDPOINT:?set STORAGE_ENDPOINT (e.g. https://<accountid>.r2.cloudflarestorage.com)}
+      Storage__Bucket: ${STORAGE_BUCKET:?set STORAGE_BUCKET}
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:?set STORAGE_ACCESS_KEY}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:?set STORAGE_SECRET_KEY}
+      Storage__ForcePathStyle: ${STORAGE_FORCE_PATH_STYLE:-false}
+      Mail__Enabled: ${MAIL_ENABLED:-true}
+      Mail__Host: ${MAIL_HOST:?set MAIL_HOST}
+      Mail__Port: ${MAIL_PORT:-587}
+      Mail__StartTls: ${MAIL_START_TLS:-true}
+      Mail__From: ${MAIL_FROM:?set MAIL_FROM}
+      Mail__Username: ${MAIL_USERNAME:-}
+      Mail__Password: ${MAIL_PASSWORD:-}
+      Jobs__Concurrency: ${JOBS_CONCURRENCY:-2}
+      # Only the worker consumes the Mongo-backed job queue.
+      Jobs__WorkerEnabled: "true"
+    mem_limit: 512m
+    # The graceful-shutdown budget is 30s in-process (HostOptions); give the
+    # runtime 10s extra so SIGTERM always finishes inside the limit and an
+    # in-flight job keeps its lease instead of being reclaimed mid-write.
+    stop_grace_period: 40s
+
+  # RabbitMQ is the LEGACY Python/Celery broker. It is not consumed by the C#
+  # backend; it exists here only as a reminder for the Celery cutover drain
+  # check (see docs/production-deploy-runbook.md: stop beat, drain queues,
+  # confirm no in-flight, then cut traffic). Point the check at the real
+  # management endpoint; no client container is needed:
+  #   RABBITMQ_MANAGEMENT_URL=https://rabbitmq.internal:15672/api/queues
