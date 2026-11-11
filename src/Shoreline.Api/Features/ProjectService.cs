@@ -539,14 +539,33 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         var source = await LanguageAsync(project["ol"].AsObjectId, ct);
         object? role = null;
         var autoAdmin = false;
-        if (actor is not null && snapshot.SourceTags.Count != 0)
+        if (actor is not null)
         {
-            role = types.RoleView("project", await types.SystemRoleAsync("project", snapshot.SourceTags[0], ct), chinese);
-            var hasRelation = await MemberRows.Find(new BsonDocument
+            var relation = await MemberRows.Find(new BsonDocument
             {
                 ["project"] = project["_id"], ["user"] = actor["_id"], ["status"] = new BsonDocument("$ne", "removed")
-            }).AnyAsync(ct);
-            autoAdmin = !hasRelation;
+            }).FirstOrDefaultAsync(ct);
+            var tags = relation?.GetValue("tags", new BsonArray()) is BsonArray tagArray ? tagArray : new BsonArray();
+            if (tags.Count > 0)
+            {
+                role = types.RoleView("project", await types.SystemRoleAsync("project", tags[0].AsString, ct), chinese);
+            }
+            else
+            {
+                // app/models/user.py:764-776 falls back to the team relation's
+                // convert_to_project_role(), which returns the project admin
+                // role for team creators/admins (AUTO_BECOME_PROJECT_ADMIN).
+                var teamMember = await store.Collection("team_member").Find(new BsonDocument
+                {
+                    ["team"] = project["t"], ["user"] = actor["_id"], ["status"] = "active"
+                }).FirstOrDefaultAsync(ct);
+                var baseTag = teamMember?.Text("base_tag");
+                if (baseTag is "creator" or "admin")
+                {
+                    role = types.RoleView("project", await types.SystemRoleAsync("project", "admin", ct), chinese);
+                    autoAdmin = relation is null;
+                }
+            }
         }
         var status = project.Integer("st", 0);
         var statusName = status switch { 0 => "NORMAL", 1 => "CLEARED", 5 => "COMPLETED", _ => null };
