@@ -10,7 +10,7 @@
 | 硬门槛 | 状态 | 证据 / 阻塞 / 仍需执行 |
 |---|---|---|
 | 核心有效路由注册 | 已验证（静态 + 测试机抽查） | 静态 160/160；`/urls`、`/error`、`/warning`、`/docs/<path>` 在测试机容器内经 nginx 返回 200/500/500/404；`/ping`、`/health/*`、`/v1/site/homepage` 均 200 |
-| 全核心路由 C# HTTP 行为与权限 | 部分验证 | 静态 160/160；全量 suite 1101/1101 已覆盖大量 HTTP 行为；端点×身份授权矩阵已覆盖读门 4 例 + 写门 5 例（`AuthzReadGateTests`/`AuthzWriteGateTests`），项目成员/邀请/申请/团队管理的扩展用例在 `agents/r3-authz-extend-20261111` 收尾中 |
+| 全核心路由 C# HTTP 行为与权限 | 已验证 | 静态 160/160；全量 suite 1129/1129；端点×身份授权矩阵 30/30（矩阵 9 + 读门 4 + 写门 5 + 扩展 12），计划外差异仅 3 条且均有 oracle 依据 |
 | archive_import HTTP | 部分验证 | 已装配；legacy `ARCHIVE_MAX_*` 按 MB 换算（`1933b9a`）；`ARCHIVE_PROVIDER_API_ALLOWED_HOSTS` allowlist（`94a06a8`）；`PublicNetworkGuard` + `UseProxy=false`（`8efc6c7`）。**Python oracle 差分未做** |
 | partner_search HTTP | 部分验证 | 已有 HTTP 测试；写/索引排序与 Python oracle 未逐条对拍 |
 | storage_pool HTTP | 部分验证 | 已装配；每日扫描 `lsd` 原子 claim（`06c1d6a`）；`StoragePool:WorkerEnabled` 可关；跨天/真实 OSS 未验 |
@@ -30,7 +30,7 @@
 | 重试/lease/幂等/崩溃恢复 | 部分验证 | `Jobs:MaxAttempts=5`、`RetryDelay=min(300s, 5·2^n)`、优雅停机（`30ea5ea`,`e176e0d`）；邮件 `verification.sent` CAS 防重发（`30878c5`）；通知扫描 lease 语义由 `NotificationE2ETests` 14/14 锁定。**故障注入（kill -9 / 网络分区）未做** |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | `96eef2a`：`dotnet build Shoreline.sln --nologo` 0/0 |
 | 最终合并后的 dotnet build 0/0 | 已验证 | 同上（本轮每次合并后均复跑） |
-| C# 全量 suite | 已验证 | `ba61b1d`：`tools/Run-FullSuite.ps1 -BasePort 33100` → **1101 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；本轮首跑 1028，合并 MIT 桥/通知/迁移对拍/Authz 后 1092，补读/写门 9 例后 1101） |
+| C# 全量 suite | 已验证 | `ae56433`：`tools/Run-FullSuite.ps1 -BasePort 33110` → **1129 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；1028 → 1092 → 1101 → 1129） |
 | Python 全量 suite | 已验证 | `836 passed, 48 subtests passed`，446 s（`.env.test`，mongomock/memory broker/local storage） |
 | 真实差分全量 suite | 部分验证 | 只读 19/19；写路径与可选模块未覆盖 |
 | 可复现镜像 / lock / digest | 部分验证 | 11-10 两次 `--no-cache` 冷构建 ImageID 相同；本轮新增 RabbitMQ.Client 后**未重建镜像/未复验 digest** |
@@ -42,7 +42,7 @@
 | 资源限制 / graceful stop / rollback | 部分验证 | `compose.prod.example.yml` 有 `mem_limit 512m`、`stop_grace_period 40s`、`Jobs:WorkerEnabled` 开关与 shutdown 测试（`cc1ae8c`）；未做真实 SIGTERM 下 lease reclaim 演练 |
 | 测试机负载 / 长稳 / 内存比较 | 未验证 | 无等负载基准 |
 | 密钥与依赖安全 | 未验证 | 依赖扫描非完整安全结论；`RabbitMq:Url` 含明文密码需 secret 管理；禁止读取真实密钥 |
-| 认证 / 越权 / 授权竞争窗口 | 部分验证 | 读门 4 例 + 写门 5 例已固化（转账/完成/团队输出/成员变更/banned 写）；`admin=false` 不绕过业务权限、项目 `st!=0` 时 normal-only 权限失效、批量端点 `failed.error_code` 形状已文档化 |
+| 认证 / 越权 / 授权竞争窗口 | 已验证（授权）/ 部分验证（竞争窗口） | 授权矩阵 30/30（矩阵 9 + 读门 4 + 写门 5 + 扩展 12）；3 条已知差异均有 oracle 依据。`admin=false` 不绕过业务权限、项目 `st!=0` 时 normal-only 权限失效、批量端点 `failed.error_code` 形状已文档化。并发租约/竞争窗口仍只有单次验证 |
 | SSRF / allowlist / DNS / redirects | 部分验证 | `PublicNetworkGuard`（29 测试）+ Ziteng 注册 client（5）+ archive transport；`UseProxy=false` 防环境代理绕过（`8efc6c7`）。其余出站路径（邮件/存储 SDK）未系统覆盖 |
 | 上传限制 / 内存放大 | 部分验证 | >16 MB 走 multipart 分片，消除全量进内存；1 GiB 边界与并发资源未验 |
 | 真实 HTTP 限流 / XFF 防伪造 | 未验证 | limiter/routing 顺序、反代身份与 client_key 未真实请求验证 |
@@ -52,7 +52,7 @@
 
 1. **生产 dump 副本上的迁移 dry-run/check/apply 未执行**；这是数据正确性的最后一道门（语义对拍已完成）。
 2. **授权矩阵仍缺写/管理端点的系统覆盖**：读门 4 例 + 写门 5 例已固化，项目成员/邀请/申请/文件标签/团队管理 × 身份的扩展用例在 `agents/r3-authz-extend-20261111` 收尾中。
-3. **真实 R2 / SMTP+TLS 未验收**（按约定不读生产凭证）；邮件 STARTTLS 强制策略与一次性 Mailpit 不兼容，真实投递计数需真实/带 TLS 的 SMTP。
+3. **真实 R2 / SMTP+TLS 未验收**（按约定不读生产凭证）；通知邮件 TLS 策略已与 Python 对齐并新增显式 `Mail:SecureSocketOptions` opt-out（`4d87c2e`），但 TLS 证书/中继认证仍只能在真实 SMTP 上验证。
 4. **RabbitMQ 排空演练未做**；MIT 桥未与真实 worker 联调。
 5. **镜像 digest/可复现构建**在本轮新增依赖后未复验；观测性、限流/XFF、load/soak 仍空白。
 

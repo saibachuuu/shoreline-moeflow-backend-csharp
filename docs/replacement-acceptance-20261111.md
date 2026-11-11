@@ -16,14 +16,14 @@
 | 路由覆盖 | Python `app/apis/*.py` 的每个方法在 C# 有对应端点，或显式 fail-closed 并有文档说明 | ✅ | `ARCHITECTURE-PY-BASELINE-VS-CSHARP.md` 路由覆盖表 |
 | 错误契约 | `{error,code,message[,identity_code]}` 形状与业务码一致（含批量端点 `failed.error_code` 包装） | ✅ 除已记录差异 | `docs/authz-matrix.md` §0、`docs/module-parity.md` |
 | 认证 | itsdangerous/legacy token、`Authorization` 直接放 token、会话过期语义一致 | ✅ | `Security/LegacyToken.cs` + `AuthzMatrixTests` |
-| 授权 | 读/写/管理端点 × 身份矩阵有测试；越权必须拒绝 | 🟡 读门 4 + 写门 5 已固化，扩展用例在 `agents/r3-authz-extend-20261111` | `AuthzReadGateTests`、`AuthzWriteGateTests` |
+| 授权 | 读/写/管理端点 × 身份矩阵有测试；越权必须拒绝 | ✅ 30/30（读门 4、写门 5、扩展 12 + 矩阵 9） | `AuthzMatrixTests`、`AuthzReadGateTests`、`AuthzWriteGateTests`、`AuthzMemberFileGateTests`、`AuthzJoinAdminGateTests` |
 | 集合 schema | 所有集合名/字段/索引与 Python 一致；迁移可建 | ✅ | `docs/migration-parity.md`（0004 修 7 个 parity bug） |
 | 存储 | 前缀规范化、签名 URL 7 天、CDN 直出、>16MB multipart、source 缺失 fail-closed 语义 | ✅ | `docs/storage-contract.md`、`StorageContractTests` |
 | 任务 | `csharp_job` 幂等/CAS/重试/退避/优雅停机 | ✅ | `docs/job-semantics.md` |
-| 通知 | 扫描、租赁、重试、邮件投递契约 | ✅ | `docs/notification-contract.md`、`NotificationE2ETests` |
-| MIT | `detect_text`/`ocr`/`translate` 经 bridge，或显式 fail-closed | 🟡 `inpaint` 待核实（`agents/r3-parity-gaps-20261111`） | `docs/mit-bridge-spike.md` |
+| 通知 | 扫描、租赁、重试、邮件投递契约；TLS 策略与 Python 一致或有显式 opt-out | ✅ | `docs/notification-contract.md`、`NotificationE2ETests`、`NotificationMailTlsTests` 12/12 |
+| MIT | `detect_text`/`ocr`/`translate` 经 bridge，或显式 fail-closed | ✅ `inpaint` 经 oracle 确认为非缺口（无 HTTP 入口，C# 同样拒绝） | `docs/mit-bridge-spike.md`、`MitHttpTests` |
 | 可选模块（proofread/ziteng/archive） | parity 或 fail-closed 有据 | ✅ | `docs/module-parity.md`（parity 25 / gap-fixed 5 / fail-closed 7 / missing 0） |
-| 全量测试 | 全绿，无 skip | ✅ **1101/1101**（`ba61b1d`，Mongo 4.4.1 隔离栈） | `tools/Run-FullSuite.ps1 -BasePort 33100` |
+| 全量测试 | 全绿，无 skip | ✅ **1129/1129**（`ae56433`，Mongo 4.4.1 隔离栈） | `tools/Run-FullSuite.ps1 -BasePort 33110` |
 
 ## 3. B 组：数据与回滚（必须全绿）
 
@@ -49,18 +49,18 @@
 1. **真实 R2/SMTP 未验证**：签名 URL、multipart、CDN 直出只在 S3Mock/Mailpit 上验证；切换前必须在预发用真实桶与真实 SMTP 跑一遍上传/下载/发信。
 2. **无压测**：并发上传、批量成员变更、通知风暴未做容量验证。
 3. **MIT 桥**：报文格式来自实测采样；publisher 无 confirm、`celery_taskmeta` 无 TTL、broker 密码在配置中明文（应交由 secret 管理）。
-4. **通知 STARTTLS 策略**：正在与 Python 对齐（`agents/r3-parity-gaps-20261111`），对齐前真实 SMTP 环境行为未证。
+4. **通知 TLS**：策略已与 Python 对齐（含 `Mail:SecureSocketOptions` 显式 opt-out），但真实 SMTP 服务器（TLS 证书、中继认证）仍未实测。
 5. **多实例 worker**：lease 竞争与 SIGTERM 回收只在测试环境验证过一次，生产需单实例起步。
 6. **迁移的单向性**：C# 写 int64 + 自有 checksum，Python 无法识别；回滚必须走 strip 脚本。
 
-## 6. GO / NO-GO 结论（2026-11-11 19:45）
+## 6. GO / NO-GO 结论（2026-11-11 19:48）
 
-- A 组：除"授权扩展"与"MIT inpaint"两项在收尾外，其余全绿 → **接近满足**。
+- A 组：**全部满足**（授权 30/30、MIT `inpaint` 确认为非缺口）。
 - B 组：**满足**。
 - C 组：部署/健康/排空工具满足；生产监控接入未做 → **部分满足**。
 - D 组：需显式接受，尤其第 1、2 项。
 
-**当前判定：NO-GO（预发可开始验收，生产切换需补完 D1/D2 并在预发实测）。**
+**当前判定：NO-GO（预发可开始验收，生产切换需补完 D1/D2，并接入 C 组观测指标）。**
 
 完成 D1/D2 后，以本表逐项打勾作为 GO 依据；任何一项回退即回到 NO-GO。
 

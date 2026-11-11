@@ -35,7 +35,7 @@
 
 ## 3. 测试证据
 
-- 全量（本轮合并后）：`tools/Run-FullSuite.ps1 -BasePort 33100` → **1101 passed / 0 failed / 0 skipped**，Mongo 4.4.1 隔离栈（`ba61b1d`；本轮首跑 1028，合并 MIT 桥/通知/迁移对拍/Authz 后 1092，补读/写门 9 例后 1101）。
+- 全量（本轮合并后）：`tools/Run-FullSuite.ps1 -BasePort 33110` → **1129 passed / 0 failed / 0 skipped**，Mongo 4.4.1 隔离栈（`ae56433`；1028 → 1092 → 1101 → 1129）。
 - 迁移：`MigrationsTests` 8/8；默认 `Mode=check` 在全新空库上的 503 行为有 `DeployHealthTests` 覆盖（夹具侧关闭迁移开关以免互相污染）。
 - 任务语义：`JobRetrySemantics` / `EmailTests.ReplayedJob…`（由 2 封改 1 封）全绿。
 - 存储：`StorageContract` 23/23（含 20 MB multipart roundtrip）、`Storage` 139/139。
