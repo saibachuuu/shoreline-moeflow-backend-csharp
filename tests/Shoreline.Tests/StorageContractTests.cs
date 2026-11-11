@@ -399,6 +399,36 @@ public sealed class StorageContractS3Tests(LocalServices services)
             await storage.DeleteAsync(key, CancellationToken.None);
         }
     }
+
+    [Fact]
+    public async Task LargeUploadUsesMultipartAndRoundTrips()
+    {
+        // Python switches to multipart through boto3 upload_fileobj (oss.py:222).
+        // Above the 16 MB threshold the C# path must produce identical bytes.
+        using var storage = new ObjectStorage(services.Configuration);
+        var key = "contract/multipart-" + Guid.NewGuid().ToString("N") + ".bin";
+        var bytes = new byte[20 * 1024 * 1024];
+        new Random(7).NextBytes(bytes);
+        try
+        {
+            await using (var input = new MemoryStream(bytes, writable: false))
+            {
+                await storage.PutAsync(key, input, "application/octet-stream", CancellationToken.None);
+            }
+
+            Assert.Equal(bytes.Length, await storage.SizeAsync(key, CancellationToken.None));
+            using (var download = await storage.GetAsync(key, CancellationToken.None))
+            {
+                using var buffer = new MemoryStream();
+                await download.Content.CopyToAsync(buffer);
+                Assert.Equal(bytes, buffer.ToArray());
+            }
+        }
+        finally
+        {
+            await storage.DeleteAsync(key, CancellationToken.None);
+        }
+    }
 }
 
 // Python signs every storage URL with 604800 seconds (app/services/oss.py:464,480),

@@ -1,6 +1,7 @@
 using System.Net;
 using Amazon.S3;
 using Amazon.S3.Model;
+using Amazon.S3.Transfer;
 
 namespace Shoreline.Api.Storage;
 
@@ -10,7 +11,15 @@ namespace Shoreline.Api.Storage;
 /// </summary>
 internal sealed class S3StorageBackend : IStorageBackend
 {
+    // Python uploads through boto3's upload_fileobj (app/services/oss.py:222),
+    // which switches to multipart above 8 MB and retries each part. A single
+    // PutObject on a multi-hundred-MB export zip cannot be resumed after a
+    // dropped connection, so mirror the threshold here.
+    private const long MultipartThresholdBytes = 16L * 1024 * 1024;
+    private const long MultipartPartSizeBytes = 16L * 1024 * 1024;
+
     private readonly AmazonS3Client client;
+    private readonly TransferUtility transfer;
     private readonly string bucket;
     private readonly string keyPrefix;
     private readonly bool viaCdn;
@@ -24,6 +33,7 @@ internal sealed class S3StorageBackend : IStorageBackend
         string? domain)
     {
         this.client = client;
+        this.transfer = new TransferUtility(client);
         this.bucket = bucket;
         this.keyPrefix = keyPrefix;
         this.viaCdn = viaCdn;
@@ -38,6 +48,22 @@ internal sealed class S3StorageBackend : IStorageBackend
     {
         ArgumentNullException.ThrowIfNull(content);
         StorageKey.ValidateObjectKey(key);
+
+        var remaining = content.CanSeek ? content.Length - content.Position : -1;
+        if (remaining > MultipartThresholdBytes)
+        {
+            var upload = new TransferUtilityUploadRequest
+            {
+                BucketName = bucket,
+                Key = PhysicalKey(key),
+                InputStream = content,
+                ContentType = contentType,
+                AutoCloseStream = false,
+                PartSize = MultipartPartSizeBytes,
+            };
+            await transfer.UploadAsync(upload, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
         var request = new PutObjectRequest
         {
