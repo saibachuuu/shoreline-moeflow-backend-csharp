@@ -94,6 +94,15 @@ exceeded Mongo's 63-character DB-name limit and was corrected before the 47/47 r
   historical migrations, real R2, retry/lease/crash coverage for all jobs, optional
   routes, MIT consumers, SSRF/trusted proxies and resource/security controls remain
   unaccepted. No product exception is assumed.
+- MIT is now fail closed rather than silently queueing dead work: `eb13ab4` (tests)
+  and `c5b9218` (guard) make `src/Shoreline.Api/Program.cs:181-200` map `/v1/mit`
+  only when `mit_detect_text`, `mit_ocr` and `mit_translate` all have a registered
+  `IJobHandler`; otherwise the routes stay unmapped (404) and one warning names the
+  missing kinds. `dotnet test ... --filter "FullyQualifiedName~MitHttpTests"` passed
+  **9/9**, 0 skipped. This removes the silent-acceptance defect only: MIT
+  functionality is still unimplemented, and real parity needs an in-process handler
+  or a supported external `manga-image-translator` Celery (`mit` queue) bridge,
+  neither of which exists.
 - C# full, safely isolated Python full, complete real differential, test-server
   deployment, migration/backup/rollback, load and soak remain unverified. An earlier
   full-test attempt suffered Mongo OOM; it is not a pass. Do not read production

@@ -12,11 +12,41 @@ using Shoreline.Api.Jobs;
 
 namespace Shoreline.Api.Features;
 
+/// <summary>
+/// Conditional MIT routes copied from Python's <c>manga-image-translator</c>
+/// blueprint. The legacy implementation is not part of either backend: Python's
+/// <c>app/tasks/mit.py</c> bodies are stubs and the real work lives in an
+/// external <c>manga_translator/moeflow_worker.py</c> Celery worker on the
+/// <c>mit</c> queue. C# jobs are only executed by the in-process
+/// <see cref="Jobs.JobWorker"/>, which claims registered
+/// <see cref="Jobs.IJobHandler.Kind"/> values exclusively. There is no supported
+/// bridge that would hand <c>csharp_job</c> documents to an external worker, so
+/// enabling <c>Mit:StorageRoot</c> without a registered consumer must fail
+/// closed: the routes stay unmapped instead of accepting work that can never
+/// run. Actual MIT parity remains unsupported until a real consumer exists.
+/// </summary>
 public static class MitEndpoints
 {
+    /// <summary>Job kinds the MIT routes can enqueue.</summary>
+    public static IReadOnlyList<string> RequiredJobKinds { get; } =
+        ["mit_detect_text", "mit_ocr", "mit_translate"];
+
     public static void AddMitServices(this IServiceCollection services)
     {
         services.AddScoped<MitService>();
+    }
+
+    /// <summary>
+    /// Returns the required job kinds that have no registered
+    /// <see cref="IJobHandler"/>. An empty result means every queued MIT job
+    /// would be claimed by the in-process worker.
+    /// </summary>
+    public static string[] FindMissingConsumers(IServiceProvider services)
+    {
+        var registered = services.GetServices<IJobHandler>()
+            .Select(handler => handler.Kind)
+            .ToHashSet(StringComparer.Ordinal);
+        return RequiredJobKinds.Where(kind => !registered.Contains(kind)).ToArray();
     }
 
     public static void MapMitEndpoints(this WebApplication app)

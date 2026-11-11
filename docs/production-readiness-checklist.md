@@ -16,7 +16,7 @@
 | partner_search HTTP | 未验证 | 已有 HTTP 测试；需全契约、写/索引排序和 Python oracle |
 | storage_pool HTTP | 未验证 | 已装配；需完整 admin HTTP 及权限/任务状态测试 |
 | ziteng_partner HTTP | 未验证 | 已有 HTTP 测试；不能误报全缺失；需全契约及安全检查 |
-| MIT 条件模块 | 未验证 | 启用/禁用装配及 Python 契约待执行 |
+| MIT 条件模块 | 部分验证（仅 fail closed） | 未配置存储根时 5 条路由 404（默认生产形态不变）；配置后无消费者时同样 404 且不入队、不落盘。`tests/Shoreline.Tests/MitHttpTests.cs` 9/9（`eb13ab4`+`c5b9218`）。**MIT 功能未实现**：真实 parity 需进程内 `mit_*` handler 或外部 `manga-image-translator` Celery（`mit` 队列）桥接，二者均不存在；启用形态/Python 契约仍未验收 |
 | OCR / 405 / 注释禁用路由的逐条例外 | 未验证 | 已记录候选原因，尚无产品批准；须核对真实响应 |
 | 真实 Flask / C# 同种子 BSON | 未验证 | 旧 fixture 有局部种子；需完整 app / modules、可复现 fresh run |
 | 真实差分读与成功写 | 部分验证 | 真实 Flask 生成 19 个只读用例，C# replay **19/19 匹配，0 business differences**（`docs/runtime-differential.md`）；写请求仍未纳入差分，测试机 E2E 已覆盖建团队/项目/术语库/上传/源文/译文/导出/邀请/申请审批/密码重置 |
@@ -27,7 +27,7 @@
 | 设置、语言/类型/角色种子 | 部分验证 | bootstrap/`LegacyTypes`/`LanguageCatalog` 已与 Python 逐项复核，测试机空库初始化通过；逐个种子集合的完整 BSON 差分仍未执行 |
 | 管理员/默认团队初始化 | 已验证（测试机空库） | 测试机 `moeflow` 原为空库；新镜像启动日志 `Created bootstrap administrator …`、`Created bootstrap Default Team …`，二次重启无重复创建；验证码 + 密码登录 `POST /v1/user/token` 成功，`/v1/user/info`、`/v1/user/teams` 正常 |
 | 迁移及回滚数据兼容 | 已验证（回滚演练） | 邮件/安全码已双写：C# 签发时同时写入 Python `v_code`，验证消费后删除；测试机实测重置密码验证码在 `v_code` 可见、消费后为 0。另用测试机 165 文档 dump 演练 Python 回滚：`tools/legacy-rollback-strip.js` 清理 C# 专有字段与冲突索引后，不启动 C# 直接由 Python 读取，`/v1/user/info`、`/v1/user/teams`、项目详情/文件/输出、团队成员均 200；步骤见 [legacy-rollback.md](legacy-rollback.md) |
-| 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
+| 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，现改为无消费者时不装配 `/v1/mit`（`c5b9218`，测试 `eb13ab4`，9/9），功能本身仍未实现；storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
 | 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
 | 最终合并后的 dotnet build 0/0 | 已验证 | `c4f3639` + 环境变量兼容工作树：`dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error（2026-11-10） |
@@ -52,9 +52,9 @@
 ## 明确阻塞
 
 1. 真实运行时差分只覆盖 19 个只读请求；成功写、邮件、四可选模块、真实 OSS/R2 尚未纳入。
-2. 静态路由 160/160 已覆盖，但全路由 HTTP 行为/越权矩阵未执行；20 个 Celery task 的故障/重试/幂等证据不足，MIT 缺外部消费者。
+2. 静态路由 160/160 已覆盖，但全路由 HTTP 行为/越权矩阵未执行；20 个 Celery task 的故障/重试/幂等证据不足，MIT 缺外部消费者（C# 已 fail closed，未实现功能）。
 3. 最新镜像 `shoreline-moeflow:ready-20261110` 只做过单次构建；未重跑双构建 digest 一致性，也未在 CI 中复现。
-4. Python/C# 全量 suite 已绿，但测试机只做了单用户 E2E；第二用户邀请/申请/密码重置邮件、跨天 StoragePool、并发/长稳未验证。
+4. 2026-11-11 在隔离本地资源（Mongo 27128 / S3 29128 / Mailpit 28128）复跑 C# 全量：**922 总 / 920 通过 / 0 跳过 / 2 失败**（2 m 0 s，`dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --nologo`）。两项失败均与 MIT 无关，且排除 `MitHttpTests` 后同样失败（913 总 / 911 通过 / 2 失败）：`LegacyRuntimeDifferentialTests.CSharpRuntimeMatchesPythonReferenceBusinessPayloads`（fixture `tools/legacy-reference/fixtures/runtime_flask_reference.json` 的 `term_bank` `c`/`e` 时间戳只有 5 分钟新鲜窗口，`tests/Shoreline.Tests/LegacyRuntimeDifferentialTests.cs:389-393`）、`StoragePoolHttpTests.ProjectMigrateRestoreMove_ValidateBeforeSideEffects`（单跑 1/1、类内 15/15 通过，仅全量并行时失败）。测试机只做了单用户 E2E；第二用户邀请/申请/密码重置邮件、跨天 StoragePool、并发/长稳未验证。
 5. 备份恢复、迁移回滚、生产 dump 副本上的 schema/索引校验未执行；生产机仅只读参考。
 6. 可观测性、限流/XFF、安全自查与部署 runbook 仍未完成。
 
@@ -93,7 +93,7 @@ chown -R 1654:1654 /path/to/stack/storage
 docker-compose restart moeflow-frontend
 ```
 
-本次未覆盖：修改邮箱、OCR、MIT 外部消费、跨天 StoragePool、生产数据规模的备份恢复计时、并发与长稳。项目申请/审批、第二用户邀请、密码重置邮件、备份恢复均已在上文验证。
+本次未覆盖：修改邮箱、OCR、MIT 外部消费（C# 仅在无消费者时 fail closed，功能仍未实现）、跨天 StoragePool、生产数据规模的备份恢复计时、并发与长稳。项目申请/审批、第二用户邀请、密码重置邮件、备份恢复均已在上文验证。
 
 数据/任务详细复核：[data-job-parity-audit-20261110.md](data-job-parity-audit-20261110.md)。
 

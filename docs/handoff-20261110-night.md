@@ -79,11 +79,15 @@ database, stripped by `tools/legacy-rollback-strip.js`, and read by Python
 - Test rollback on the test machine itself (dump → strip → Python), not only
   from the copied dump.
 - StoragePool restart/day-boundary scan, with `se=true` and worker enabled.
-- MIT conditional module: C# currently enqueues `mit_*` jobs into its own
-  `csharp_job` queue, but there is no C# consumer and Python delegates to an
-  external `manga-image-translator` Celery worker. Production has
-  `MIT_STORAGE_ROOT` unset, so this is optional; document the external worker
-  requirement or keep it disabled.
+- MIT conditional module: C# used to enqueue `mit_*` jobs into its own
+  `csharp_job` queue with no C# consumer, and Python delegates to an external
+  `manga-image-translator` Celery worker. `c5b9218` (tests `eb13ab4`) now keeps
+  `/v1/mit` unmapped unless all of `mit_detect_text`, `mit_ocr`, `mit_translate`
+  have a registered `IJobHandler`; with the default empty handler set the module
+  is a 404 and inserts nothing. Production has `MIT_STORAGE_ROOT` unset, so this
+  is optional either way. Remaining gate unchanged: real MIT parity needs an
+  in-process consumer or a supported external worker bridge; otherwise keep it
+  disabled and do not advertise it.
 - Write-path differential, authorization matrix, SSRF/limit/XFF, load/soak,
   and the one-page production cutover runbook.
 

@@ -2,15 +2,24 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Shoreline.Api.Features;
+using Shoreline.Api.Jobs;
 
 namespace Shoreline.Tests;
 
 [Collection("local-services")]
 public sealed class MitHttpTests(LocalServices services) : IDisposable
 {
+    // Kinds the MIT routes can enqueue. Kept literal here so this regression
+    // test compiles before the production guard exists; MitEndpoints.RequiredJobKinds
+    // must stay in sync with this list.
+    private static readonly string[] MitJobKinds = ["mit_detect_text", "mit_ocr", "mit_translate"];
+
     private readonly List<string> _tempDirectories = [];
 
     private string CreateTempStorageRoot()
@@ -21,12 +30,42 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
         return tempDir;
     }
 
-    private WebApplicationFactory<Program> CreateEnabledApp(string storageRoot) =>
-        services.App.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    private WebApplicationFactory<Program> CreateApp(
+        string storageRoot,
+        IReadOnlyCollection<string>? consumerKinds = null,
+        bool withWorker = true)
+    {
+        return services.App.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Mit:StorageRoot"] = storageRoot
+                }));
+
+            builder.ConfigureTestServices(testServices =>
             {
-                ["Mit:StorageRoot"] = storageRoot
-            })));
+                if (!withWorker)
+                {
+                    foreach (var descriptor in testServices
+                                 .Where(descriptor => descriptor.ImplementationType == typeof(JobWorker))
+                                 .ToList())
+                    {
+                        testServices.Remove(descriptor);
+                    }
+                }
+
+                foreach (var kind in consumerKinds ?? [])
+                {
+                    testServices.AddSingleton<IJobHandler>(new FakeMitJobHandler(kind));
+                }
+            });
+        });
+    }
+
+    private Task<long> CountMitJobsAsync() =>
+        services.Store.Collection("csharp_job")
+            .CountDocumentsAsync(Builders<BsonDocument>.Filter.In("kind", MitJobKinds));
 
     public void Dispose()
     {
@@ -68,10 +107,110 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
     }
 
     [Fact]
+    public void MitEndpoints_DefaultHostRegistersNoMitJobConsumer()
+    {
+        var registeredKinds = services.App.Services
+            .GetServices<IJobHandler>()
+            .Select(handler => handler.Kind)
+            .ToArray();
+
+        foreach (var kind in MitJobKinds)
+        {
+            Assert.DoesNotContain(kind, registeredKinds);
+        }
+
+        // The literal list above guards the production gate: if a new MIT task
+        // kind is added to RequiredJobKinds the regression test must be updated
+        // instead of silently passing.
+        Assert.Equal(MitJobKinds, MitEndpoints.RequiredJobKinds);
+
+        var missing = MitEndpoints.FindMissingConsumers(services.App.Services);
+        Assert.Equal(MitEndpoints.RequiredJobKinds, missing);
+    }
+
+    [Fact]
+    public async Task MitEndpoints_WithoutRegisteredConsumers_Returns404AndInsertsNoJob()
+    {
+        var storageRoot = CreateTempStorageRoot();
+        var seededPath = Path.Combine(storageRoot, "page.png");
+        await File.WriteAllBytesAsync(seededPath, [1, 2, 3]);
+
+        using var app = CreateApp(storageRoot);
+        using var client = app.CreateClient();
+        var jobsBefore = await CountMitJobsAsync();
+
+        // 启用存储目录但没有消费者：上传不能落盘。
+        using (var form = new MultipartFormDataContent())
+        {
+            form.Add(new ByteArrayContent([0x89, 0x50, 0x4E, 0x47]), "file", "upload.png");
+            var uploadRes = await client.PostAsync("/v1/mit/images", form);
+            Assert.Equal(HttpStatusCode.NotFound, uploadRes.StatusCode);
+        }
+
+        // 图片任务/翻译任务不能入队。
+        var marker = Guid.NewGuid().ToString("N");
+        var imageTaskRes = await client.PostAsJsonAsync("/v1/mit/image-tasks", new
+        {
+            filename = "page.png",
+            task_name = "mit_detect_text",
+            marker
+        });
+        Assert.Equal(HttpStatusCode.NotFound, imageTaskRes.StatusCode);
+
+        var translateRes = await client.PostAsJsonAsync("/v1/mit/translate-tasks", new
+        {
+            query = "こんにちは",
+            marker
+        });
+        Assert.Equal(HttpStatusCode.NotFound, translateRes.StatusCode);
+
+        // 轮询路由同样不可用。
+        var missingId = ObjectId.GenerateNewId().ToString();
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/v1/mit/image-tasks/{missingId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/v1/mit/translate-tasks/{missingId}")).StatusCode);
+
+        Assert.Equal(jobsBefore, await CountMitJobsAsync());
+        Assert.Equal(0, await services.Store.Collection("csharp_job")
+            .CountDocumentsAsync(new BsonDocument("payload.marker", marker)));
+
+        // 预置文件仍然存在且未被覆盖/新增文件。
+        Assert.Equal(new[] { seededPath }, Directory.GetFiles(storageRoot));
+        Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(seededPath));
+    }
+
+    [Fact]
+    public async Task MitEndpoints_PartialConsumerCoverage_KeepsModuleUnavailable()
+    {
+        var storageRoot = CreateTempStorageRoot();
+        await File.WriteAllBytesAsync(Path.Combine(storageRoot, "page.png"), [1, 2, 3]);
+
+        using var app = CreateApp(storageRoot, new[] { "mit_detect_text" });
+        using var client = app.CreateClient();
+        var jobsBefore = await CountMitJobsAsync();
+
+        var imageTaskRes = await client.PostAsJsonAsync("/v1/mit/image-tasks", new
+        {
+            filename = "page.png",
+            task_name = "mit_detect_text"
+        });
+        Assert.Equal(HttpStatusCode.NotFound, imageTaskRes.StatusCode);
+
+        var translateRes = await client.PostAsJsonAsync("/v1/mit/translate-tasks", new
+        {
+            query = "hello"
+        });
+        Assert.Equal(HttpStatusCode.NotFound, translateRes.StatusCode);
+
+        Assert.Equal(jobsBefore, await CountMitJobsAsync());
+    }
+
+    [Fact]
     public async Task MitEndpoints_UploadImage_ValidationAndSuccess()
     {
         var storageRoot = CreateTempStorageRoot();
-        using var app = CreateEnabledApp(storageRoot);
+        using var app = CreateApp(storageRoot, MitJobKinds);
         using var client = app.CreateClient();
 
         // 1. 无文件请求
@@ -136,7 +275,7 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
     public async Task MitEndpoints_ImageTask_ValidationAndPathTraversal_Rejected()
     {
         var storageRoot = CreateTempStorageRoot();
-        using var app = CreateEnabledApp(storageRoot);
+        using var app = CreateApp(storageRoot, MitJobKinds, withWorker: false);
         using var client = app.CreateClient();
 
         // 1. 缺失 filename
@@ -209,7 +348,7 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
     public async Task MitEndpoints_ImageTask_DetectText_And_Status_Query_Lifecycle()
     {
         var storageRoot = CreateTempStorageRoot();
-        using var app = CreateEnabledApp(storageRoot);
+        using var app = CreateApp(storageRoot, MitJobKinds, withWorker: false);
         using var client = app.CreateClient();
 
         // 1. 上传图片
@@ -294,7 +433,7 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
     public async Task MitEndpoints_TranslateTask_And_Status_Query_Lifecycle()
     {
         var storageRoot = CreateTempStorageRoot();
-        using var app = CreateEnabledApp(storageRoot);
+        using var app = CreateApp(storageRoot, MitJobKinds, withWorker: false);
         using var client = app.CreateClient();
 
         // 1. 提交翻译任务
@@ -335,7 +474,7 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
     public async Task MitEndpoints_UnknownTaskId_ReturnsPendingStatus()
     {
         var storageRoot = CreateTempStorageRoot();
-        using var app = CreateEnabledApp(storageRoot);
+        using var app = CreateApp(storageRoot, MitJobKinds, withWorker: false);
         using var client = app.CreateClient();
 
         // 合法格式但不存在的 ObjectId
@@ -353,5 +492,16 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
         var json2 = await res2.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(randomStringId, json2.GetProperty("task_id").GetString());
         Assert.Equal("pending", json2.GetProperty("status").GetString());
+    }
+
+    /// <summary>
+    /// Test-only stand-in for a future in-process consumer. It deliberately does
+    /// nothing: the tests assert that the routes are only mapped when a handler
+    /// exists, not that MIT actually runs. Production registers no mit_* handler.
+    /// </summary>
+    private sealed class FakeMitJobHandler(string kind) : IJobHandler
+    {
+        public string Kind => kind;
+        public Task ExecuteAsync(BsonDocument payload, CancellationToken ct) => Task.CompletedTask;
     }
 }
