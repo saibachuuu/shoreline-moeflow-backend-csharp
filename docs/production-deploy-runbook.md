@@ -25,6 +25,11 @@
 5. `docker compose -f compose.prod.example.yml config` renders without
    "variable is not set" errors (every required value fails fast).
 6. Or run all of the above read-only via `pwsh scripts/verify-deploy.ps1`.
+7. If the stack stores objects on a bind mount, hand it to the container UID
+   **before** the first start: `chown -R 1654:1654 /srv/moeflow/storage`.
+   A root-owned `0755` directory makes the first upload fail with 500
+   `Request failed (UnauthorizedAccessException)` — observed on the
+   2026-11-10 test host and fixed by the same `chown`.
 
 ## 1. Start order
 
@@ -44,6 +49,10 @@ mongo (external, reachable) → api (runs the schema gate) → worker → nginx 
   `Migrations:Enabled=false`, so it never races the api for the migration
   lease; it only drains `csharp_job`, notifications and the daily storage scan.
 - Only then point nginx upstream at the new api container.
+- If nginx resolves the api host by container name at **start-up** (the
+  bundled frontend image does), restart it after replacing the api container:
+  `docker compose restart <frontend>`. Otherwise the edge keeps the old
+  container IP and keeps returning 502 — observed on the 2026-11-10 test host.
 
 Rolling update: start the new worker, then the new api, move nginx upstream,
 then stop the old pair. Never run old + new workers against the same
