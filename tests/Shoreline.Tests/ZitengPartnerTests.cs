@@ -82,6 +82,34 @@ public sealed class ZitengPartnerTests
     }
 
     [Fact]
+    public void Settings_RejectApiUrlsThatWouldDowngradeToPlaintext()
+    {
+        // UriBuilder("host/path") silently invents http://, which would send the
+        // Bearer key unencrypted. Python's requests raises MissingSchema here.
+        Assert.Throws<InvalidOperationException>(() => ZitengPartnerSettings.FromConfiguration(
+            Configuration(("ZITENG_PARTNER_API_URL", "partner-api.ziteng.org/partner-api/v1/works/search"))));
+        Assert.Throws<InvalidOperationException>(() => ZitengPartnerSettings.FromConfiguration(
+            Configuration(("ZitengPartner:ApiUrl", "http://partner-api.ziteng.org/partner-api/v1/works/search"))));
+        Assert.Throws<InvalidOperationException>(() => ZitengPartnerSettings.FromConfiguration(
+            Configuration(("ZitengPartner:ApiUrl", "https://user:pass@partner-api.ziteng.org/v1"))));
+        Assert.Throws<InvalidOperationException>(() => ZitengPartnerSettings.FromConfiguration(
+            Configuration(("ZitengPartner:ApiUrl", "https://partner-api.ziteng.org/v1#frag"))));
+
+        // An absent or empty value keeps the documented official endpoint.
+        Assert.Equal(ZitengPartnerSettings.DefaultApiUrl,
+            ZitengPartnerSettings.FromConfiguration(Configuration()).ApiUrl);
+        Assert.Equal(ZitengPartnerSettings.DefaultApiUrl,
+            ZitengPartnerSettings.FromConfiguration(Configuration(("ZITENG_PARTNER_API_URL", "  "))).ApiUrl);
+        Assert.Equal("https://partner.example.test/v1/works",
+            ZitengPartnerSettings.FromConfiguration(
+                Configuration(("ZitengPartner:ApiUrl", "https://partner.example.test/v1/works"))).ApiUrl);
+    }
+
+    private static IConfiguration Configuration(params (string Key, string? Value)[] values) =>
+        new ConfigurationBuilder().AddInMemoryCollection(
+            values.ToDictionary(item => item.Key, item => item.Value)).Build();
+
+    [Fact]
     public void Settings_ReadLegacyOverridesAndNeverExposeKey()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>

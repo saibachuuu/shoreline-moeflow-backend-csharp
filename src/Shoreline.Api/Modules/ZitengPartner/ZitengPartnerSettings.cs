@@ -40,7 +40,7 @@ public sealed class ZitengPartnerSettings
         ArgumentNullException.ThrowIfNull(configuration);
         return new ZitengPartnerSettings
         {
-            ApiUrl = ReadString(configuration, "ApiUrl", "ZITENG_PARTNER_API_URL")?.Trim() ?? DefaultApiUrl,
+            ApiUrl = NormalizeApiUrl(ReadString(configuration, "ApiUrl", "ZITENG_PARTNER_API_URL")),
             // The legacy config helper strips the key. An explicitly empty value is
             // meaningful: it disables the module without removing the routes.
             ApiKey = (ReadString(configuration, "ApiKey", "ZITENG_PARTNER_API_KEY") ?? "").Trim(),
@@ -65,6 +65,22 @@ public sealed class ZitengPartnerSettings
             value, @"(?i)(authorization|bearer)\s*[:=]?\s*[^\s,;]+", "$1 ***");
         value = value.Replace('\r', ' ').Replace('\n', ' ');
         return value.Length <= 300 ? value : value[..300];
+    }
+
+    private static string NormalizeApiUrl(string? value)
+    {
+        var text = (value ?? "").Trim();
+        // An unset or empty value falls back to the official endpoint (the Python
+        // module treats an empty environment variable the same way).
+        if (text.Length == 0) return DefaultApiUrl;
+        // Fail closed instead of letting UriBuilder guess. A bare "host/path"
+        // string silently becomes http://, which would send the Bearer API key in
+        // clear text; Python's requests raises MissingSchema for such a value.
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            throw new InvalidOperationException("ZitengPartner:ApiUrl 必须是绝对 HTTPS 地址");
+        if (uri.UserInfo.Length != 0 || uri.Fragment.Length != 0)
+            throw new InvalidOperationException("ZitengPartner:ApiUrl 不能包含用户信息或 fragment");
+        return text;
     }
 
     private static string? ReadString(IConfiguration configuration, string key, string legacyKey)
