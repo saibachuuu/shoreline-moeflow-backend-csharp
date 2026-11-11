@@ -26,6 +26,11 @@ public static class ZitengPartnerRegistration
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
             {
                 AllowAutoRedirect = false,
+                // The public-network ConnectCallback is the security boundary.
+                // An environment proxy would be dialed instead of the partner
+                // host, letting the Bearer key reach private targets through
+                // the proxy while the guard only inspects the proxy address.
+                UseProxy = false,
                 AutomaticDecompression = DecompressionMethods.All,
                 ConnectTimeout = TimeSpan.FromSeconds(20),
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5),

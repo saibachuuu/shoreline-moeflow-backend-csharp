@@ -208,6 +208,11 @@ public sealed class ArchiveImportTransport : IArchiveImportTransport, IDisposabl
     private static SocketsHttpHandler CreateHandler() => new()
     {
         AllowAutoRedirect = false,
+        // The connection-level public-address check below is the security
+        // boundary. An environment HTTP(S)_PROXY would make ConnectCallback
+        // dial the proxy instead of the target, so the guard would only see the
+        // proxy address and the archive host could still be reached indirectly.
+        UseProxy = false,
         AutomaticDecompression = DecompressionMethods.None,
         ConnectTimeout = TimeSpan.FromSeconds(5),
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
