@@ -68,37 +68,53 @@ public sealed class ArchiveImportOptions
         {
             ProviderApiUrl = archive["ProviderApiUrl"] ?? configuration["ARCHIVE_PROVIDER_API_URL"] ?? "",
             AllowedHosts = archive.GetSection("AllowedHosts").Get<string[]>() ?? Array.Empty<string>(),
-            MaxZipBytes = ReadLong(configuration, "Archive:MaxZipBytes", "ARCHIVE_MAX_ZIP_BYTES", DefaultMaxZipBytes),
+            MaxZipBytes = ReadLong(configuration, "Archive:MaxZipBytes", "ARCHIVE_MAX_ZIP_BYTES", DefaultMaxZipBytes, legacyInMegabytes: true),
             MaxUncompressedBytes = ReadUncompressedBytes(configuration),
             MaxEntries = (int)Math.Min(int.MaxValue,
                 ReadLong(configuration, "Archive:MaxZipEntries", "ARCHIVE_MAX_ZIP_ENTRIES", DefaultMaxEntries)),
-            MaxEntryBytes = ReadLong(configuration, "Archive:MaxEntryBytes", "ARCHIVE_MAX_ENTRY_BYTES", DefaultMaxEntryBytes),
+            MaxEntryBytes = ReadLong(configuration, "Archive:MaxEntryBytes", "ARCHIVE_MAX_ENTRY_BYTES", DefaultMaxEntryBytes, legacyInMegabytes: true),
             TempRoot = archive["TempRoot"] ?? configuration["ARCHIVE_TEMP_ROOT"],
         };
     }
 
     private static long ReadUncompressedBytes(IConfiguration configuration)
     {
-        var direct = ReadOptionalLong(configuration, "Archive:MaxZipUncompressedBytes", "ARCHIVE_MAX_ZIP_UNCOMPRESSED_BYTES");
-        if (direct is > 0) return direct.Value;
-        var megabytes = ReadOptionalLong(configuration, "Archive:MaxZipUncompressedMB", "ARCHIVE_MAX_ZIP_UNCOMPRESSED_MB");
-        if (megabytes is > 0 && megabytes.Value <= long.MaxValue / (1024 * 1024)) return megabytes.Value * 1024 * 1024;
+        foreach (var key in new[] { "Archive:MaxZipUncompressedBytes", "ARCHIVE_MAX_ZIP_UNCOMPRESSED_BYTES" })
+        {
+            var direct = ReadOptionalLong(configuration, key);
+            if (direct is > 0) return direct.Value;
+        }
+
+        foreach (var key in new[] { "Archive:MaxZipUncompressedMB", "ARCHIVE_MAX_ZIP_UNCOMPRESSED_MB" })
+        {
+            var megabytes = ReadOptionalLong(configuration, key);
+            if (megabytes is > 0 && megabytes.Value <= long.MaxValue / (1024 * 1024))
+            {
+                return megabytes.Value * 1024 * 1024;
+            }
+        }
+
         return DefaultMaxUncompressedBytes;
     }
 
-    private static long ReadLong(IConfiguration configuration, string key, string environmentKey, long fallback)
+    private static long ReadLong(IConfiguration configuration, string key, string environmentKey, long fallback, bool legacyInMegabytes = false)
     {
-        var value = ReadOptionalLong(configuration, key, environmentKey);
-        return value is > 0 ? value.Value : fallback;
+        var modern = ReadOptionalLong(configuration, key);
+        if (modern is > 0) return modern.Value;
+
+        var legacy = ReadOptionalLong(configuration, environmentKey);
+        if (legacy is > 0)
+        {
+            return legacyInMegabytes ? legacy.Value * 1024 * 1024 : legacy.Value;
+        }
+
+        return fallback;
     }
 
-    private static long? ReadOptionalLong(IConfiguration configuration, string key, string environmentKey)
+    private static long? ReadOptionalLong(IConfiguration configuration, string key)
     {
-        foreach (var raw in new[] { configuration[key], configuration[environmentKey] })
-        {
-            if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
-                return value;
-        }
+        if (long.TryParse(configuration[key], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
+            return value;
         return null;
     }
 }

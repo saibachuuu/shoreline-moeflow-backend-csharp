@@ -21,8 +21,11 @@ public sealed class SecurityEmailHandler(MongoStore store, IConfiguration config
 
         var host = configuration["Mail:Host"] ?? throw new InvalidOperationException("Mail:Host is required");
         var port = configuration.GetValue("Mail:Port", 587);
+        // Python selects implicit SMTPS solely from EMAIL_USE_SSL. Keep the 465
+        // port heuristic for deployments that omit the toggle but expect SMTPS.
+        var useSsl = configuration.GetValue("Mail:UseSsl", false) || port == 465;
         var startTls = configuration.GetValue<bool?>("Mail:StartTls", null);
-        var socketOptions = port == 465
+        var socketOptions = useSsl
             ? SecureSocketOptions.SslOnConnect
             : startTls switch
             {
