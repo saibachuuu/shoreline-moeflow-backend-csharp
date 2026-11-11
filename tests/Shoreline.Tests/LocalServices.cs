@@ -54,7 +54,12 @@ public class LocalServices : IAsyncLifetime
             ["Mail:Host"] = "127.0.0.1",
             ["Mail:Port"] = TestEnvironment.SmtpPort.ToString(),
             ["Mail:StartTls"] = "false",
-            ["Mail:From"] = "noreply@example.test"
+            ["Mail:From"] = "noreply@example.test",
+            // Each fixture owns a brand-new empty database, so the deploy-time
+            // migration check would always report pending migrations and pin
+            // /health/ready at 503. Migration behaviour is covered directly by
+            // MigrationsTests; the HTTP gate has its own unit tests.
+            ["Migrations:Enabled"] = "false"
         };
         Configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         Store = new MongoStore(Configuration);
