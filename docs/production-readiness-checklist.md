@@ -44,7 +44,7 @@
 | 测试机负载 / 长稳 / 内存比较 | 未验证 | 现有资源快照不是等负载基准；需约定时长、数据和通过阈值 |
 | 密钥与依赖安全 | 未验证 | 首轮依赖工具未报 vulnerable，不等于完整安全通过；禁止读取真实密钥 |
 | 认证 / 越权 / 授权竞争窗口 | 未验证 | 需按 Python oracle 验证所有修改/删除/管理端及并发路径 |
-| SSRF / allowlist / DNS / redirects | 未验证 | archive 已有防护；Ziteng 和全部出站路径需源码及 HTTP/连接测试 |
+| SSRF / allowlist / DNS / redirects | 部分验证 | archive 连接防护已抽为 `Infrastructure.PublicNetworkGuard`（archive 语义不变）；Ziteng 注册 handler 接入同一防护（`AllowAutoRedirect=false` 不变 + HTTPS 配置校验不变），Bearer key 不会发往私有 HTTPS；新增 `PublicNetworkGuardTests`（29）与注册 client 回归测试 `ZitengPartnerSsrfTests`（5，真实 handler、私有目标建 socket 前拒绝、无外部请求）。仍未覆盖：其他全部出站路径（邮件/存储等）的源码及 HTTP/连接矩阵 |
 | 上传限制 / 内存放大 | 部分验证 | 测试机真实 multipart 上传图片成功，缩略图 worker 生成 cover/resample，导出 zip 可下载；1 GiB 边界与并发资源仍未验证 |
 | 真实 HTTP 限流 / XFF 防伪造 | 未验证 | limiter/routing 顺序、反代身份和 client_key 均需真实请求验证 |
 | 部署 / 迁移 / 回滚 runbook | 部分验证 | 测试机空库部署、备份恢复、Python 回滚演练均有命令与证据；仍需固化为一页生产 runbook 并在测试机复跑 |
