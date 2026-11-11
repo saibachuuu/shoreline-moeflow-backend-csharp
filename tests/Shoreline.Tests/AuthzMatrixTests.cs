@@ -40,7 +40,8 @@ internal sealed class AuthzWorld : IAsyncDisposable
     public HttpClient BadToken { get; private set; } = null!;
     public HttpClient WrongScheme { get; private set; } = null!;
 
-    public static async Task<AuthzWorld> CreateAsync(LocalServices services, int allowApplyType = 1)
+    public static async Task<AuthzWorld> CreateAsync(LocalServices services, int allowApplyType = 1,
+        int teamAllowApplyType = 1)
     {
         // Team founding is gated by the site setting (oacg, default true, both
         // stacks). The matrix world opens founding so the owner stays a plain
@@ -91,7 +92,7 @@ internal sealed class AuthzWorld : IAsyncDisposable
 
         var teamBody = await BodyAsync(await ownerClient.PostAsJsonAsync("/v1/teams", new
         {
-            name = Name("team"), intro = "", allow_apply_type = 1, application_check_type = 2,
+            name = Name("team"), intro = "", allow_apply_type = teamAllowApplyType, application_check_type = 2,
             default_role = (await RoleAsync(services, "team", "member")).ToString()
         }));
         var teamId = ObjectId.Parse(teamBody.GetProperty("team").GetProperty("id").GetString());
