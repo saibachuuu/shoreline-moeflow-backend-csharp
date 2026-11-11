@@ -287,7 +287,7 @@ public static class LabelEndpoints
 
     private static ObjectId RequiredQueryObjectId(string raw, string field) =>
         string.IsNullOrEmpty(raw)
-            ? throw ApiError.Field(field, "缺少必填字段")
+            ? throw ApiError.Field(field, "Missing data for required field.")
             : RequiredObjectId(raw, field);
 
     private static ObjectId RequiredObjectId(JsonElement body, string field) =>
@@ -296,7 +296,7 @@ public static class LabelEndpoints
     private static string RequiredString(JsonElement body, string field)
     {
         if (!body.TryGetProperty(field, out var value) || value.ValueKind != JsonValueKind.String)
-            throw ApiError.Field(field, "缺少必填字段");
+            throw ApiError.Field(field, "Missing data for required field.");
         return value.GetString()!;
     }
 

@@ -115,7 +115,16 @@ public static class ApplicationEndpoints
             HttpContext context, CurrentUser current, ApplicationService applications, CancellationToken ct) =>
         {
             var actor = await current.RequireAsync(context, ct);
-            var result = await applications.PublicInfoAsync(actor, groupType, groupId, ct);
+            BsonDocument result;
+            try
+            {
+                result = await applications.PublicInfoAsync(actor, groupType, groupId, ct);
+            }
+            catch (ApiError error) when (error.Code == 3001)
+            {
+                var chinese = LanguageCatalog.ChinesePreferred(context.Request.GetTypedHeaders().AcceptLanguage);
+                throw new ApiError(error.Error, error.Code, chinese ? "团队不存在" : "Team does not exist.");
+            }
             return Results.Content(result.ToJson(), "application/json");
         });
     }

@@ -82,7 +82,7 @@ public sealed class UserRegistrationService(MongoStore store, SiteSettings setti
         {
             if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty(field, out var value) || value.ValueKind != JsonValueKind.String)
             {
-                Add(field, "缺少必填字段");
+                Add(field, "Missing data for required field.");
                 return null;
             }
             var text = value.GetString()!;
