@@ -134,7 +134,7 @@ public sealed class UserProjectListService(MongoStore store, IdentityPermissions
         return statuses;
     }
 
-    private static Dictionary<string, object?> MemberSummary(BsonDocument row) => new()
+    internal static Dictionary<string, object?> MemberSummary(BsonDocument row) => new()
     {
         ["id"] = row["_id"].ToString(),
         ["display_name"] = row.Text("display_name"),
@@ -146,6 +146,6 @@ public sealed class UserProjectListService(MongoStore store, IdentityPermissions
 
     // ListCardAsync returns an anonymous object. Reflection preserves its exact
     // field names/values while allowing the batch member_summary to be attached.
-    private static Dictionary<string, object?> Properties(object value) => value.GetType()
+    internal static Dictionary<string, object?> Properties(object value) => value.GetType()
         .GetProperties().ToDictionary(property => property.Name, property => property.GetValue(value));
 }

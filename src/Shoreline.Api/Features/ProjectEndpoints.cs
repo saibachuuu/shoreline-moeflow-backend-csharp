@@ -70,7 +70,10 @@ public static class ProjectEndpoints
             var page = Pagination.From(context.Request);
             var (rows, count) = await ListProjectsAsync(projects, store, permissions, actor, team, context.Request.Query, page, Chinese(context), ct);
             page.Apply(context.Response, count);
-            return new { projects = rows };
+            // Flask returns the bare list here (app/apis/team.py:566-589). The
+            // frontend does `data.map(...)`, so an object wrapper breaks the
+            // project-set page even though the status code is 200.
+            return rows;
         });
         teamProjects.MapPost("", async (string teamId, JsonElement data, HttpContext context, CurrentUser current, ProjectService projects, CancellationToken ct) =>
         {
@@ -96,7 +99,8 @@ public static class ProjectEndpoints
             if (word.Length > 0) filter["n"] = new BsonRegularExpression(Regex.Escape(word), "i");
             var count = await store.Collection("project_set").CountDocumentsAsync(filter, cancellationToken: ct);
             var rows = await store.Collection("project_set").Find(filter)
-                .Sort(new BsonDocument("_id", 1)).Skip(page.Skip).Limit(page.Limit).ToListAsync(ct);
+                // app/models/team.py:406 orders by ["-default", "-edit_time"].
+                .Sort(new BsonDocument("d", -1).Add("et", -1)).Skip(page.Skip).Limit(page.Limit).ToListAsync(ct);
             page.Apply(context.Response, count);
             return rows.Select(ProjectService.ProjectSetListView).ToArray();
         });
@@ -166,13 +170,40 @@ public static class ProjectEndpoints
         }
         var count = await store.Collection("project").CountDocumentsAsync(filter, cancellationToken: ct);
         var rows = await store.Collection("project").Find(filter)
-            .Sort(new BsonDocument("_id", 1)).Skip(page.Skip).Limit(page.Limit).ToListAsync(ct);
+            // app/models/team.py:478 orders by ["-edit_time", "-id"]; GroupMixin maps
+            // edit_time to "m_e", so this is the legacy order with a stable tiebreak.
+            .Sort(new BsonDocument("m_e", -1).Add("_id", -1))
+            .Skip(page.Skip).Limit(page.Limit).ToListAsync(ct);
+        // app/apis/team.py:433-437 attaches a compact member summary to every
+        // card, so the list page can paint member stats without N+1 queries.
+        var projectIds = rows.Select(row => row["_id"].AsObjectId).ToArray();
+        List<BsonDocument> memberRows = projectIds.Length == 0
+            ? []
+            : await store.Collection("project_member")
+                .Find(new BsonDocument
+                {
+                    ["project"] = new BsonDocument("$in", new BsonArray(projectIds.Select(id => (BsonValue)id))),
+                    ["status"] = new BsonDocument("$in", new BsonArray { "active", "invited" })
+                })
+                .Sort(new BsonDocument { ["display_name"] = 1, ["_id"] = 1 })
+                .Project(new BsonDocument
+                {
+                    ["project"] = 1,
+                    ["display_name"] = 1,
+                    ["tags"] = 1,
+                    ["status"] = 1
+                })
+                .ToListAsync(ct);
+        var summaries = memberRows.GroupBy(row => row["project"].AsObjectId)
+            .ToDictionary(group => group.Key, group => group.Select(UserProjectListService.MemberSummary).ToArray());
         var list = new List<object>();
         foreach (var row in rows)
         {
             var snapshot = await permissions.ProjectSnapshotAsync(actor, row, ct);
             var set = await projects.GetProjectSetAsync(row["ps"].ToString()!, ct);
-            list.Add(projects.ListCardAsync(row, actor, chinese, snapshot, team, set));
+            var card = UserProjectListService.Properties(projects.ListCardAsync(row, actor, chinese, snapshot, team, set));
+            card["member_summary"] = summaries.GetValueOrDefault(row["_id"].AsObjectId) ?? Array.Empty<object>();
+            list.Add(card);
         }
         return (list, count);
     }
