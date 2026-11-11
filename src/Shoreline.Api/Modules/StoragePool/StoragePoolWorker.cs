@@ -18,7 +18,6 @@ public sealed class StoragePoolWorker : BackgroundService
     private readonly TimeProvider clock;
     private readonly IConfiguration configuration;
     private readonly ILogger<StoragePoolWorker> logger;
-    private DateOnly? lastScanDate;
 
     public StoragePoolWorker(
         IServiceScopeFactory scopes,
@@ -75,13 +74,18 @@ public sealed class StoragePoolWorker : BackgroundService
             }
         }
 
-        var local = clock.GetLocalNow();
-        var today = DateOnly.FromDateTime(local.DateTime);
-        if (local.Hour >= 3 && lastScanDate != today && StoragePoolBson.Bool(setting, "se"))
+        // The legacy beat entry runs at 03:00 in Celery's UTC schedule and
+        // persists its last-run state, so a process restart must not replay
+        // an already-consumed day. Claim the UTC day in Mongo before scanning.
+        var utcNow = clock.GetUtcNow().UtcDateTime;
+        if (utcNow.Hour >= 3)
         {
-            var scan = scope.ServiceProvider.GetRequiredService<StoragePoolScanService>();
-            await scan.RunAsync(false, ct).ConfigureAwait(false);
-            lastScanDate = today;
+            var today = DateOnly.FromDateTime(utcNow);
+            if (await settings.TryClaimScheduledScanAsync(today, ct).ConfigureAwait(false))
+            {
+                var scan = scope.ServiceProvider.GetRequiredService<StoragePoolScanService>();
+                await scan.RunAsync(false, ct).ConfigureAwait(false);
+            }
         }
     }
 

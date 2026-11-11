@@ -255,7 +255,14 @@ not update the last scan timestamp.
 `StoragePoolWorker` is optional and may be disabled with
 `StoragePool:WorkerEnabled=false`. It is registered only by
 `AddStoragePoolServices`; the core application remains runnable without the
-module.
+module. When enabled, it processes queued transfers on every tick and, after
+03:00 UTC, performs at most one scheduled scan per UTC day. The day is claimed
+atomically in `storage_pool_setting.lsd` (`yyyy-MM-dd`), so a process restart or
+a second replica cannot replay the scan. The claim is consumed even when
+`se=false`, matching the resident legacy beat entry; enabling `se` later the
+same day does not back-fill a scan. A restart after a missed 03:00 tick runs
+the scan once as a catch-up. Manual `POST /scan` keeps its legacy forced
+behavior and does not consume the scheduled claim.
 
 ## Dirty-data pre-flight
 
@@ -316,6 +323,15 @@ The existing 34 facts still cover:
 - scan disabled, global budget, presence skip, run-disabled checkpoint;
 - move validation, settings audit/defaults, Python-shaped stats/usage aggregation.
 
+`tests/Shoreline.Tests/StoragePoolRecoveryTests.cs` adds 8 reconstruction
+facts over the same isolated Mongo database: a queued transfer is resumed by a
+new worker/provider instance; the project-lock lease survives service
+reconstruction and expires by TTL; a hard-killed run lock without TTL keeps the
+transfer pending like legacy; the scheduled scan is claimed once per UTC day
+across restart; 03:00 UTC is the cross-day boundary; a missed tick catches up
+once without replay; a disabled scan consumes its daily tick; and `next_run_at`
+is UTC 03:00 even when the host local zone is UTC+08:00.
+
 These tests used an isolated snapshot of the shared working tree with the
 existing local MongoDB and S3Mock services: build 0 warnings/0 errors, focused
 StoragePool/File/Output/Thumbnail/ProjectCleanup run 146/146, and the full suite
@@ -335,3 +351,7 @@ evidence.
   multi-tenant security sandbox.
 - A bounded shared S3-client cache remains future work; each pooled lease
   currently owns one client for the duration of its operation/job.
+- `storage_transfer_run_lock` intentionally has no TTL, matching legacy Python.
+  A hard-killed process leaves a stale lock and blocks that transfer's recovery
+  until the lock is removed manually; `StoragePoolRecoveryTests` documents this
+  behavior.

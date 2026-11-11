@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -87,6 +88,25 @@ public sealed class StoragePoolSettingsService
         return await GetViewAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Claims the one scheduled scan for a UTC day. The claim is stored in
+    /// Mongo so a restarted process (or a second replica) cannot repeat the
+    /// daily scan. A false result means another worker already consumed the
+    /// day, or this process already did.
+    /// </summary>
+    internal async Task<bool> TryClaimScheduledScanAsync(DateOnly day, CancellationToken ct)
+    {
+        var value = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var result = await Settings.UpdateOneAsync(new BsonDocument
+            {
+                ["_id"] = "default",
+                ["lsd"] = new BsonDocument("$ne", value),
+            },
+            new BsonDocument("$set", new BsonDocument("lsd", value)),
+            cancellationToken: ct).ConfigureAwait(false);
+        return result.ModifiedCount == 1;
+    }
+
     public Task RecordScanAsync(DateTime? scannedAt, string result, int queued, CancellationToken ct)
     {
         var set = new BsonDocument
@@ -112,6 +132,7 @@ public sealed class StoragePoolSettingsService
         ["lst"] = BsonNull.Value,
         ["lsr"] = "",
         ["lsq"] = 0,
+        ["lsd"] = BsonNull.Value,
     };
 
     public static BsonDocument ToApi(BsonDocument row) => new()
@@ -132,8 +153,8 @@ public sealed class StoragePoolSettingsService
 
     private DateTime NextRunAt()
     {
-        var now = clock.GetLocalNow();
-        var next = new DateTimeOffset(now.Year, now.Month, now.Day, 3, 0, 0, now.Offset);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var next = new DateTimeOffset(now.Year, now.Month, now.Day, 3, 0, 0, TimeSpan.Zero);
         if (next <= now) next = next.AddDays(1);
         return next.UtcDateTime;
     }

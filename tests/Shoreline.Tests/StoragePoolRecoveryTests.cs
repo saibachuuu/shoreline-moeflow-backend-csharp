@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -21,6 +22,25 @@ public sealed class StoragePoolRecoveryTests(LocalServices services)
     private static readonly TimeZoneInfo PlusEight = TimeZoneInfo.CreateCustomTimeZone(
         "storage-pool-test+08", TimeSpan.FromHours(8),
         "storage-pool-test+08", "storage-pool-test+08");
+
+    private static readonly DateTime StaleEdit = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    private static JsonElement Json(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+
+    private static Task EnableScanAsync(StoragePoolRuntime runtime, bool runEnabled) =>
+        runtime.Settings.UpdateAsync(Json($$"""
+            {"scan_enabled":true,"run_enabled":{{(runEnabled ? "true" : "false")}}}
+            """), ObjectId.GenerateNewId(), CancellationToken.None);
+
+    private static Task<long> CountTransfersAsync(StoragePoolRuntime runtime, ObjectId sourceId) =>
+        runtime.Store.Collection(StoragePoolConstants.TransferCollection)
+            .CountDocumentsAsync(new BsonDocument("s", sourceId), cancellationToken: CancellationToken.None);
+
+    private static string ClaimedDay(BsonDocument setting) => setting["lsd"].AsString;
 
     [Fact]
     public async Task WorkerResumesPreparedTransferAfterHostReconstruction()
@@ -110,6 +130,134 @@ public sealed class StoragePoolRecoveryTests(LocalServices services)
         Assert.Equal(StoragePoolConstants.Pending, (await runtime.GetTransferAsync(transferId))["st"].ToInt32());
         Assert.True(await runtime.Store.Collection(StoragePoolConstants.RunLockCollection)
             .Find(new BsonDocument("_id", transferId)).AnyAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ScheduledScanIsClaimedOncePerUtcDayAcrossWorkerRestart()
+    {
+        var clock = new StoragePoolMutableClock(
+            new DateTimeOffset(2026, 11, 11, 3, 5, 0, TimeSpan.Zero), PlusEight);
+        using var runtime = new StoragePoolRuntime(services, clock);
+        var sourceId = await runtime.InsertSourceAsync();
+        await runtime.InsertProjectAsync(editTime: StaleEdit);
+        await EnableScanAsync(runtime, runEnabled: false);
+
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+
+        Assert.Equal(1, await CountTransfersAsync(runtime, sourceId));
+        Assert.Equal("2026-11-11",
+            ClaimedDay(await runtime.Settings.ReadAsync(CancellationToken.None)));
+
+        await runtime.InsertProjectAsync(editTime: StaleEdit);
+        clock.Advance(TimeSpan.FromHours(1));
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+
+        Assert.Equal(1, await CountTransfersAsync(runtime, sourceId));
+    }
+
+    [Fact]
+    public async Task CrossDayScheduleScansAtUtcThreeAfterRestart()
+    {
+        var clock = new StoragePoolMutableClock(
+            new DateTimeOffset(2026, 11, 11, 2, 59, 0, TimeSpan.Zero), PlusEight);
+        using var runtime = new StoragePoolRuntime(services, clock);
+        var sourceId = await runtime.InsertSourceAsync();
+        await runtime.InsertProjectAsync(editTime: StaleEdit);
+        await EnableScanAsync(runtime, runEnabled: false);
+
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(0, await CountTransfersAsync(runtime, sourceId));
+
+        clock.Advance(TimeSpan.FromMinutes(1));
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(1, await CountTransfersAsync(runtime, sourceId));
+        Assert.Equal("2026-11-11",
+            ClaimedDay(await runtime.Settings.ReadAsync(CancellationToken.None)));
+
+        await runtime.InsertProjectAsync(editTime: StaleEdit);
+        clock.SetUtcNow(new DateTimeOffset(2026, 11, 12, 2, 59, 0, TimeSpan.Zero));
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(1, await CountTransfersAsync(runtime, sourceId));
+
+        clock.Advance(TimeSpan.FromMinutes(1));
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(2, await CountTransfersAsync(runtime, sourceId));
+        Assert.Equal("2026-11-12",
+            ClaimedDay(await runtime.Settings.ReadAsync(CancellationToken.None)));
+    }
+
+    [Fact]
+    public async Task RestartAfterMissedScheduleCatchesUpOnce()
+    {
+        var clock = new StoragePoolMutableClock(
+            new DateTimeOffset(2026, 11, 11, 0, 30, 0, TimeSpan.Zero), PlusEight);
+        using var runtime = new StoragePoolRuntime(services, clock);
+        var sourceId = await runtime.InsertSourceAsync();
+        await runtime.InsertProjectAsync(editTime: StaleEdit);
+        await EnableScanAsync(runtime, runEnabled: false);
+
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(0, await CountTransfersAsync(runtime, sourceId));
+
+        clock.SetUtcNow(new DateTimeOffset(2026, 11, 11, 10, 0, 0, TimeSpan.Zero));
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(1, await CountTransfersAsync(runtime, sourceId));
+
+        await runtime.InsertProjectAsync(editTime: StaleEdit);
+        clock.SetUtcNow(new DateTimeOffset(2026, 11, 11, 18, 0, 0, TimeSpan.Zero));
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(1, await CountTransfersAsync(runtime, sourceId));
+    }
+
+    [Fact]
+    public async Task ScheduledTickIsConsumedWhileScanIsDisabled()
+    {
+        var clock = new StoragePoolMutableClock(
+            new DateTimeOffset(2026, 11, 11, 3, 5, 0, TimeSpan.Zero), PlusEight);
+        using var runtime = new StoragePoolRuntime(services, clock);
+        var sourceId = await runtime.InsertSourceAsync();
+        await runtime.InsertProjectAsync(editTime: StaleEdit);
+
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(0, await CountTransfersAsync(runtime, sourceId));
+        Assert.Equal("2026-11-11",
+            ClaimedDay(await runtime.Settings.ReadAsync(CancellationToken.None)));
+
+        clock.SetUtcNow(new DateTimeOffset(2026, 11, 11, 10, 0, 0, TimeSpan.Zero));
+        await EnableScanAsync(runtime, runEnabled: false);
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(0, await CountTransfersAsync(runtime, sourceId));
+
+        clock.SetUtcNow(new DateTimeOffset(2026, 11, 12, 3, 5, 0, TimeSpan.Zero));
+        using (var worker = new StoragePoolWorkerHarness(services, runtime, clock))
+            await worker.TickAsync(CancellationToken.None);
+        Assert.Equal(1, await CountTransfersAsync(runtime, sourceId));
+    }
+
+    [Fact]
+    public async Task NextRunAtUsesUtcThreeRegardlessOfHostLocalZone()
+    {
+        var clock = new StoragePoolMutableClock(
+            new DateTimeOffset(2026, 11, 10, 19, 30, 0, TimeSpan.Zero), PlusEight);
+        using var runtime = new StoragePoolRuntime(services, clock);
+
+        var view = await runtime.Settings.GetViewAsync(CancellationToken.None);
+        Assert.Equal("2026-11-11T03:00:00.000000", view["next_run_at"].AsString);
+
+        clock.SetUtcNow(new DateTimeOffset(2026, 11, 11, 3, 0, 0, TimeSpan.Zero));
+        view = await runtime.Settings.GetViewAsync(CancellationToken.None);
+        Assert.Equal("2026-11-12T03:00:00.000000", view["next_run_at"].AsString);
     }
 }
 
