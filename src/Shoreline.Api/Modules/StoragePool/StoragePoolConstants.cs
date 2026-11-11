@@ -1,4 +1,5 @@
 using MongoDB.Bson;
+using Shoreline.Api.Formats;
 using Microsoft.Extensions.Configuration;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Storage;
@@ -128,10 +129,10 @@ internal static class StoragePoolBson
     }
 
     public static string Iso(BsonDocument document, string key) =>
-        Date(document, key)?.ToString("yyyy-MM-ddTHH:mm:ss.ffffff", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        Date(document, key) is { } value ? PythonValue.Iso(value) : "";
 
     public static string Iso(DateTime? value) =>
-        value?.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.ffffff", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        value is { } date ? PythonValue.Iso(date.ToUniversalTime()) : "";
 
     public static BsonValue Ref(ObjectId? id) => id is null ? BsonNull.Value : id.Value;
 

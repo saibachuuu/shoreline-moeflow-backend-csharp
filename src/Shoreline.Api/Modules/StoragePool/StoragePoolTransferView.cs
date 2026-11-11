@@ -4,21 +4,14 @@ namespace Shoreline.Api.Modules.StoragePool;
 
 internal static class StoragePoolTransferView
 {
+    // app/modules/storage_pool/models.py:180-183. The C# pipeline tracks
+    // processed/verified counters too, but legacy progress_percent only uses
+    // copied_objects, so upgrading the percentage would change the admin UI.
     public static int Progress(BsonDocument transfer)
     {
-        var status = StoragePoolBson.Int(transfer, "st");
-        if (status == StoragePoolConstants.Done) return 100;
         var total = StoragePoolBson.Int(transfer, "to");
-        if (total == 0) return status == StoragePoolConstants.Switched ? 95 : 0;
-        var processed = StoragePoolBson.Int(transfer, "processed");
-        var skipped = StoragePoolBson.Int(transfer, "skipped");
-        var copied = Math.Min(90, (int)((long)processed * 90 / total));
-        var real = Math.Max(1, total - skipped);
-        if (status == StoragePoolConstants.Switched)
-            return Math.Min(99, 95 + (int)((long)StoragePoolBson.Int(transfer, "deleted") * 4 / real));
-        if (status == StoragePoolConstants.Verified)
-            return Math.Min(94, 90 + (int)((long)StoragePoolBson.Int(transfer, "verified") * 4 / real));
-        return copied;
+        if (total == 0) return 0;
+        return Math.Min(100, (int)((long)StoragePoolBson.Int(transfer, "co") * 100 / total));
     }
 
     public static BsonDocument ToApi(BsonDocument transfer, BsonDocument? project, BsonDocument? source,
@@ -48,10 +41,6 @@ internal static class StoragePoolTransferView
             ["direction_name"] = StoragePoolConstants.DirectionName(direction),
             ["total_objects"] = StoragePoolBson.Int(transfer, "to"),
             ["copied_objects"] = StoragePoolBson.Int(transfer, "co"),
-            ["processed_objects"] = StoragePoolBson.Int(transfer, "processed"),
-            ["skipped_objects"] = StoragePoolBson.Int(transfer, "skipped"),
-            ["verified_objects"] = StoragePoolBson.Int(transfer, "verified"),
-            ["deleted_objects"] = StoragePoolBson.Int(transfer, "deleted"),
             ["total_bytes"] = StoragePoolBson.Long(transfer, "tb"),
             ["copied_bytes"] = StoragePoolBson.Long(transfer, "cb"),
             ["breakdown"] = new BsonDocument
