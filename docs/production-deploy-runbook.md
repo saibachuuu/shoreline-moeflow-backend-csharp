@@ -1,8 +1,9 @@
 # Production deploy, rollback and cutover runbook (C# backend)
 
-> Status: **NOT validated against real R2 / real SMTP / production.**
-> Every step below was checked only against the disposable loopback stack
-> (mongo + s3mock + mailpit). The R2/SMTP commands are templates: fill in
+> Status: **R2 write/read validated against the real bucket (2026-11-11); SMTP validated at
+> connection+AUTH level only; no full production cutover has been performed.**
+> Everything else below was checked against the disposable loopback stack
+> (mongo + s3mock + mailpit). The production commands are templates: fill in
 > values, run them from the production host, never commit them.
 
 ## 0. Pre-deploy checks (all must pass)
@@ -168,6 +169,20 @@ curl -s http://127.0.0.1:8080/ping
 #      StartTlsWhenAvailable|SslOnConnect) -- it applies to notification mail
 #      only; verification-code mail still follows MAIL_START_TLS.
 ```
+
+Observed on 2026-11-11 against the credentials already present in the WSL deploy:
+
+- **R2** (`*.r2.cloudflarestorage.com`, `Region=auto`, `ForcePathStyle=true`): Put/Head/Get and
+  a 7-day presigned GET all succeeded for 1 KB and 20 MB objects, SHA-256 identical. The AWS SDK
+  default of signing bodies with `STREAMING-AWS4-HMAC-SHA256-PAYLOAD` is rejected by R2
+  (`...not implemented`); the backend now sets `UseChunkEncoding=false` and drives multipart
+  manually. See `docs/storage-contract.md` §9.
+- **SMTP** (`m.usag.cc:465`, `EMAIL_USE_SSL=true`): TLS handshake and AUTH succeeded; no message
+  was sent. **Port 465 is implicit SMTPS, but the legacy notification-mail path mandates
+  `starttls()`, so notification mail cannot deliver on this configuration in either backend.**
+  Before cutover either move notification mail to port 587/STARTTLS or set
+  `MAIL_SECURE_SOCKET_OPTIONS=SslOnConnect`. Verification-code mail already follows the
+  opportunistic `MAIL_START_TLS` policy and is unaffected.
 
 Also update the drain step above to use the checked-in helper instead of a
 hand-written query: `RABBITMQ_HOST=... RABBITMQ_USER=... RABBITMQ_PASS=... ./tools/celery-drain-check.sh`
