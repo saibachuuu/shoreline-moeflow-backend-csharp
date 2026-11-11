@@ -9,13 +9,16 @@
 
 param(
     [int]$BasePort = 33000,
-    [string]$TrxDir = (Join-Path $env:TEMP "opencode\moeflow-r2-full-suite"),
+    [string]$TrxDir = "",
     [string]$Filter = ""
 )
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
-$stack = "shoreline-r2-full"
+# Unique per port range so parallel worktrees never share a compose project.
+$stack = "shoreline-r2-full-$BasePort"
+if (-not $TrxDir) { $TrxDir = Join-Path $env:TEMP "opencode\moeflow-r2-full-suite-$BasePort" }
+$wslRepo = "/mnt/" + $repo.Substring(0, 1).ToLowerInvariant() + ($repo.Substring(2) -replace '\\', '/')
 
 $mongoPort = $BasePort
 $s3Port = $BasePort + 1
@@ -31,7 +34,7 @@ $env:SHORELINE_TEST_MAILPIT_PORT = "$mailpitPort"
 $env:SHORELINE_TEST_API_PORT = "$apiPort"
 
 Write-Host "Starting disposable stack '$stack' on ports $mongoPort-$apiPort ..."
-wsl -e bash -lc "cd /mnt/c/Users/88888888/shoreline-moeflow/shoreline-moeflow-backend-csharp && SHORELINE_TEST_STACK_NAME='$stack' SHORELINE_TEST_MONGO_PORT='$mongoPort' SHORELINE_TEST_S3_PORT='$s3Port' SHORELINE_TEST_SMTP_PORT='$smtpPort' SHORELINE_TEST_MAILPIT_PORT='$mailpitPort' docker compose -f compose.test.yml up -d --wait mongo s3 mailpit"
+wsl -e bash -lc "cd '$wslRepo' && SHORELINE_TEST_STACK_NAME='$stack' SHORELINE_TEST_MONGO_PORT='$mongoPort' SHORELINE_TEST_S3_PORT='$s3Port' SHORELINE_TEST_SMTP_PORT='$smtpPort' SHORELINE_TEST_MAILPIT_PORT='$mailpitPort' docker compose -f compose.test.yml up -d --wait mongo s3 mailpit"
 if ($LASTEXITCODE -ne 0) { throw "stack failed to start" }
 
 New-Item -ItemType Directory -Force -Path $TrxDir | Out-Null
@@ -48,7 +51,7 @@ try {
 finally {
     Pop-Location
     Write-Host "Stopping disposable stack '$stack' ..."
-    wsl -e bash -lc "docker compose -p '$stack' -f /mnt/c/Users/88888888/shoreline-moeflow/shoreline-moeflow-backend-csharp/compose.test.yml down -v" | Out-Null
+    wsl -e bash -lc "docker compose -p '$stack' -f '$wslRepo/compose.test.yml' down -v" | Out-Null
 }
 
 Write-Host "TRX: $TrxDir\full.trx"
