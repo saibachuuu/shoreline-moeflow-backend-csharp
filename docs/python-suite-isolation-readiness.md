@@ -1,11 +1,10 @@
 # Python full-suite isolation readiness
 
-Status as of 2026-11-10 (end of session): **runner implemented, runner self-tests
-green, isolated full-suite run NOT passing yet - one harness bug remains.**
+Status as of 2026-11-11: **isolated full-suite run VERIFIED — all gates held,
+914 collected tests passed (866 tests + 48 subtests), 0 failures/errors/skips.**
 Nothing was ever run inside the legacy workspace and no dotenv file or
-credential was read. The result below is honest: the suite did start inside the
-disposable container, but every test errored during collection because of a
-harness stub bug, so the suite has **no** real pass/fail signal yet.
+credential was read. The earlier harness bug described below was diagnosed and
+fixed; the corrected stub is the one committed here.
 
 ## Why the legacy suite cannot be run in place
 
@@ -86,7 +85,66 @@ identity probe used by the port gate.
   outer `timeout -k 30 2100`, harness timeout 1800 s, dedicated Mongo container
   with `--tmpfs /data/db` and published only on `127.0.0.1:27321`.
 
-## Honest result of the isolated full run
+## Verified isolated full run (2026-11-11)
+
+* Prior failure diagnosed: run 2 of 2026-11-10 errored 160 tests at setup with
+  `PermissionError: python-isolation: fixture may not set MOEFLOW_PYISO_TOKEN`
+  because the `dotenv.load_dotenv` stub raised on the harness's own bookkeeping
+  key when pytest-dotenv fed the isolated fixture back through it. The stub now
+  skips that key (`tools/Python-IsolatedSuite.py:275` `_ALLOWED`) and accepts
+  pytest-dotenv's keyword call (`dotenv_path/stream/verbose/override/
+  interpolate/encoding`), so no code change beyond the already-committed stub
+  was needed for this run. Prior "no valid result" = collection/setup errors
+  only, not real test outcomes.
+* Run 2026-11-11 (branch `agents/repl-python-suite-20261111`, worktree
+  `moeflow-repl-python-20261111`): snapshot of legacy commit
+  `be0b717407a494f9daf636476ac7ec8319eb87bc` (360 files, status=planned),
+  disposable container `shoreline-pyiso:20261110`, own Mongo endpoint
+  `shoreline-pyiso-repl-20261111-mongo` on `127.0.0.1:27271` (tmpfs, agent-owned
+  ports: mongo 27271, s3 29271, smtp 21271, mailpit 28271, api 25271,
+  rabbit 25272), DB `moeflow_pyiso_553ae973_test` claimed before import.
+* All gates green: dotenv autoload absent, `imports_before_gates=0`,
+  execution-copy digest equal to snapshot digest
+  `a40a42a...dd4a727`, no foreign listeners, fixture credentials empty.
+* Result: **914 collected items, passed 914 (866 tests + 48 subtests),
+  failures 0, errors 0, skipped 0**, pytest exit 0, elapsed 123.5 s,
+  Python 3.12.16, workers 2.
+* Evidence (WSL host): plan `/home/eight8times/pyiso-repl-20261111/plan.json`,
+  summary `/home/eight8times/pyiso-repl-20261111/work/summary.json`, JUnit
+  `/home/eight8times/pyiso-repl-20261111/work/runs/20261111T041147/junit.xml`,
+  pytest log `/home/eight8times/pyiso-repl-20261111/work/runs/20261111T041147/pytest.log`
+  (sha256 `ce242f68ace22404e0d500c7a297c29ec16b08e26e8e45151790f2f84ddbc8b7`).
+  Owned endpoint stopped after the run (`removed shoreline-pyiso-repl-20261111-mongo`).
+* Runner self-tests re-run on WSL Python 3.13: `python3 -m unittest discover -s
+  tools/tests -p "test_*.py"` -> 68 tests OK.
+
+Commands used (WSL):
+```
+python3 tools/Python-IsolatedSuite.py plan \
+  --legacy-directory <legacy-repo> --target <disjoint-snapshot-dir> \
+  --commit be0b717407a494f9daf636476ac7ec8319eb87bc \
+  --expect-commit be0b717407a494f9daf636476ac7ec8319eb87bc \
+  --port-mongo 27271 --port-s3 29271 --port-smtp 21271 \
+  --port-mailpit 28271 --port-api 25271 --port-rabbit 25272 \
+  --json-out <plan.json> --print-plan
+python3 tools/Python-IsolatedSuite.py endpoints --action start \
+  --name shoreline-pyiso-repl-20261111-mongo --port 27271 \
+  --database <db-name> --manifest <endpoints.json>
+docker run --rm --network host --user 10001:10001 \
+  -v <harness-tools-dir>:/harness:ro -v <snapshot>:/source:ro \
+  -v <work-dir>:/work shoreline-pyiso:20261110 \
+  timeout -k 30 2100 python /harness/Python-IsolatedSuite.py run \
+  --source /source --root /work --db-name <db-name> --workers 2 \
+  --owned-endpoint-manifest /work/endpoints.json \
+  --port-mongo 27271 --port-s3 29271 --port-smtp 21271 \
+  --port-mailpit 28271 --port-api 25271 --port-rabbit 25272 \
+  --json-out /work/summary.json
+python3 tools/Python-IsolatedSuite.py endpoints --action stop \
+  --name shoreline-pyiso-repl-20261111-mongo --port 27271 \
+  --database <db-name> --manifest <endpoints.json>
+```
+
+## Earlier isolated runs (2026-11-10, superseded by the run above)
 
 Two isolated runs were started in the disposable container against the
 snapshot (never against the legacy workspace):
@@ -110,10 +168,9 @@ setup errors, not test outcomes.
 
 ## Blockers / next steps
 
-1. Re-run the full suite with the corrected stub (`tools/Python-IsolatedSuite.py`,
-   `dotenv_stub_source`): expected failure line gone; then record the real
-   pass/fail/skip counts from `junit.xml`/summary JSON.
-2. If real failures appear, they are legacy failures to be reported as such -
+1. ~~Re-run the full suite with the corrected stub~~ Done 2026-11-11 — see
+   "Verified isolated full run" above.
+2. Any real failures would be legacy failures to be reported as such -
    not to be skipped or patched.
 3. Optional hardening: `pytest-randomly` is installed transitively but not
    loaded by default, so no ordering guard was kept.
