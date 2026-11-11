@@ -292,6 +292,55 @@ public sealed class FileParseTests(LocalServicesWithoutWorker services)
         Assert.Equal(FileParseService.FindTermsFinished, (await LoadFileAsync(file)).Integer("ft"));
     }
 
+    [Fact]
+    public async Task ParseText_ReplayAfterSuccess_IsNoOp()
+    {
+        var clock = new TestClock();
+        var project = await ProjectAsync();
+        var file = await FileAsync(project, "replay.txt", ParseText("one\ntwo"));
+        var queue = new JobQueue(services.Store, clock);
+        var parse = Service(clock, queue);
+
+        var jobId = await parse.ParseTextAsync(file, null, runSync: false, ct);
+        Assert.NotNull(jobId);
+        var claimed = await queue.ClaimAsync("first", [FileParseService.ParseTextJobKind], ct);
+        if (claimed is null || claimed["payload"].AsBsonDocument.Text("file_id") != file.ToString())
+        {
+            // Other tests in this collection schedule parse jobs they never
+            // claim; drain until this test's own job is delivered.
+            claimed = null;
+            for (var i = 0; i < 100 && claimed is null; i++)
+            {
+                var candidate = await queue.ClaimAsync("first", [FileParseService.ParseTextJobKind], ct);
+                if (candidate is null) break;
+                if (candidate["payload"].AsBsonDocument.Text("file_id") == file.ToString()) claimed = candidate;
+            }
+        }
+        Assert.NotNull(claimed);
+        var payload = claimed!["payload"].AsBsonDocument;
+        await parse.RunParseTextAsync(payload, ct);
+        await queue.CompleteAsync(jobId.Value, "first", ct);
+
+        var sources = await SourcesAsync(file);
+        Assert.Equal(2, sources.Count);
+        var ids = sources.Select(row => row["_id"].AsObjectId).ToList();
+
+        // Redelivery of the same job after success must not create duplicate
+        // business documents or schedule follow-up work.
+        await parse.RunParseTextAsync(payload, ct);
+
+        var replayed = await SourcesAsync(file);
+        Assert.Equal(ids, replayed.Select(row => row["_id"].AsObjectId).ToList());
+        Assert.Equal(FileParseService.ParseSucceeded, (await LoadFileAsync(file)).Integer("ps"));
+        Assert.Equal(1, await services.Store.Collection("csharp_job").CountDocumentsAsync(
+            new BsonDocument
+            {
+                ["kind"] = FileParseService.ParseTextJobKind,
+                ["payload.file_id"] = file.ToString()
+            }));
+        Assert.Equal("done", (await LoadJobAsync(jobId.Value)).Text("state"));
+    }
+
     // ---------------------------------------------------------------- fixtures
 
     private FileParseService Service(TestClock clock, JobQueue? queue = null) => new(

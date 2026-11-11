@@ -28,8 +28,29 @@ public sealed class JobEnqueueConflictException : InvalidOperationException
     public ObjectId JobId { get; }
 }
 
-public sealed class JobQueue(MongoStore store, TimeProvider clock, JobQueueWriteObserver? writeObserver = null)
+public sealed class JobQueue(MongoStore store, TimeProvider clock, JobQueueWriteObserver? writeObserver = null, int maxAttempts = JobQueue.DefaultMaxAttempts)
 {
+    /// <summary>
+    /// Default ceiling for delivery attempts of a single job (initial claim +
+    /// retries). A job whose attempt counter reaches this value is moved to
+    /// <c>failed</c> instead of being reclaimed. Overridable per instance via
+    /// the <c>maxAttempts</c> constructor argument and process-wide via the
+    /// <c>Jobs:MaxAttempts</c> configuration key (see Program.cs).
+    /// Mirrors the Celery default-style bounded retry policy: exponential
+    /// backoff (<see cref="RetryDelay"/>) with a hard attempt ceiling — never
+    /// infinite retries.
+    /// </summary>
+    public const int DefaultMaxAttempts = 5;
+
+    private readonly int maxAttempts = Math.Max(1, maxAttempts);
+
+    /// <summary>
+    /// Retry backoff for a failed attempt: <c>min(300s, 5 * 2^attempts)</c>,
+    /// matching the Python Celery beat/worker retry posture (bounded
+    /// exponential backoff, 5-minute cap).
+    /// </summary>
+    internal static TimeSpan RetryDelay(int attempts) =>
+        TimeSpan.FromSeconds(Math.Min(300, 5 * (1 << Math.Min(Math.Max(0, attempts), 20))));
     private IMongoCollection<BsonDocument> Jobs => store.Collection("csharp_job");
     public async Task<ObjectId> EnqueueAsync(string kind, BsonDocument payload, CancellationToken ct)
     {
@@ -111,10 +132,10 @@ public sealed class JobQueue(MongoStore store, TimeProvider clock, JobQueueWrite
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var f = Builders<BsonDocument>.Filter;
-        await Jobs.UpdateManyAsync(f.Eq("state", "running") & f.Lte("lease_until", now) & f.Gte("attempts", 5),
+        await Jobs.UpdateManyAsync(f.Eq("state", "running") & f.Lte("lease_until", now) & f.Gte("attempts", maxAttempts),
             Builders<BsonDocument>.Update.Set("state", "failed").Set("finished_at", now)
                 .Unset("owner").Unset("lease_until"), cancellationToken: ct);
-        var eligible = f.In("kind", kinds) & f.Lt("attempts", 5) &
+        var eligible = f.In("kind", kinds) & f.Lt("attempts", maxAttempts) &
             ((f.Eq("state", "pending") & f.Lte("available_at", now)) |
              (f.Eq("state", "running") & f.Lte("lease_until", now)));
         return await Jobs.FindOneAndUpdateAsync<BsonDocument>(eligible,
@@ -139,8 +160,8 @@ public sealed class JobQueue(MongoStore store, TimeProvider clock, JobQueueWrite
             .Unset("owner").Unset("lease_until"), cancellationToken: ct);
 
     public Task FailAsync(ObjectId id, string owner, int attempts, CancellationToken ct) => Jobs.UpdateOneAsync(Owned(id, owner),
-        Builders<BsonDocument>.Update.Set("state", attempts >= 5 ? "failed" : "pending")
-            .Set("available_at", clock.GetUtcNow().UtcDateTime.AddSeconds(Math.Min(300, 5 * (1 << attempts))))
+        Builders<BsonDocument>.Update.Set("state", attempts >= maxAttempts ? "failed" : "pending")
+            .Set("available_at", clock.GetUtcNow().UtcDateTime.Add(RetryDelay(attempts)))
             .Unset("owner").Unset("lease_until"), cancellationToken: ct);
 
     public Task CancelPendingAsync(ObjectId id, CancellationToken ct) => Jobs.UpdateOneAsync(

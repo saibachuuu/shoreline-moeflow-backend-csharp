@@ -286,7 +286,7 @@ public sealed class EmailTests(LocalServices services)
     }
 
     [Fact]
-    public async Task ReplayedJobRecoversOneMirrorWithoutRotatingOrDuplicatingTheCode()
+    public async Task ReplayedJobRecoversOneMirrorWithoutResending()
     {
         var email = Guid.NewGuid().ToString("N") + "@example.test";
         var issued = DateTime.UtcNow;
@@ -296,6 +296,7 @@ public sealed class EmailTests(LocalServices services)
 
         // Two executions model a retry after an interruption (send happened but the
         // completion write did not, so the lease expired and the job was reclaimed).
+        // The verification.sent claim makes the second execution a no-op.
         await Handler().ExecuteAsync(new BsonDocument("code_job_id", jobId), default);
         await Handler().ExecuteAsync(new BsonDocument("code_job_id", jobId), default);
 
@@ -311,23 +312,21 @@ public sealed class EmailTests(LocalServices services)
         for (var attempt = 0; attempt < 50; attempt++)
         {
             messages = await SearchMailpitAsync(email);
-            if (messages.GetProperty("messages").GetArrayLength() >= 2) break;
+            if (messages.GetProperty("messages").GetArrayLength() >= 1) break;
             await Task.Delay(100);
         }
         await Task.Delay(300);
         messages = await SearchMailpitAsync(email);
-        // At-least-once delivery may send twice; the code must never change.
-        Assert.Equal(2, messages.GetProperty("messages").GetArrayLength());
+        // Exactly-once delivery: the replay must not resend, and the code
+        // must never rotate.
+        var messageId = Assert.Single(messages.GetProperty("messages").EnumerateArray())
+            .GetProperty("ID").GetString();
         using var mailpit = new HttpClient
         {
             BaseAddress = new Uri(TestEnvironment.MailpitBaseUrl), Timeout = TimeSpan.FromSeconds(5)
         };
-        foreach (var summary in messages.GetProperty("messages").EnumerateArray())
-        {
-            var message = await mailpit.GetFromJsonAsync<JsonElement>(
-                "/api/v1/message/" + summary.GetProperty("ID").GetString());
-            Assert.Contains("112233", message.GetProperty("Text").GetString());
-        }
+        var message = await mailpit.GetFromJsonAsync<JsonElement>("/api/v1/message/" + messageId);
+        Assert.Contains("112233", message.GetProperty("Text").GetString());
     }
 
     [Fact]

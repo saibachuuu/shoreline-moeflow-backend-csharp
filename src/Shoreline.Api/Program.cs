@@ -73,7 +73,10 @@ builder.Services.AddScoped<ApplicationService>();
 builder.Services.AddScoped<IdentityTagPolicyService>();
 builder.Services.AddScoped<BootstrapService>();
 builder.Services.AddSingleton<ObjectStorage>();
-builder.Services.AddSingleton<JobQueue>();
+builder.Services.AddSingleton(sp => new JobQueue(
+    sp.GetRequiredService<MongoStore>(),
+    sp.GetRequiredService<TimeProvider>(),
+    maxAttempts: sp.GetRequiredService<IConfiguration>().GetValue("Jobs:MaxAttempts", JobQueue.DefaultMaxAttempts)));
 builder.Services.AddSingleton<EmailCodeService>();
 builder.Services.AddSingleton<IJobHandler, SecurityEmailHandler>();
 builder.Services.AddSingleton<IJobHandler, TeamCreationHandler>();

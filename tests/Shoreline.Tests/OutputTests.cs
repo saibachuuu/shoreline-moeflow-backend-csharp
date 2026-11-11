@@ -844,6 +844,51 @@ public sealed class OutputTests(LocalServices services)
             project["fs"].ToInt64());
     }
 
+    [Fact]
+    public async Task Export_CrashBeforeQueueComplete_ReclaimConverges()
+    {
+        var clock = new TestClock(BaseTime);
+        var fixture = await ExportFixtureAsync(clock, putImage: true);
+        // Unique unregistered kind: the shared background worker in this
+        // collection only claims registered kinds, so the queue mechanics
+        // below are driven solely by this test.
+        var kind = "output-probe-" + Guid.NewGuid().ToString("N");
+        var queue = new JobQueue(services.Store, clock);
+        var jobId = ObjectId.GenerateNewId();
+        await queue.EnqueueOnceAsync(jobId, kind, fixture.Payload, CancellationToken.None);
+
+        var first = await queue.ClaimAsync("owner-a", [kind], CancellationToken.None);
+        Assert.NotNull(first);
+        await ExportService(clock).RunAsync(fixture.Payload, CancellationToken.None);
+        Assert.Equal(OutputStatus.Succeeded, (await LoadOutputAsync(fixture.OutputId)).Integer("s"));
+
+        // Crash: business data is written but the queue Complete never runs.
+        // Both leases expire (queue lease and output-row lease) so another
+        // worker reclaims the same job and re-runs the same payload.
+        await services.Store.Collection("csharp_job").UpdateOneAsync(
+            new BsonDocument("_id", jobId),
+            new BsonDocument("$set", new BsonDocument(
+                "lease_until", BaseTime.AddMinutes(-1).UtcDateTime)));
+        await services.Store.Collection("output").UpdateOneAsync(
+            new BsonDocument("_id", fixture.OutputId),
+            new BsonDocument("$set", new BsonDocument(
+                "job_lease_until", BaseTime.AddMinutes(-1).UtcDateTime)));
+        var second = await queue.ClaimAsync("owner-b", [kind], CancellationToken.None);
+        Assert.NotNull(second);
+        Assert.Equal(2, second["attempts"].AsInt32);
+        await ExportService(clock).RunAsync(fixture.Payload, CancellationToken.None);
+        await queue.CompleteAsync(jobId, "owner-b", CancellationToken.None);
+
+        var output = await LoadOutputAsync(fixture.OutputId);
+        var project = await ProjectAsync(fixture.ProjectId);
+        Assert.Equal(OutputStatus.Succeeded, output.Integer("s"));
+        Assert.Equal(output["sb"].ToInt64(), project["ob"].ToInt64());
+        Assert.Single((await Storage().ListAsync(
+            "outputs/" + fixture.OutputId + "/", null, 100, CancellationToken.None)).Objects);
+        Assert.Equal("done", (await services.Store.Collection("csharp_job")
+            .Find(new BsonDocument("_id", jobId)).FirstAsync()).Text("state"));
+    }
+
     private async Task ResetForRetryAsync(ObjectId outputId)
     {
         await services.Store.Collection("output").UpdateOneAsync(
