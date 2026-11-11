@@ -32,7 +32,17 @@ Python oracle：`shoreline-moeflow-backend`；C# 实现：本 worktree。
 - [ ] G2：`同一 target 的聚合（更新 vs 新增）`——Python 无“同一事件更新已有通知”语义（幂等键相同内容复用、不同内容 409；重复 dispatch 只补回执）。若“聚合”指别的（如同类通知合并计数），无 oracle 对应——标**待确认**（`app/services/notifications.py:502-535`）。
 - [ ] G3：个人通知（`personal`）端到端：仅内部受信来源可发，无 HTTP 入口（`notifications.py:875-885`）。本次未覆盖 `PublishPersonalAsync` 的真实来源注册——标**待确认**是否需要。
 
-## 验证（focused）
+## 验证（focused，实际执行）
 
-- `pwsh -NoProfile -File tools/Run-FullSuite.ps1 -BasePort 33050 -Filter "FullyQualifiedName~NotificationE2E"`
-- 目标：13/13 通过（12 service-level + 1 HTTP + 常量表；其中 `ErrorContract_NotificationErrorShapeMatchesPython` 为纯单元）。
+- `tools/Run-FullSuite.ps1 -BasePort 33050 -Filter "FullyQualifiedName~NotificationE2E"`：
+  **14/14 通过**（13 个 service-level 事实 + 1 HTTP 事实 + 1 纯单元形状断言，共 14 个 `[Fact]`）。
+  首次运行 12/14：两个失败均为测试搭建问题（项目发布需作者同时是活跃项目成员，
+  与 Python `app/services/notifications.py:96` 一致；`unverified_email` 需 `trust:false`
+  实例），已修正，无产品代码改动。
+- `tools/Run-FullSuite.ps1 -BasePort 33051 -Filter "FullyQualifiedName~Notification"`：
+  **107/107 通过**（新增 14 + 既有 N1/N2/N3/HTTP 93），确认共享库下无交叉污染。
+- 构建：`dotnet build Shoreline.sln` 0 警告 0 错误。
+- 未跑全量（按任务要求只跑 focused）。
+- Mailpit 真实投递：未做（见待确认 G1）。一次性栈自带 Mailpit 容器（33053/33054），
+  但生产 MailKit 传输强制 STARTTLS/SMTPS + 系统信任链，Mailpit 明文监听无法完成
+  accepted 路径；投递决策与精确计数已由 fake transport 锁定。
