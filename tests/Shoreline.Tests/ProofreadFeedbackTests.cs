@@ -364,7 +364,8 @@ public sealed class ProofreadFeedbackTests : IDisposable
         var error = await Assert.ThrowsAsync<ApiError>(() =>
             service.SendAsync(stranger, page.Project["_id"].AsObjectId.ToString(),
                 page.Target["_id"].AsObjectId.ToString(), Body(), "key-0001", default));
-        Assert.Equal(403, error.Status);
+        Assert.Equal(400, error.Status);
+        Assert.Equal(103, error.Code);
         Assert.Equal("您没有校对权限，无法寄送校对稿", error.Message);
     }
 
@@ -431,7 +432,7 @@ public sealed class ProofreadFeedbackTests : IDisposable
         var error = await Assert.ThrowsAsync<ApiError>(() =>
             service.SendAsync(actor, project["_id"].AsObjectId.ToString(),
                 target["_id"].AsObjectId.ToString(), Body(), "key-0006", default));
-        Assert.Equal(4025, error.Code);
+        Assert.Equal(4030, error.Code);
     }
 
     // ------------------------------------------------------------------
@@ -597,6 +598,8 @@ public sealed class ProofreadFeedbackTests : IDisposable
             service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
                 page.Target["_id"].AsObjectId.ToString(), Body(new { cc_myself = false }), "key-0013", default));
         Assert.Equal("NoTranslatorMemberError", error.Error);
+        Assert.Equal(4031, error.Code);
+        Assert.Equal(400, error.Status);
     }
 
     [Fact]
@@ -630,6 +633,8 @@ public sealed class ProofreadFeedbackTests : IDisposable
             service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
                 page.Target["_id"].AsObjectId.ToString(), Body(new { cc_myself = false }), "key-0015", default));
         Assert.Equal("NoTranslatorMemberError", error.Error);
+        Assert.Equal(4031, error.Code);
+        Assert.Equal(400, error.Status);
     }
 
     // ------------------------------------------------------------------
@@ -1044,14 +1049,16 @@ public sealed class ProofreadFeedbackTests : IDisposable
     }
 
     [Fact]
-    public async Task Http_NoPermissionReturns403()
+    public async Task Http_NoPermissionReturns400()
     {
         var page = await CreateChangedPageAsync();
         var stranger = await InsertUserAsync("外人", UniqueEmail("stranger@example.test"));
         using var app = HttpApp(false);
         var client = Authenticated(app, stranger);
         var response = await Post(client, SendPath(page), new { }, "http-0003");
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(103, error.GetProperty("code").GetInt32());
     }
 
     [Fact]
