@@ -60,7 +60,8 @@ public sealed class LegacyRuntimeDifferentialTests
             ConfigurationProvenance =
                 "runtime_reference.py:203-204 synthetic DEFAULT_USER_AVATAR/DEFAULT_TEAM_AVATAR=''; " +
                 "runtime_reference.py:224 APIKIT_DEFAULT_LIMIT=10/MAX=100; " +
-                "mapped to C# Storage:DefaultUserAvatar, Site:DefaultTeamAvatar, Pagination:DefaultLimit/MaxLimit."
+                "mapped to C# Storage:DefaultUserAvatar, Site:DefaultTeamAvatar, Pagination:DefaultLimit/MaxLimit.",
+            DynamicBsonRules = "term_bank_create only: the one inserted term_bank document may vary at _id (must be ObjectId), c and e (must be BSON DateTime within 5 minutes of replay); t,n,sl,tl,ti,u and every other field/type/value plus BSON field order are exact, the seeded term_bank document is byte-identical, and all other collection after digests are exact."
         };
 
         try
@@ -83,7 +84,7 @@ public sealed class LegacyRuntimeDifferentialTests
 
             foreach (var item in root.GetProperty("cases").EnumerateArray())
             {
-                await RunCaseAsync(report, services, http, item, token, seedNames);
+                await RunCaseAsync(report, services, http, item, token, seedNames, seedCollections);
             }
         }
         finally
@@ -124,7 +125,7 @@ public sealed class LegacyRuntimeDifferentialTests
     }
 
     private static async Task RunCaseAsync(DifferentialReport report, LocalServices services, HttpClient http,
-        JsonElement item, string token, IReadOnlyList<string> seedNames)
+        JsonElement item, string token, IReadOnlyList<string> seedNames, JsonElement seedCollections)
     {
         var name = item.GetProperty("name").GetString() ?? $"case-{item.GetProperty("index").GetInt32()}";
         var request = item.GetProperty("request");
@@ -149,6 +150,15 @@ public sealed class LegacyRuntimeDifferentialTests
         using var message = new HttpRequestMessage(new HttpMethod(method), url);
         if (request.TryGetProperty("json", out var requestJson))
             message.Content = new StringContent(requestJson.GetRawText(), Encoding.UTF8, "application/json");
+        if (request.TryGetProperty("json", out requestJson))
+        {
+            var outboundJson = await message.Content!.ReadAsStringAsync();
+            caseReport.RequestBodyEqual = string.Equals(outboundJson, requestJson.GetRawText(), StringComparison.Ordinal);
+            caseReport.RequestBody = outboundJson;
+            if (!caseReport.RequestBodyEqual)
+                Add(report, name, "request", "$request.json", requestJson.GetRawText(), outboundJson,
+                    "business", SourceFor(name, "$request.json"), "Replayed JSON request differs from the fixture.");
+        }
         if (request.TryGetProperty("accept_language", out var acceptLanguage) &&
             acceptLanguage.GetString() is { Length: > 0 } language)
             message.Headers.AcceptLanguage.ParseAdd(language);
@@ -220,11 +230,166 @@ public sealed class LegacyRuntimeDifferentialTests
 
         var after = await DatabaseDigestAsync(services, seedNames);
         var expectedAfter = item.GetProperty("database_after");
-        var afterEqual = CompareDigest(report, name, "$database_after", expectedAfter, after,
-            "bson_after", "Request changed fixture data, or the C# database does not match the Python fixture after the request.");
+        var afterEqual = name == "term_bank_create"
+            ? await CompareTermBankAfterAsync(report, services, item, seedCollections, after, expectedAfter)
+            : CompareDigest(report, name, "$database_after", expectedAfter, after,
+                "bson_after", "Request changed fixture data, or the C# database does not match the Python fixture after the request.");
         caseReport.DatabaseBeforeEqual = beforeEqual;
         caseReport.DatabaseAfterEqual = afterEqual;
         report.Cases.Add(caseReport);
+    }
+
+    private static async Task<bool> CompareTermBankAfterAsync(DifferentialReport report, LocalServices services,
+        JsonElement item, JsonElement seedCollections, Dictionary<string, CollectionDigest> actualDigests,
+        JsonElement expectedDigests)
+    {
+        var equal = true;
+        foreach (var expectedCollection in expectedDigests.EnumerateObject())
+        {
+            if (expectedCollection.Name == "term_bank") continue;
+            if (!actualDigests.TryGetValue(expectedCollection.Name, out var actual))
+            {
+                Add(report, "term_bank_create", "bson_after", "$database_after." + expectedCollection.Name,
+                    ToJson(expectedCollection.Value), "<missing>", "business", SourceFor("term_bank_create", "$database_after"),
+                    "Expected collection is missing after the write.");
+                equal = false;
+                continue;
+            }
+            equal &= CompareDigest(report, "term_bank_create", "$database_after." + expectedCollection.Name,
+                expectedCollection.Value, actual, "bson_after", "Non-term-bank after digest differs.");
+        }
+        foreach (var actualCollection in actualDigests.Keys)
+        {
+            if (expectedDigests.TryGetProperty(actualCollection, out _)) continue;
+            Add(report, "term_bank_create", "bson_after", "$database_after." + actualCollection,
+                "<missing>", JsonSerializer.Serialize(actualDigests[actualCollection], ReportJson), "business",
+                SourceFor("term_bank_create", "$database_after"), "Unexpected collection exists after the write.");
+            equal = false;
+        }
+
+        var expectedDocs = item.GetProperty("database_after_documents").GetProperty("term_bank")
+            .EnumerateArray().Select(document => DeserializeRaw(document)).ToArray();
+        var actualDocs = await services.Store.Collection("term_bank")
+            .Find(FilterDefinition<BsonDocument>.Empty).Sort(new BsonDocument("_id", 1)).ToListAsync();
+        var expectedCount = expectedDigests.GetProperty("term_bank").GetProperty("count").GetInt32();
+        if (expectedDocs.Length != expectedCount || actualDocs.Count != expectedCount || expectedCount != 2)
+        {
+            Add(report, "term_bank_create", "bson_after", "$database_after.term_bank.count",
+                expectedCount.ToString(CultureInfo.InvariantCulture), actualDocs.Count.ToString(CultureInfo.InvariantCulture),
+                "business", SourceFor("term_bank_create", "$database_after.term_bank"),
+                "Expected exactly one inserted term-bank document.");
+            equal = false;
+        }
+
+        var seedDocument = DeserializeRaw(seedCollections.GetProperty("term_bank")
+            .GetProperty("documents")[0]);
+        var existing = actualDocs.SingleOrDefault(document => document["_id"] == seedDocument["_id"]);
+        if (existing is null || !existing.ToBson().AsSpan().SequenceEqual(seedDocument.ToBson()))
+        {
+            Add(report, "term_bank_create", "bson_after", "$database_after.term_bank[seed]",
+                Convert.ToBase64String(seedDocument.ToBson()), existing is null ? "<missing>" : Convert.ToBase64String(existing.ToBson()),
+                "business", SourceFor("term_bank_create", "$database_after.term_bank[seed]"),
+                "Pre-existing seeded term-bank must remain byte-identical.");
+            equal = false;
+        }
+
+        var expectedNew = expectedDocs.SingleOrDefault(document => document["_id"] != seedDocument["_id"]);
+        var actualNew = actualDocs.SingleOrDefault(document => document["_id"] != seedDocument["_id"]);
+        if (expectedNew is null || actualNew is null)
+        {
+            Add(report, "term_bank_create", "bson_after", "$database_after.term_bank[new]",
+                expectedNew is null ? "<missing>" : expectedNew.ToJson(), actualNew is null ? "<missing>" : actualNew.ToJson(),
+                "business", SourceFor("term_bank_create", "$database_after.term_bank[new]"),
+                "Exactly one new document must exist in both runtimes.");
+            equal = false;
+        }
+        else
+        {
+            equal &= CompareInsertedTermBank(report, expectedNew, actualNew);
+        }
+
+        return equal;
+    }
+
+    private static BsonDocument DeserializeRaw(JsonElement descriptor) =>
+        BsonSerializer.Deserialize<BsonDocument>(Convert.FromBase64String(descriptor.GetProperty("bson_base64").GetString()!));
+
+    private static bool CompareInsertedTermBank(DifferentialReport report, BsonDocument expected, BsonDocument actual)
+    {
+        var equal = true;
+        foreach (var requiredField in new[] { "_id", "t", "n", "sl", "tl", "ti", "u", "c", "e" })
+        {
+            if (expected.Contains(requiredField) && actual.Contains(requiredField)) continue;
+            Add(report, "term_bank_create", "bson_field", "$database_after.term_bank[new]." + requiredField,
+                expected.Contains(requiredField) ? "present" : "<missing>", actual.Contains(requiredField) ? "present" : "<missing>",
+                "business", SourceFor("term_bank_create", "$database_after.term_bank[new]." + requiredField),
+                "Required inserted term-bank field is missing.");
+            equal = false;
+        }
+        var expectedNames = expected.Names.ToArray();
+        var actualNames = actual.Names.ToArray();
+        if (!expectedNames.SequenceEqual(actualNames, StringComparer.Ordinal))
+        {
+            Add(report, "term_bank_create", "bson_field", "$database_after.term_bank[new].<field-order>",
+                string.Join(",", expectedNames), string.Join(",", actualNames), "business",
+                SourceFor("term_bank_create", "$database_after.term_bank[new]"), "BSON field set/order differs.");
+            equal = false;
+        }
+        foreach (var field in expectedNames.Union(actualNames, StringComparer.Ordinal))
+        {
+            var path = "$database_after.term_bank[new]." + field;
+            if (!expected.TryGetValue(field, out var expectedValue) || !actual.TryGetValue(field, out var actualValue))
+            {
+                Add(report, "term_bank_create", "bson_field", path,
+                    expected.TryGetValue(field, out expectedValue) ? expectedValue.ToJson() : "<missing>",
+                    actual.TryGetValue(field, out actualValue) ? actualValue.ToJson() : "<missing>",
+                    "business", SourceFor("term_bank_create", path), "BSON field is missing from one runtime.");
+                equal = false;
+                continue;
+            }
+            if (field == "_id")
+            {
+                if (expectedValue.BsonType != BsonType.ObjectId || actualValue.BsonType != BsonType.ObjectId)
+                {
+                    Add(report, "term_bank_create", "bson_type", path,
+                        expectedValue.BsonType.ToString(), actualValue.BsonType.ToString(), "business",
+                        SourceFor("term_bank_create", path), "Dynamic _id must be BSON ObjectId in both runtimes.");
+                    equal = false;
+                }
+            }
+            else if (field is "c" or "e")
+            {
+                if (expectedValue.BsonType != BsonType.DateTime || actualValue.BsonType != BsonType.DateTime)
+                {
+                    Add(report, "term_bank_create", "bson_type", path,
+                        expectedValue.BsonType.ToString(), actualValue.BsonType.ToString(), "business",
+                        SourceFor("term_bank_create", path), "Dynamic date fields must be BSON DateTime in both runtimes.");
+                    equal = false;
+                }
+                else if (!IsRecent(expectedValue.AsBsonDateTime.ToUniversalTime()) ||
+                         !IsRecent(actualValue.AsBsonDateTime.ToUniversalTime()))
+                {
+                    Add(report, "term_bank_create", "bson_value", path,
+                        expectedValue.ToJson(), actualValue.ToJson(), "business",
+                        SourceFor("term_bank_create", path), "Dynamic DateTime must be within five minutes of replay.");
+                    equal = false;
+                }
+            }
+            else if (expectedValue.BsonType != actualValue.BsonType || !expectedValue.Equals(actualValue))
+            {
+                Add(report, "term_bank_create", "bson_value", path,
+                    expectedValue.ToJson(), actualValue.ToJson(), "business",
+                    SourceFor("term_bank_create", path), "Non-dynamic BSON field type/value differs.");
+                equal = false;
+            }
+        }
+        return equal;
+    }
+
+    private static bool IsRecent(DateTime value)
+    {
+        var delta = (DateTime.UtcNow - value).Duration();
+        return delta <= TimeSpan.FromMinutes(5);
     }
 
     private static void CompareHeaders(DifferentialReport report, string name,
@@ -479,6 +644,7 @@ public sealed class LegacyRuntimeDifferentialTests
         "team_list" => "src/Shoreline.Api/Features/TeamEndpoints.cs:44-61; src/Shoreline.Api/Features/TeamService.cs ViewAsync",
         "term_bank_list" => "src/Shoreline.Api/Features/TermEndpoints.cs:13-20; src/Shoreline.Api/Features/TermService.cs:262-290",
         "application_list" => "src/Shoreline.Api/Features/ApplicationEndpoints.cs:52-65; src/Shoreline.Api/Features/ApplicationService.cs ToApiListAsync",
+        "term_bank_create" => "src/Shoreline.Api/Features/TermEndpoints.cs:22-28",
         "method_not_allowed_ping_post" => "src/Shoreline.Api/Program.cs:94",
         _ => "unknown"
     };
@@ -554,6 +720,7 @@ public sealed class LegacyRuntimeDifferentialTests
         public string TestDatabase { get; set; } = "";
         public Dictionary<string, string?> Configuration { get; set; } = new();
         public string ConfigurationProvenance { get; set; } = "";
+        public string DynamicBsonRules { get; set; } = "";
         public Dictionary<string, CollectionDigest> Seed { get; set; } = new();
         public List<CaseReport> Cases { get; set; } = new();
         public List<Difference> BusinessDifferences { get; set; } = new();
@@ -576,6 +743,8 @@ public sealed class LegacyRuntimeDifferentialTests
         public int StatusActual { get; set; }
         public string BodyKind { get; set; } = "";
         public bool BodyEqual { get; set; }
+        public bool RequestBodyEqual { get; set; } = true;
+        public string RequestBody { get; set; } = "";
         public bool DatabaseBeforeEqual { get; set; }
         public bool DatabaseAfterEqual { get; set; }
         public string ActualBody { get; set; } = "";

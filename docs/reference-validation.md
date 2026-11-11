@@ -276,11 +276,15 @@ recorded `python`/`pymongo` environment and is not the supported check.
   tasks are not covered.
 - Optional modules, translation catalogs, real OSS/R2, SMTP, Google Vision,
   and real production data are disabled or absent.
-- C# differential replay was run: statuses and JSON bodies matched, but the
-  term-bank after-write BSON SHA-256 differed (Python
-  `31504d7cbb58335d9a6e399c0a1e80fb4d3481f2e830d5ad8dd9293ae855f471` vs C#
-  `889bde3c00e1636642ef9854a5bdc91b004701535164adbffac335d5cf0d31cb`); this
-  remains a genuine write-side discrepancy.
+- C# differential replay validates seed/before digests byte-for-byte and
+  compares all after digests except the inserted term-bank document, whose
+  BSON fields are compared strictly except `_id` (ObjectId) and `c`/`e`
+  (DateTime, each within five minutes of replay). The original term-bank BSON
+  document remains byte-identical; every other after collection digest must
+  match exactly. On the inserted document, `_id` must remain an ObjectId, `c`
+  and `e` must remain BSON DateTime within five minutes of replay, while `t`,
+  `n`, `sl`, `tl`, `ti`, `u` and every other field/type/value/order are strict.
+  Latest targeted replay passed with zero business differences.
 - The original `tests/__init__.py` and `conftest.py` remain forbidden because
   of `*_test` database drops and in-source `.mo` compilation.
 - The runtime fixture and differential changes are tracked on the isolated
@@ -308,5 +312,5 @@ These areas were intentionally not fabricated:
   fixture executes 20 Flask cases, including one term-bank creation POST; it
   does not claim coverage of other writes, registration, background tasks,
   optional modules, or real storage.
-- The targeted C# differential test ran and reports the after-write BSON
-  difference above; its TRX is `tests/Shoreline.Tests/TestResults/legacy-runtime-write-diff-final.trx`.
+- The targeted C# differential test passed with the precise dynamic-field rules
+  above; its TRX is `tests/Shoreline.Tests/TestResults/legacy-runtime-write-diff-normalized.trx`.

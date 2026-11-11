@@ -759,6 +759,14 @@ def run_cases(flask_app: Any, database: Any, token: str) -> list[dict[str, Any]]
             headers={"Accept-Language": "zh", **case["headers"]},
         )
         after = database_digest(database)
+        after_documents = None
+        if case["name"] == "term_bank_create":
+            after_documents = {
+                "term_bank": [
+                    bson_document(document)
+                    for document in database["term_bank"].find({}).sort("_id", 1)
+                ]
+            }
         records.append(
             {
                 "index": index,
@@ -778,6 +786,7 @@ def run_cases(flask_app: Any, database: Any, token: str) -> list[dict[str, Any]]
                 },
                 "database_before": before,
                 "database_after": after,
+                **({"database_after_documents": after_documents} if after_documents is not None else {}),
             }
         )
     return records

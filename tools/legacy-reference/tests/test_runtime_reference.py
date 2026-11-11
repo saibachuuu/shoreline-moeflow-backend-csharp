@@ -112,7 +112,7 @@ class RuntimeReferenceFixtureTests(unittest.TestCase):
         )
         self.assertTrue(application["create_time"].startswith("2026-01-01T00:00:00"))
 
-    def test_seed_bson_hashes_and_read_only_snapshots(self) -> None:
+    def test_seed_bson_hashes_and_write_snapshot(self) -> None:
         for name, collection in self.fixture["seed_collections"].items():
             self.assertEqual(collection["count"], len(collection["documents"]))
             for document in collection["documents"]:
@@ -149,6 +149,17 @@ class RuntimeReferenceFixtureTests(unittest.TestCase):
                         self.assertEqual(case["database_after"][collection], before)
             else:
                 self.assertEqual(case["database_before"], case["database_after"], case["name"])
+
+        write_case = self.fixture["cases"][-1]
+        after_docs = write_case["database_after_documents"]["term_bank"]
+        self.assertEqual(len(after_docs), 2)
+        seeded_hex = self.fixture["seed_collections"]["term_bank"]["documents"][0]["bson_hex"]
+        self.assertEqual(sum(document["bson_hex"] == seeded_hex for document in after_docs), 1)
+        for document in after_docs:
+            raw = base64.b64decode(document["bson_base64"])
+            self.assertEqual(raw.hex(), document["bson_hex"])
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), document["sha256"])
+            self.assertEqual(len(raw), document["bytes"])
 
     def test_no_secrets_and_owned_database_guard(self) -> None:
         self.assertRegex(
