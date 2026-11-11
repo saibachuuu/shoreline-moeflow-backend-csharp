@@ -9,11 +9,15 @@
 
 1. Build is green on the pinned SDK:
    `dotnet build Shoreline.sln --nologo`
-2. Migration check is a **placeholder**: `Infrastructure/Migrations` is owned
-   by another agent. Until it lands, the "migration" is the startup index
-   initialization (`MongoStore.InitializeAsync` + module `Initialize*Async`
-   in `Program.cs`); a deploy is only safe if the new image boots once
-   against a copy of production data without index errors.
+2. Migration gate is real: `Infrastructure/Migrations` ports the Python
+   `m0001`–`m0009` chain with the same ledger collections
+   (`migration_record`, `migration_lock`). `Migrations:Mode=apply` on the
+   first deploy against a fresh database; keep `MIGRATIONS_MODE=check` for
+   later deploys so a forgotten migration turns `/health/ready` into 503
+   instead of silently serving on an old schema. Rows written by the Python
+   runner are accepted as applied (C# only verifies checksums of its own
+   `runner:"csharp"` rows), so a cutover onto an already-migrated production
+   database does not re-run anything.
 3. Record the image digest and keep the previous one for rollback:
    `docker pull $SHORELINE_IMAGE && docker inspect --format='{{.RepoDigests}}' $SHORELINE_IMAGE`
 4. Take a full MongoDB backup and verify it restores (dump + restore to a
@@ -28,14 +32,17 @@ External MongoDB and RabbitMQ first (managed services, outside compose),
 then the C# roles, then the edge proxy:
 
 ```
-mongo (external, reachable) → worker → api → nginx (external)
+mongo (external, reachable) → api (runs the schema gate) → worker → nginx (external)
 ```
 
-- `docker compose -f compose.prod.example.yml up -d worker`, wait for
-  `/health/ready` 200 on the worker host (it serves HTTP on 8080 too, but
-  unpublished; `docker exec` a loopback curl or check logs for index init).
-- `docker compose -f compose.prod.example.yml up -d api`, wait for
-  `GET /health/ready` → `{"status":"ok"}` through nginx.
+- `docker compose -f compose.prod.example.yml up -d api`. The api instance owns
+  `Migrations:Mode=apply` (first install) and serves HTTP on loopback; wait for
+  `GET /health/ready` → `{"status":"ok"}`. A 503 with
+  `{"status":"migrations-pending"}` means the gate refused to serve: inspect
+  logs, fix, or set `MIGRATIONS_MODE=apply` and restart.
+- `docker compose -f compose.prod.example.yml up -d worker`. It has
+  `Migrations:Enabled=false`, so it never races the api for the migration
+  lease; it only drains `csharp_job`, notifications and the daily storage scan.
 - Only then point nginx upstream at the new api container.
 
 Rolling update: start the new worker, then the new api, move nginx upstream,
@@ -57,10 +64,12 @@ major behavior or returning to Python.
   2. Backup, then run `tools/legacy-rollback-strip.js` (see
      `docs/legacy-rollback.md`): removes C#-only fields and the conflicting
      index names; Python recreates its own indexes on first access.
-  3. Migration-version handling: there is no down-migration. The only
-     forward state C# writes outside `csharp_*` collections is removable by
-     the strip script; if the deploy wrote anything else, restore the
-     pre-deploy backup instead of stripping.
+
+  3. Migration-version handling: there is no down-migration. Python refuses
+     to start on a `migration_record` row whose checksum it cannot reproduce
+     (any v>=0004 row with `runner:"csharp"`), so the strip script deletes
+     exactly those rows and clears the `migrate` lock; Python then re-applies
+     the versions it never recorded (every Python up() is idempotent).
   4. Smoke-test `/v1/user/info`, a project detail, files, outputs, members.
 
 ## 3. Graceful-shutdown verification

@@ -42,6 +42,7 @@ services:
       Mail__Host: ${MAIL_HOST:?set MAIL_HOST}
       Mail__Port: ${MAIL_PORT:-587}
       Mail__StartTls: ${MAIL_START_TLS:-true}
+      Mail__UseSsl: ${MAIL_USE_SSL:-false}
       Mail__From: ${MAIL_FROM:?set MAIL_FROM}
       Mail__Username: ${MAIL_USERNAME:-}
       Mail__Password: ${MAIL_PASSWORD:-}
@@ -49,11 +50,19 @@ services:
       Jobs__Concurrency: ${JOBS_CONCURRENCY:-2}
       # API instances never consume the queue; the worker instance drains it.
       Jobs__WorkerEnabled: "false"
+      # Likewise for the two background scanners: the worker instance owns
+      # notifications and the daily storage-pool scan. Mongo leases make a
+      # duplicate scan safe, but it doubles the polling load for no benefit.
+      Notifications__WorkerEnabled: "false"
+      StoragePool__WorkerEnabled: "false"
+      # Schema gate. First deploy against a fresh database: apply. Later
+      # deploys should run check, so a forgotten migration fails readiness
+      # instead of mutating production while serving traffic.
+      Migrations__Mode: ${MIGRATIONS_MODE:-apply}
+      Migrations__Enabled: "true"
       Security__TrustedProxies__0: ${TRUSTED_PROXY_0:-}
     mem_limit: 512m
     stop_grace_period: 40s
-    depends_on:
-      - worker
 
   worker:
     image: ${SHORELINE_IMAGE:?set SHORELINE_IMAGE to the pinned C# image (e.g. registry.example.com/shoreline-csharp:<tag>@sha256:<digest>)}
@@ -75,12 +84,16 @@ services:
       Mail__Host: ${MAIL_HOST:?set MAIL_HOST}
       Mail__Port: ${MAIL_PORT:-587}
       Mail__StartTls: ${MAIL_START_TLS:-true}
+      Mail__UseSsl: ${MAIL_USE_SSL:-false}
       Mail__From: ${MAIL_FROM:?set MAIL_FROM}
       Mail__Username: ${MAIL_USERNAME:-}
       Mail__Password: ${MAIL_PASSWORD:-}
       Jobs__Concurrency: ${JOBS_CONCURRENCY:-2}
       # Only the worker consumes the Mongo-backed job queue.
       Jobs__WorkerEnabled: "true"
+      # Only the API instance runs the schema gate, so two processes never
+      # race for the migration lease during a rolling deploy.
+      Migrations__Enabled: "false"
     mem_limit: 512m
     # The graceful-shutdown budget is 30s in-process (HostOptions); give the
     # runtime 10s extra so SIGTERM always finishes inside the limit and an

@@ -85,3 +85,18 @@ for (const collection of Object.keys(legacyIndexes).sort()) {
   }
 }
 
+// Migration ledger rows written by the C# runner carry runner:"csharp" and a
+// canonical checksum the Python AST hasher cannot reproduce. Python's
+// _checksum_matches treats rows for v>=0004 as tampered and refuses to start.
+// Delete only C#-written rows (rows Python wrote itself never have this
+// runner tag), then clear the lock. Every Python up() is idempotent by design,
+// so Python re-applies exactly the versions it never recorded.
+const csharpMigrations = db
+  .getCollection("migration_record")
+  .deleteMany({ runner: "csharp" });
+print(
+  "migration_record: deleted " + csharpMigrations.deletedCount + " csharp rows"
+);
+const lock = db.getCollection("migration_lock").deleteMany({ _id: "migrate" });
+print("migration_lock: cleared " + lock.deletedCount + " lease(s)");
+
