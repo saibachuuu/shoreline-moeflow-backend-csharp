@@ -42,9 +42,10 @@ public sealed class MongoStoreIndexCompatTests
             await store.InitializeAsync(CancellationToken.None);
 
             var indexes = await (await members.Indexes.ListAsync()).ToListAsync();
-            Assert.Contains(indexes, index => index["name"].AsString == "project_member_identity_key_v1");
             Assert.Contains(indexes, index => index["name"].AsString == "project_member_project_user_v1");
             Assert.Contains(indexes, index => index["name"].AsString == "project_member_project_external_v1");
+            var identity = Assert.Single(indexes, index => index["name"].AsString == "project_member_identity_key_v1");
+            Assert.True(identity.Contains("partialFilterExpression"));
         }
         finally
         {

@@ -91,28 +91,56 @@ public sealed class MongoStore
         await Collection("identity_tag_policy").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("team"), new CreateIndexOptions { Unique = true }), cancellationToken: ct);
         await DropIndexIfExistsAsync("project_member", "project_member_display_name_search_v1", ct);
-        await Collection("project_member").Indexes.CreateManyAsync([
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("ik"),
-                new CreateIndexOptions { Unique = true, Name = "project_member_identity_key_v1" }),
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("user"),
-                new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_project_user_v1",
-                    PartialFilterExpression = new BsonDocument("user", new BsonDocument("$type", "objectId")) }),
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("external_id"),
-                new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_project_external_v1",
-                    PartialFilterExpression = new BsonDocument("external_id", new BsonDocument("$type", "string")) }),
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("status"),
-                new CreateIndexOptions { Name = "project_member_status_v1" }),
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("tags"),
-                new CreateIndexOptions { Name = "project_member_tags_v1" }),
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("display_name"),
-                new CreateIndexOptions { Name = "project_member_display_name_v1" }),
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("status").Ascending("dns"),
-                new CreateIndexOptions { Name = "project_member_display_name_search_v1" })
-        ], cancellationToken: ct);
+        // A database that the Python app has been serving already carries these
+        // indexes with mongoengine's option shapes. MongoDB rejects a second
+        // definition under the same name (IndexOptionsConflict), so reconcile
+        // instead of letting createIndexes abort startup.
+        foreach (var model in new[]
+                 {
+                     new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("ik"),
+                         new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_identity_key_v1",
+                             PartialFilterExpression = new BsonDocument("ik", new BsonDocument("$type", "string")) }),
+                     new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("user"),
+                         new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_project_user_v1",
+                             PartialFilterExpression = new BsonDocument("user", new BsonDocument("$type", "objectId")) }),
+                     new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("external_id"),
+                         new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_project_external_v1",
+                             PartialFilterExpression = new BsonDocument("external_id", new BsonDocument("$type", "string")) }),
+                     new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("status"),
+                         new CreateIndexOptions { Name = "project_member_status_v1" }),
+                     new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("tags"),
+                         new CreateIndexOptions { Name = "project_member_tags_v1" }),
+                     new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("display_name"),
+                         new CreateIndexOptions { Name = "project_member_display_name_v1" }),
+                     new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("status").Ascending("dns"),
+                         new CreateIndexOptions { Name = "project_member_display_name_search_v1" }),
+                 })
+        {
+            await EnsureIndexTolerantAsync("project_member", model, ct);
+        }
         await DropIndexIfExistsAsync("identity_operation", "identity_operation_project_operation_v1", ct);
         await Collection("identity_operation").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("operation_id"),
             new CreateIndexOptions { Unique = true, Name = "project_1_operation_id_1" }), cancellationToken: ct);
+    }
+
+    // Reconcile a named index instead of failing the whole startup when a
+    // database prepared by the Python app already has the same name with
+    // mongoengine's option shape (IndexOptionsConflict / IndexKeySpecsConflict).
+    private async Task EnsureIndexTolerantAsync(
+        string collection, CreateIndexModel<BsonDocument> model, CancellationToken ct)
+    {
+        var indexes = Collection(collection).Indexes;
+        var name = model.Options.Name;
+        try
+        {
+            await indexes.CreateOneAsync(model, cancellationToken: ct);
+        }
+        catch (MongoCommandException ex) when (ex.Code is 85 or 86 && !string.IsNullOrEmpty(name))
+        {
+            await DropIndexIfExistsAsync(collection, name!, ct);
+            await indexes.CreateOneAsync(model, cancellationToken: ct);
+        }
     }
 
     private async Task DropIndexIfExistsAsync(string collection, string name, CancellationToken ct)
