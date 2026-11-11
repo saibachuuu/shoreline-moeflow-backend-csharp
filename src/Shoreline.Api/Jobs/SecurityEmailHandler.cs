@@ -21,18 +21,7 @@ public sealed class SecurityEmailHandler(MongoStore store, IConfiguration config
 
         var host = configuration["Mail:Host"] ?? throw new InvalidOperationException("Mail:Host is required");
         var port = configuration.GetValue("Mail:Port", 587);
-        // Python selects implicit SMTPS solely from EMAIL_USE_SSL. Keep the 465
-        // port heuristic for deployments that omit the toggle but expect SMTPS.
-        var useSsl = configuration.GetValue("Mail:UseSsl", false) || port == 465;
-        var startTls = configuration.GetValue<bool?>("Mail:StartTls", null);
-        var socketOptions = useSsl
-            ? SecureSocketOptions.SslOnConnect
-            : startTls switch
-            {
-                true => SecureSocketOptions.StartTls,
-                false => SecureSocketOptions.None,
-                null => SecureSocketOptions.Auto
-            };
+        var socketOptions = ResolveSocketOptions(configuration);
 
         var subject = code["t"].AsInt32 switch
         {
@@ -113,5 +102,29 @@ public sealed class SecurityEmailHandler(MongoStore store, IConfiguration config
             catch { }
             throw;
         }
+    }
+
+    /// <summary>
+    /// Verification-code mail TLS selection (Python <c>app/tasks/email.py:99-104</c>).
+    /// The legacy code calls <c>starttls()</c> and only swallows
+    /// <c>SMTPNotSupportedError</c>, so "when available" is the exact analogue:
+    /// a server without STARTTLS keeps going in plaintext, while a broken
+    /// certificate still fails the send. Implicit SMTPS comes solely from
+    /// <c>EMAIL_USE_SSL</c>; the 465 heuristic is kept for deployments that
+    /// omit the toggle but expect SMTPS.
+    /// </summary>
+    public static SecureSocketOptions ResolveSocketOptions(IConfiguration configuration)
+    {
+        var port = configuration.GetValue("Mail:Port", 587);
+        var useSsl = configuration.GetValue("Mail:UseSsl", false) || port == 465;
+        var startTls = configuration.GetValue<bool?>("Mail:StartTls", null);
+        return useSsl
+            ? SecureSocketOptions.SslOnConnect
+            : startTls switch
+            {
+                true => SecureSocketOptions.StartTlsWhenAvailable,
+                false => SecureSocketOptions.None,
+                null => SecureSocketOptions.Auto
+            };
     }
 }
