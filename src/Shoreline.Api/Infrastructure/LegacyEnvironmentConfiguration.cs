@@ -36,6 +36,38 @@ public static class LegacyEnvironmentConfiguration
         Alias(configuration, "Site:Name", "SITE_NAME");
         Alias(configuration, "Site:Origin", "SITE_ORIGIN");
 
+        // Storage: the legacy .env names are the ones present on the production
+        // host. ObjectStorage already consults them directly, but the admin
+        // overview and storage-pool workers read Storage:* first, so bridge them
+        // once here (Python app/config.py + app/services/oss.py).
+        Alias(configuration, "Storage:Bucket", "OSS_BUCKET_NAME");
+        Alias(configuration, "Storage:Endpoint", "OSS_ENDPOINT");
+        Alias(configuration, "Storage:AccessKey", "OSS_ACCESS_KEY_ID");
+        Alias(configuration, "Storage:SecretKey", "OSS_ACCESS_KEY_SECRET");
+        Alias(configuration, "Storage:Region", "OSS_S3_REGION");
+        Alias(configuration, "Storage:Domain", "STORAGE_DOMAIN");
+        Alias(configuration, "Storage:KeyPrefix", "OSS_KEY_PREFIX");
+        Alias(configuration, "Storage:BucketStyle", "OSS_BUCKET_STYLE");
+        if (string.IsNullOrWhiteSpace(configuration["Storage:Type"]))
+        {
+            var legacyType = configuration["STORAGE_TYPE"]?.Trim();
+            if (!string.IsNullOrWhiteSpace(legacyType))
+            {
+                var normalized = legacyType.ToUpperInvariant();
+                configuration["Storage:Type"] = normalized switch
+                {
+                    "LOCAL_STORAGE" => "LOCAL",
+                    "OSS" => string.IsNullOrWhiteSpace(configuration["OSS_BUCKET_STYLE"])
+                        ? "S3" : configuration["OSS_BUCKET_STYLE"]!.Trim().ToUpperInvariant(),
+                    _ => legacyType
+                };
+            }
+        }
+        if (string.IsNullOrWhiteSpace(configuration["Storage:ViaCdn"]) && IsTrue(configuration["OSS_VIA_CDN"]))
+        {
+            configuration["Storage:ViaCdn"] = "true";
+        }
+
         if (string.IsNullOrWhiteSpace(configuration["Mongo:Uri"]))
         {
             var legacyUri = BuildLegacyMongoUri(configuration);

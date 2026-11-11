@@ -40,7 +40,10 @@ public sealed class StoragePoolSettingsService
     {
         var row = await ReadAsync(ct).ConfigureAwait(false);
         var view = ToApi(row);
-        view["next_run_at"] = NextRunAt().ToString("yyyy-MM-ddTHH:mm:ss.ffffff",
+        // app/modules/storage_pool/api.py:736-752 returns an aware UTC datetime;
+        // datetime.isoformat() renders it with an explicit +00:00 offset and
+        // omits the fraction when microseconds are zero.
+        view["next_run_at"] = NextRunAt().ToString("yyyy-MM-ddTHH:mm:ss'+00:00'",
             System.Globalization.CultureInfo.InvariantCulture);
         return view;
     }

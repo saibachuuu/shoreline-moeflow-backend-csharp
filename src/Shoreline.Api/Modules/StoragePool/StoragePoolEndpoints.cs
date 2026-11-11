@@ -68,7 +68,11 @@ public static class StoragePoolEndpoints
             await current.RequireAdminAsync(context, ct);
             var pagination = Pagination.From(context.Request);
             var projectId = context.Request.Query["project_id"].ToString();
-            var (rows, count) = await transfers.ListAsync(projectId, pagination.Skip, pagination.Limit, ct);
+            // app/modules/storage_pool/api.py:308-312 never applies p.skip/p.limit
+            // (it passes the whole queryset to set_objects), so the legacy body
+            // always contains every transfer while the headers still report the
+            // requested page/limit. Mirror that wire behaviour.
+            var (rows, count) = await transfers.ListAsync(projectId, 0, int.MaxValue, ct);
             pagination.Apply(context.Response, count);
             return rows.Select(StoragePoolApiJson.ToObject).ToList();
         });
