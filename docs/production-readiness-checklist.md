@@ -31,6 +31,7 @@
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | `96eef2a`：`dotnet build Shoreline.sln --nologo` 0/0 |
 | 最终合并后的 dotnet build 0/0 | 已验证 | 同上（本轮每次合并后均复跑） |
 | C# 全量 suite | 已验证 | `9d37ae8` + r6 合并：`tools/Run-FullSuite.ps1 -BasePort 33270` → **1154 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；1028 → 1092 → 1101 → 1129 → 1138 → 1144 → 1149） |
+| CI 流水线 | 已配置 | `.github/workflows/check-pr.yml`：push main / PR 时用 `compose.test.yml` 起同一组依赖，`--locked-mode` 还原 + Release 构建 + 全量测试 + TRX artifact；`build-image.yml`：仅 `v<major>.<minor>.<patch>[-pre]` tag 构建 `linux/amd64,linux/arm64` 并推 ghcr。本地已用同一 compose 栈验证 Release 全量 **1154/1154**（1m40s） |
 | Python 全量 suite | 已验证 | `836 passed, 48 subtests passed`，446 s（`.env.test`，mongomock/memory broker/local storage） |
 | 真实差分全量 suite | 部分验证 | 只读 19/19；写路径与可选模块未覆盖 |
 | 可复现镜像 / lock / digest | 已验证（层内容） | 两次 `--no-cache` 冷构建：19 个层的 Layer ID、大小（497130313 bytes）、`CreatedBy` 全部一致；ImageID 因 image config 的 `created` 时间戳不同而不相等（Docker 默认行为），需要 bit-identical 时用 buildx `--rewrite-timestamp`（需 ≥ 0.14；本机 0.13.1 不支持该 flag，已实测报错）。另有空库 `Migrations:Mode=apply` 首启冒烟与「Python 库已有同名索引」接管冒烟，均 `/ping`、`/health/live`、`/health/ready` 200。见 `docs/image-reproducibility.md`（`b4f77f9`, `bacd343`） |
