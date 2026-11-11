@@ -377,10 +377,10 @@ public sealed class M0004IdentityMembers : LegacyMigration
 
         await MigrationBson.EnsureNamedIndexAsync(database, "project_member",
             MigrationBson.Keys(("project", 1), ("user", 1)), "project_member_project_user_v1",
-            unique: true, new BsonDocument("user", new BsonDocument("$exists", true)), ct);
+            unique: true, new BsonDocument("user", new BsonDocument("$type", "objectId")), ct);
         await MigrationBson.EnsureNamedIndexAsync(database, "project_member",
             MigrationBson.Keys(("project", 1), ("external_id", 1)), "project_member_project_external_v1",
-            unique: true, new BsonDocument("external_id", new BsonDocument("$exists", true)), ct);
+            unique: true, new BsonDocument("external_id", new BsonDocument("$type", "string")), ct);
         await MigrationBson.EnsureNamedIndexAsync(database, "project_member",
             MigrationBson.Keys(("ik", 1)), "project_member_identity_key_v1",
             unique: true, partialFilter: null, ct);

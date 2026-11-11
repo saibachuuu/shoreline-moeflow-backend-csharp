@@ -93,8 +93,7 @@ public sealed class MongoStore
         await DropIndexIfExistsAsync("project_member", "project_member_display_name_search_v1", ct);
         await Collection("project_member").Indexes.CreateManyAsync([
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("ik"),
-                new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_identity_key_v1",
-                    PartialFilterExpression = new BsonDocument("ik", new BsonDocument("$type", "string")) }),
+                new CreateIndexOptions { Unique = true, Name = "project_member_identity_key_v1" }),
             new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("user"),
                 new CreateIndexOptions<BsonDocument> { Unique = true, Name = "project_member_project_user_v1",
                     PartialFilterExpression = new BsonDocument("user", new BsonDocument("$type", "objectId")) }),
