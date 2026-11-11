@@ -1,6 +1,6 @@
 # 生产替换硬门槛检查表
 
-日期：2026-11-11（深夜更新）。C# main `d841a92`（本轮 14 个分支全部 `--no-ff` 合并）；Python 参考 `be0b717`。
+日期：2026-11-11（深夜更新）。C# main `2b1b69f`（本轮 16 个分支全部 `--no-ff` 合并）；Python 参考 `be0b717`。
 本轮增量、分支 hash 与证据：[readiness-20261111.md](readiness-20261111.md)。迁移逐字段对拍：[migration-parity.md](migration-parity.md)。存储契约：[storage-contract.md](storage-contract.md)。可选模块：[module-parity.md](module-parity.md)。通知：[notification-contract.md](notification-contract.md)。
 
 **发布结论：仍然阻塞，不能替换生产 Python。**
