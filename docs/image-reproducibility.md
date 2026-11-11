@@ -104,7 +104,7 @@ identity index after boot:
 
 ### 为什么 C# 保留 partial filter 而不是照抄 Python
 
-`ik` 在 Python 侧是 `StringField(required=True)`，mongoengine 保证每行都有值，所以无 partial 的唯一索引能成立。C# 的写入路径与测试夹具并非都写 `ik`，去掉 partial 后同一集合里多条 `ik: null` 直接触发 `E11000 duplicate key`（实测 200 个用例失败）。保留 `{"$type": "string"}` 的语义是「凡是字符串形态的 ik 必须唯一」，对符合 Python 模型的数据与无 partial 等价，对缺失 ik 的历史行则放行。差异已记录在 `docs/storage-contract.md` 与 `docs/migration-parity.md`。
+`ik` 在 Python 侧是 `StringField(required=True)`，mongoengine 保证每行都有值，所以无 partial 的唯一索引能成立。C# 的写入路径与测试夹具并非都写 `ik`，去掉 partial 后同一集合里多条 `ik: null` 直接触发 `E11000 duplicate key`（实测 200 个用例失败）。保留 `{"$type": "string"}` 的语义是「凡是字符串形态的 ik 必须唯一」，对符合 Python 模型的数据与无 partial 等价，对缺失 ik 的历史行则放行。逐字段差异见 `docs/migration-parity.md` §4.1。
 
 ## 5. 剩余待验证
 

@@ -64,6 +64,19 @@ Conventions: "Python file:line" uses `app/migrations/...` paths;
 
 接受的微小差异（不修）：非 string 的项目 `w` 字段，Python 取 `repr(raw)` 仍记录报告并继续（`workers_projects+1`），C# 记 `workers_parse_error` 后直接返回（不计该项目）。`w` 按 schema恒为 string，且 Python 的 `repr` 语义无法从 BSON 精确复刻，故接受现状。
 
+### 4.1 索引 options 差异（2026-11-11 22:00 补）
+
+| 索引 | Python `app/models/project_member.py` | C# |
+|---|---|---|
+| `project_member_identity_key_v1` | `{ik:1}` unique，**无** partial filter（:40-46） | `{ik:1}` unique + `partialFilterExpression: {ik: {$type: "string"}}` |
+| `project_member_project_user_v1` | `{project:1,user:1}` unique + `{user: {$type:"objectId"}}`（:47-55） | 同左（`569be7b` 前误写 `$exists`） |
+| `project_member_project_external_v1` | `{project:1,external_id:1}` unique + `{external_id: {$type:"string"}}`（:56-67） | 同左（`569be7b` 前误写 `$exists`） |
+
+`ik` 保留 partial filter 的理由：Python 侧 `ik` 是 `StringField(required=True)`，mongoengine 保证每行有值，因此无 partial 的唯一索引成立；C# 并非所有写入路径/夹具都写 `ik`，去掉后同一集合里多条 `ik: null` 直接 `E11000 duplicate key`（实测 200 个用例失败）。保留 `$type:string` 的语义是「字符串形态的 ik 必须唯一」，对符合 Python 模型的数据与无 partial 等价。
+
+**启动兼容**：Python 建的库上同名索引 options 不同会让 `createIndexes` 抛 `IndexOptionsConflict`（code 85）并打死进程。`MongoStore.EnsureIndexTolerantAsync`（`a8b46e9`）捕获 85/86 后先 drop 再按 C# options 重建；`MongoStoreIndexCompatTests` 与镜像上的接管冒烟（`docs/image-reproducibility.md` §4）共同锁定。
+
+
 ## 5. 测试
 
 `tests/Shoreline.Tests/MigrationsParityTests.cs`（相对 `MigrationsTests.cs` 的 happy-path 的补充，均为 focused `Migrations` filter 可跑）：覆盖空集合、目标已存在、重复运行、缺字段老文档、Python 风格 ledger 行（无 `runner`）、>100（650）文档分批、锁争用、`verify` 失败路径、0004 脏数据分支（dangling/duplicate/missing-role/unmapped-role/owner 修复/join 流程/重跑收敛），以及 F1–F5 回归（per-relation `mapped_tags`、falsy `m_t`、merge dup issue+invalid 计数、非字符串 tag 过滤与 raw 保留、emoji code-point 长度与 `repr` detail）。
