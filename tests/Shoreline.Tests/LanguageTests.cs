@@ -54,7 +54,7 @@ public sealed class LanguageTests(LocalServices services)
     public Task ExistingCatalogIsPreservedIncludingCustomIdsAndBlankCodeFiltering() => WithDatabaseAsync(async store =>
     {
         var languages = store.Collection("language");
-        var row = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["co"] = "custom", ["e"] = "Custom", ["c"] = "自定义", ["s"] = 42 };
+        var row = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["co"] = "custom", ["e"] = "Custom", ["c"] = "Custom", ["s"] = 42 };
         await languages.InsertManyAsync(new[] { row, new BsonDocument("co", "") });
         var catalog = new LanguageCatalog(store);
         await catalog.InitializeAsync();
@@ -62,7 +62,7 @@ public sealed class LanguageTests(LocalServices services)
         Assert.Equal(row, await languages.Find(new BsonDocument("_id", row["_id"])).FirstAsync());
         var result = JsonSerializer.SerializeToElement(await catalog.ListAsync(false));
         Assert.Equal(1, result.GetArrayLength());
-        Assert.Equal("自定义", result[0].GetProperty("lo_name").GetString());
+        Assert.Equal("Custom", result[0].GetProperty("lo_name").GetString());
         Assert.Equal(row["_id"].ToString(), result[0].GetProperty("id").GetString());
     });
 

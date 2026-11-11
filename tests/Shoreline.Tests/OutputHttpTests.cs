@@ -301,6 +301,19 @@ public sealed class OutputHttpTests
                 ["user"] = userId, ["base_tag"] = "creator", ["tags"] = new BsonArray(),
                 ["status"] = "active", ["create_time"] = now, ["edit_time"] = now
             });
+            // app/models/identity_tag.py tag_definition lets a per-team policy
+            // override the creator tag. Grant AUTO explicitly so this HTTP
+            // path stays exercised; the shipped defaults omit it.
+            await store.Collection("identity_tag_policy").UpdateOneAsync(
+                Builders<BsonDocument>.Filter.Eq("team", teamId),
+                Builders<BsonDocument>.Update
+                    .Set("team_tags.creator", new BsonDocument
+                    {
+                        ["name"] = "creator", ["code"] = "creator",
+                        ["permissions"] = new BsonArray { "team:ACCESS", "team:AUTO_BECOME_PROJECT_ADMIN" }
+                    })
+                    .SetOnInsert("team", teamId),
+                new UpdateOptions { IsUpsert = true });
             await store.Collection("project_role")
                 .DeleteManyAsync(new BsonDocument("m_o", "translator"));
             await store.Collection("project_role").InsertOneAsync(new BsonDocument

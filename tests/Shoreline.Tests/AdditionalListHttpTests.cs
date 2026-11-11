@@ -101,7 +101,7 @@ public sealed class AdditionalListHttpTests(LocalServices services)
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
             var item = Assert.Single(body.EnumerateArray());
             Assert.Equal(emailCode.ToString(), item.GetProperty("id").GetString());
-            Assert.Equal("验证邮箱", item.GetProperty("intro").GetString());
+            Assert.Equal("Verify email", item.GetProperty("intro").GetString());
             Assert.Equal("email-http", item.GetProperty("content").GetString());
             Assert.DoesNotContain(body.EnumerateArray(), row => row.GetProperty("id").GetString() == captcha.ToString());
         }

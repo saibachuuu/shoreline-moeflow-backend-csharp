@@ -137,8 +137,12 @@ public sealed class ProjectTests(LocalServices services)
         Assert.Equal("添加目标语言成功", created.GetProperty("message").GetString());
         var targetId = created.GetProperty("target").GetProperty("id").GetString();
         Assert.Equal("de", created.GetProperty("target").GetProperty("language").GetProperty("code").GetString());
-        var listed = await BodyAsync(await owner.GetAsync("/v1/projects/" + projectId + "/targets"));
-        Assert.Equal(3, listed.GetProperty("count").GetInt32());
+        // app/apis/project.py:150-156 returns a bare list; pagination lives in
+        // X-Pagination-* headers, not in a {count, items} envelope.
+        using var listedResponse = await owner.GetAsync("/v1/projects/" + projectId + "/targets");
+        var listed = await BodyAsync(listedResponse);
+        Assert.Equal(3, listed.GetArrayLength());
+        Assert.Equal("3", listedResponse.Headers.GetValues("X-Pagination-Count").Single());
         var afterAdd = await ProjectAsync(ObjectId.Parse(projectId));
         Assert.Equal(3, afterAdd.Integer("tc"));
         await ErrorAsync(await owner.PostAsJsonAsync("/v1/projects/" + projectId + "/targets", new { language = "de" }), 6004);

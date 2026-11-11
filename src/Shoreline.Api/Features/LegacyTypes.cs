@@ -115,7 +115,8 @@ public sealed class LegacyTypes(MongoStore store, TimeProvider clock)
         _ => throw InvalidGroup()
     });
     private static GroupDefinitions Group(string scope) => scope switch { "team" => Definitions.Team, "project" => Definitions.Project, _ => throw InvalidGroup() };
-    private static ApiError InvalidGroup() => new("RequestDataWrongError", 111, "'group_type' not in ['team', 'project']");
+    private static ApiError InvalidGroup() => new("RequestDataWrongError", 111,
+        "Request parameter error.: 'group_type' not in ['team', 'project']");
     private static object TypeView(TypeDefinition row, bool chinese) => new
     {
         id = row.Id,
@@ -143,7 +144,9 @@ public static class TypeEndpoints
             var chinese = LanguageCatalog.ChinesePreferred(ctx.Request.GetTypedHeaders().AcceptLanguage);
             if (typeName == "locale") return Results.Json(types.Types(typeName, "", chinese));
             var scope = ctx.Request.Query["group_type"].ToString();
-            if (scope is not ("team" or "project")) throw new ApiError("RequestDataWrongError", 111, "'group_type' not in ['team', 'project']");
+            if (scope is not ("team" or "project"))
+                throw new ApiError("RequestDataWrongError", 111,
+                    (chinese ? "请求参数错误: " : "Request parameter error.: ") + "'group_type' not in ['team', 'project']");
             if (typeName is not ("permission" or "allow-apply-type" or "application-check-type" or "system-role")) return Results.NoContent();
             var raw = ctx.Request.Query["with_creator"].ToString();
             var withCreator = raw == "1" || raw.Equals("true", StringComparison.OrdinalIgnoreCase);

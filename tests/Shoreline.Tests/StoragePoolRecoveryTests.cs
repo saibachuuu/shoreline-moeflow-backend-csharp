@@ -253,11 +253,11 @@ public sealed class StoragePoolRecoveryTests(LocalServices services)
         using var runtime = new StoragePoolRuntime(services, clock);
 
         var view = await runtime.Settings.GetViewAsync(CancellationToken.None);
-        Assert.Equal("2026-11-11T03:00:00.000000", view["next_run_at"].AsString);
+        Assert.Equal("2026-11-11T03:00:00+00:00", view["next_run_at"].AsString);
 
         clock.SetUtcNow(new DateTimeOffset(2026, 11, 11, 3, 0, 0, TimeSpan.Zero));
         view = await runtime.Settings.GetViewAsync(CancellationToken.None);
-        Assert.Equal("2026-11-12T03:00:00.000000", view["next_run_at"].AsString);
+        Assert.Equal("2026-11-12T03:00:00+00:00", view["next_run_at"].AsString);
     }
 }
 

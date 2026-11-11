@@ -86,7 +86,7 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
 
         // Legacy marshmallow rejects the payload before any probe runs.
         var missingName = await admin.PostAsJsonAsync(Base + "/sources", new Dictionary<string, object?>());
-        AssertFieldError(await BodyAsync(missingName), "name", "缺少必填字段");
+        AssertFieldError(await BodyAsync(missingName), "name", "Missing data for required field.");
 
         var blankName = await admin.PostAsJsonAsync(Base + "/sources",
             With(SourcePayload(name), ("name", "")));
@@ -424,7 +424,7 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
 
         var missingSource = await admin.PostAsJsonAsync($"{Base}/projects/{projectId}/migrate",
             new Dictionary<string, object?>());
-        AssertFieldError(await BodyAsync(missingSource), "source_id", "缺少必填字段");
+        AssertFieldError(await BodyAsync(missingSource), "source_id", "Missing data for required field.");
 
         var badSource = await admin.PostAsJsonAsync($"{Base}/projects/{projectId}/migrate",
             new { source_id = "not-an-id" });

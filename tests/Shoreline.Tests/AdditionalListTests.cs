@@ -342,14 +342,14 @@ public sealed class AdditionalListTests(LocalServices services)
 
         var email = result.EnumerateArray().Single(item => item.GetProperty("id").GetString() == emailId.ToString());
         Assert.Equal("mail-code", email.GetProperty("content").GetString());
-        Assert.Equal("验证邮箱", email.GetProperty("intro").GetString());
+        Assert.Equal("Verify email", email.GetProperty("intro").GetString());
         Assert.Equal("user@example.test", email.GetProperty("info").GetString());
         Assert.Equal("2026-01-02T03:04:05.123000", email.GetProperty("send_time").GetString());
         Assert.Equal("2026-01-03T04:05:06", email.GetProperty("expires").GetString());
         Assert.Equal(3, email.GetProperty("wrong_count").GetInt32());
 
         var reset = result.EnumerateArray().Single(item => item.GetProperty("id").GetString() == resetId.ToString());
-        Assert.Equal("重置密码", reset.GetProperty("intro").GetString());
+        Assert.Equal("Reset password", reset.GetProperty("intro").GetString());
         Assert.Equal("2026-01-02T03:04:06", reset.GetProperty("send_time").GetString());
 
         var unknown = result.EnumerateArray().Single(item => item.GetProperty("id").GetString() == unknownId.ToString());

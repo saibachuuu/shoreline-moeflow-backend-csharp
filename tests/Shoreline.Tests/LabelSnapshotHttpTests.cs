@@ -159,8 +159,9 @@ public sealed class LabelSnapshotHttpTests(LocalServices services)
         Assert.Equal(1, project["label_revision"].ToInt64());
 
         using var allowed = await world.Client.GetAsync($"/v1/projects/{world.ProjectId}/targets");
+        // app/apis/project.py:150-156: bare target array + pagination headers.
         var targets = await JsonAsync(allowed, HttpStatusCode.OK);
-        Assert.Equal(1, targets.GetProperty("count").GetInt32());
+        Assert.Equal(1, targets.GetArrayLength());
         Assert.Equal("1", RevisionHeader(allowed));
         await AssertNoLockRowAsync(world.ProjectId);
     }
