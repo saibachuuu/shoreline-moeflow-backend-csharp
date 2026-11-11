@@ -33,7 +33,7 @@
 | C# 全量 suite | 已验证 | `62ba5c2`：`tools/Run-FullSuite.ps1 -BasePort 33210` → **1149 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；1028 → 1092 → 1101 → 1129 → 1138 → 1144 → 1149） |
 | Python 全量 suite | 已验证 | `836 passed, 48 subtests passed`，446 s（`.env.test`，mongomock/memory broker/local storage） |
 | 真实差分全量 suite | 部分验证 | 只读 19/19；写路径与可选模块未覆盖 |
-| 可复现镜像 / lock / digest | 已验证（层内容） | 两次 `--no-cache` 冷构建：19 个层的 Layer ID、大小（497130313 bytes）、`CreatedBy` 全部一致；ImageID 因 image config 的 `created` 时间戳不同而不相等（Docker 默认行为），需要 bit-identical 时用 buildx `--rewrite-timestamp`（本机 0.13.1 可用）。另有空库 `Migrations:Mode=apply` 首启冒烟与「Python 库已有同名索引」接管冒烟，均 `/ping`、`/health/live`、`/health/ready` 200。见 `docs/image-reproducibility.md`（`b4f77f9`, `bacd343`） |
+| 可复现镜像 / lock / digest | 已验证（层内容） | 两次 `--no-cache` 冷构建：19 个层的 Layer ID、大小（497130313 bytes）、`CreatedBy` 全部一致；ImageID 因 image config 的 `created` 时间戳不同而不相等（Docker 默认行为），需要 bit-identical 时用 buildx `--rewrite-timestamp`（需 ≥ 0.14；本机 0.13.1 不支持该 flag，已实测报错）。另有空库 `Migrations:Mode=apply` 首启冒烟与「Python 库已有同名索引」接管冒烟，均 `/ping`、`/health/live`、`/health/ready` 200。见 `docs/image-reproducibility.md`（`b4f77f9`, `bacd343`） |
 | 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | UID 1654；bind mount 需 `chown -R 1654:1654 storage`，否则首传 500；已写入 runbook §0 第 7 条（`16a6fab`） |
 | health / readiness / 配置校验 | 部分验证 | `/health/live` 200、`/health/ready` 200；迁移闸门 503 `migrations-pending` 已实现并有测试；反代/部署形状未验收 |
 | 日志 / metrics / 告警 | 可选增强（非 parity 阻塞） | Python 老版同样无 metrics 导出（`app/**/*.py` 无 prometheus/statsd 匹配）；runbook 已有阈值表与排查路径。接入监控属运维增强，不构成替换阻塞 |

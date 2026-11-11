@@ -28,7 +28,7 @@
 
 - **文件系统内容可复现**：任何一次冷构建产出的层内容相同，`docker save` 后逐层 tar 的哈希一致。
 - **ImageID 不相等**：Docker 把构建时刻写进 image config 的 `created` 字段，config 参与 ImageID 计算。这是 Docker 的默认行为，不是构建不确定性。
-- 需要 bit-identical ImageID（例如按 digest 做部署校验）时，用 BuildKit 的 `--rewrite-timestamp`（buildx ≥ 0.11，本机 `docker buildx 0.13.1+ds1` 可用），或 `SOURCE_DATE_EPOCH` + `buildx build --output type=docker`。
+- 需要 bit-identical ImageID（例如按 digest 做部署校验）时，用 BuildKit 的 `--rewrite-timestamp`（buildx ≥ 0.14）。本机 `docker buildx 0.13.1+ds1` 明确报 `unknown flag: --rewrite-timestamp`，已验证本机工具链做不到 bit-identical，升级 buildx 后再复验。
 - 部署流程目前以「层内容一致 + `docker image inspect` 的记录 + 部署前 `docker build` 自检」为准，不依赖 ImageID 相等。
 
 ## 3. 首次启动冒烟（发现并修复一个阻断缺陷）
