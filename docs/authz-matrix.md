@@ -238,8 +238,30 @@ team `member` 只有 ACCESS，连 term-bank 列表都不可见。
 
 ## 14. 测试覆盖映射
 
-- `AuthzMatrixTests.cs`：world 夹具 + §1 + §2（团队 CRUD/成员/策略）。
-- `AuthzProjectTests.cs`：§3（项目/目标/sets）+ §4（成员/生命周期）。
-- `AuthzFileLabelTests.cs`：§5 + §6。
-- `AuthzTeamInviteTests.cs`：§2 成员管理 + §8 + §9 + §11（terms/insight/presence/import/ocr/thumbnail/proofread-draft）。
-- `AuthzAdminMiscTests.cs`：§10 + storage-pool + archive import + §7 补充。
+| 测试类 | 覆盖领域 | 测试方法 |
+|---|---|---|
+| `AuthzMatrixTests.cs` | world 夹具 + §1 + §2（团队 CRUD/成员/策略） | `AuthPrimitives_*`, `Teams_CreateGate_*`, `Teams_Create_*`, `Teams_Update_*`, `Teams_Delete_*`, `Teams_MembersList_*`, `Teams_MembersAdd_*`, `Teams_MemberUpdateRemove_*`, `Teams_TagPolicy_*` |
+| `AuthzReadGateTests.cs` | §7 输出读取、§8/§9 列表 | `ProjectInvitations_RequireInviteUser`, `ProjectApplications_RequireCheckUser`, `TargetOutputs_RequireOutputPermission`, `BannedIdentity_IsRejectedBeforePermissionChecks` |
+| `AuthzWriteGateTests.cs` | §4 批量成员变更/转让/完结、§7 团队导出 | `ProjectMemberChanges_RequireManagerForMutations`, `ProjectOwnerTransfer_RequiresOwnerOrManager`, `ProjectComplete_RequiresCompletePermission`, `TeamOutputs_RequireTeamManagement`, `BannedIdentity_WritesAreRejectedBeforeValidation` |
+| `AuthzMemberFileGateTests.cs` | §4 bind/merge/hard-delete；§5 文件改名/移动/删除；§7 输出创建 | `ProjectMemberBind_RequiresManager`, `ProjectMemberMerge_RequiresManager`, `ProjectMemberHardDelete_RequiresOwnerOrTeamCreator`, `FileRenameMoveDelete_RequireFilePermissions`, `ProjectOutputsPost_RequiresOutputPermission` |
+| `AuthzJoinAdminGateTests.cs` | §8 邀请、§9 申请、§11 terms、§10 管理员 | `ProjectInvitations_MutationGates`, `TeamInvitations_ListAndCreateGates`, `ProjectApplications_FlowGates`, `ProjectApplications_DeleteOnlyByApplicant`, `TeamApplications_ListRequiresCheckUser`, `Terms_MutationGates`, `AdminEndpoints_RequireSiteAdmin` |
+
+## 15. 已知差异（Known differences — C# 现行行为，测试按此断言）
+
+- D-1（已记录，见 §0）：`GET /v1/admin/*`、`storage-pool` 等 `RequireAdminAsync`
+  路由上，被封禁的 siteAdmin 在 C# 得 `400/1006`（`RequireAsync` 先于
+  admin 检查），而 Python `admin_required` 不查 banned（`admin_can()` 只看
+  `admin is True`）。C# 更严格，视为修复而非缺口；`AdminEndpoints_RequireSiteAdmin`
+  按 C# 行为断言。
+- D-2（文案）：`POST /v1/projects/{id}/applications` 在需审核组（`application_check_type=2`）
+  的成功文案为「申请成功，请等待管理员审核」（与 Python `user.py:701` 一致）；
+  `ProjectApplications_FlowGates` 按此断言。
+- D-3（校验）：项目邀请 `tags` 分支要求目标用户具备相应团队工作人员资格
+  （`TeamQualificationRequiredError/5102`，见 `identity_permission.py:499…615`）；
+  无资格目标的邀请创建两端一致拒绝。`ProjectInvitations_MutationGates` 使用
+  `admin` 标签（管理标签，不受资格门限制，见 `InvitationTests` 同例）。
+- 本轮扩展未发现新的越权放行或错误码形状差异：bind/merge 的
+  `RequireOperator → IsManager` 顺序、hard-delete 的 owner-or-team-creator 门、
+  文件 `MOVE/RENAME/DELETE_FILE` 分字段门、输出 `OUTPUT_TRA` 先于 `type`
+  校验、邀请/申请的 `INVITE_USER/CHECK_USER`/仅本人门、terms 的
+  `ACCESS/CHANGE/DELETE_TERM*` 门，均与 Python oracle 一致，无需 `TODO(parity)`。
