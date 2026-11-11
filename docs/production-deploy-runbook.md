@@ -118,7 +118,15 @@ curl -s http://127.0.0.1:8080/ping
 #   2. Confirm delivery and that the code verifies within its TTL.
 #   3. Confirm a second request for the same address reuses one durable code
 #      (see EmailTests.ConcurrentIssueCreatesOneDurableCode*).
+#   4. TLS policy: the default mirrors the legacy app (UseSsl -> SslOnConnect,
+#      otherwise mandatory STARTTLS). If the relay needs a different mode, set
+#      MAIL_SECURE_SOCKET_OPTIONS (None|Auto|StartTls|StartTlsWhenAvailable|
+#      SslOnConnect); leaving it empty keeps the legacy mapping.
 ```
+
+Also update the drain step above to use the checked-in helper instead of a
+hand-written query: `RABBITMQ_HOST=... RABBITMQ_USER=... RABBITMQ_PASS=... ./tools/celery-drain-check.sh`
+(exit 0 = drained, 1 = still pending, 2 = management API unreachable).
 
 ## 6. Celery → C# cutover / drain checklist
 
