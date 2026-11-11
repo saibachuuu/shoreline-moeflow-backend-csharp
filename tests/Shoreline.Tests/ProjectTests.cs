@@ -177,15 +177,24 @@ public sealed class ProjectTests(LocalServices services)
         var teamId = await CreateTeamAsync(owner, Name("team"));
         var project = await CreateProjectAsync(owner, teamId, Name("project"));
         var body = await BodyAsync(await owner.GetAsync("/v1/teams/" + teamId + "/projects"));
-        var card = Assert.Single(body.GetProperty("projects").EnumerateArray());
+        // The legacy endpoint returns a bare array (app/apis/team.py:428-438);
+        // the frontend calls data.map on it, so a wrapper breaks the page.
+        Assert.Equal(JsonValueKind.Array, body.ValueKind);
+        var card = Assert.Single(body.EnumerateArray());
         Assert.Equal(project.GetProperty("id").GetString(), card.GetProperty("id").GetString());
         Assert.Equal(teamId.ToString(), card.GetProperty("team").GetProperty("id").GetString());
         Assert.True(card.GetProperty("project_set").GetProperty("default").GetBoolean());
         Assert.Contains("project:ACCESS", card.GetProperty("effective_permissions").EnumerateArray().Select(v => v.GetString()));
+        // Every card carries the compact member summary the legacy list injects.
+        var summary = card.GetProperty("member_summary");
+        Assert.Equal(JsonValueKind.Array, summary.ValueKind);
+        var member = Assert.Single(summary.EnumerateArray());
+        Assert.False(string.IsNullOrEmpty(member.GetProperty("display_name").GetString()));
+        Assert.Equal("active", member.GetProperty("status").GetString());
         var counted = await BodyAsync(await owner.GetAsync("/v1/teams/" + teamId + "/projects?status=NORMAL"));
-        Assert.Equal(1, counted.GetProperty("projects").GetArrayLength());
+        Assert.Equal(1, counted.GetArrayLength());
         var cleared = await BodyAsync(await owner.GetAsync("/v1/teams/" + teamId + "/projects?status=CLEARED"));
-        Assert.Equal(0, cleared.GetProperty("projects").GetArrayLength());
+        Assert.Equal(0, cleared.GetArrayLength());
     }
 
     // ---- helpers ----
