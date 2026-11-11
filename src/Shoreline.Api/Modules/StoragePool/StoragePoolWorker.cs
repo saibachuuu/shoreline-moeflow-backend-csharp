@@ -54,7 +54,7 @@ public sealed class StoragePoolWorker : BackgroundService
         }
     }
 
-    private async Task TickAsync(CancellationToken ct)
+    internal async Task TickAsync(CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var settings = scope.ServiceProvider.GetRequiredService<StoragePoolSettingsService>();
