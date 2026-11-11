@@ -13,6 +13,8 @@ import collections
 import importlib.util
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -731,6 +733,192 @@ class RepositoryHygieneTests(unittest.TestCase):
                 if common.classify_entry(relative) is not None:
                     offenders.append(relative)
         self.assertEqual(offenders, [])
+
+
+class HardeningRegressionTests(unittest.TestCase):
+    """Regressions for destructive edge cases found in review (2026-11-11)."""
+
+    def test_plan_tar_uses_a_unique_name_and_never_overwrites_neighbours(self):
+        # A predictable ``<target>.tar`` could overwrite an unrelated
+        # neighbouring file; the plan must use a fresh exclusive temp name and
+        # clean it up afterwards.
+        legacy_root = Path(tempfile.mkdtemp())
+        try:
+            legacy = legacy_root / "legacy"
+            legacy.mkdir()
+            for git_dir in (".git",):
+                (legacy / git_dir).mkdir()
+            # Minimal workable git repo: one commit on HEAD.
+            subprocess.run(
+                ["git", "init", "--initial-branch=main", str(legacy)],
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(["git", "-C", str(legacy), "config", "user.email", "t@t"],
+                           capture_output=True, check=True)
+            subprocess.run(["git", "-C", str(legacy), "config", "user.name", "t"],
+                           capture_output=True, check=True)
+            (legacy / "a.txt").write_text("hello\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(legacy), "add", "a.txt"],
+                           capture_output=True, check=True)
+            subprocess.run(["git", "-C", str(legacy), "commit", "-m", "one"],
+                           capture_output=True, check=True)
+
+            neighbour = legacy_root / "snap.tar"
+            neighbour.write_text("PRECIOUS-NEIGHBOUR", encoding="utf-8")
+            tars_before = {p.name for p in legacy_root.glob("*.tar")}
+
+            plan = tool.compute_plan(
+                argparse.Namespace(
+                    legacy_directory=legacy,
+                    target=legacy_root / "snap",
+                    commit=None,
+                    expect_commit=None,
+                    replace_snapshot=False,
+                    db_name=DB,
+                    workers=1,
+                    timeout_seconds=60,
+                    **_config_dict(),
+                )
+            )
+            self.assertEqual(plan["status"], "planned")
+            self.assertEqual(
+                neighbour.read_text(encoding="utf-8"), "PRECIOUS-NEIGHBOUR"
+            )
+            leftovers = {p.name for p in legacy_root.glob("*.tar")}
+            self.assertEqual(leftovers, tars_before)
+            self.assertTrue((legacy_root / "snap" / "a.txt").is_file())
+        finally:
+            shutil.rmtree(legacy_root, ignore_errors=True)
+
+    def _endpoint_args(self, manifest: Path) -> argparse.Namespace:
+        return argparse.Namespace(
+            action="stop",
+            name="shoreline-pyiso-repl-20261111-mongo",
+            port=27271,
+            image="mongo:8.0",
+            database=DB,
+            manifest=str(manifest),
+            ready_timeout_seconds=10,
+        )
+
+    def _stop(self, manifest_payload, live_label="20261110", live_id="id-live"):
+        """Drive cmd_endpoints stop with fake docker calls; returns (removed, error)."""
+        calls = []
+
+        def fake_docker(argv, check=True):
+            calls.append(list(argv))
+            if argv[:2] == ["inspect", "-f"]:
+                return collections.namedtuple("R", "returncode stdout stderr")(
+                    0, f"{live_id}\t{live_label}\n", ""
+                )
+            return collections.namedtuple("R", "returncode stdout stderr")(0, "", "")
+
+        real_docker, real_exists = tool.docker, tool.docker_container_exists
+        tool.docker = fake_docker
+        tool.docker_container_exists = lambda name: True
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                manifest = Path(tmp) / "endpoints.json"
+                tool.write_json(manifest, manifest_payload)
+                try:
+                    tool.cmd_endpoints(self._endpoint_args(manifest))
+                    error = None
+                except tool.GateFailure as failure:
+                    error = str(failure)
+        finally:
+            tool.docker, tool.docker_container_exists = real_docker, real_exists
+        removed = any(argv[:2] == ["rm", "-f"] for argv in calls)
+        return removed, error
+
+    def test_stop_removes_only_the_manifest_recorded_container(self):
+        payload = {
+            "tool": "Python-IsolatedSuite",
+            "endpoints": [
+                {
+                    "port": 27271,
+                    "container": "shoreline-pyiso-repl-20261111-mongo",
+                    "container_id": "id-live",
+                    "evidence": "docker inspect",
+                }
+            ],
+        }
+        removed, error = self._stop(payload)
+        self.assertIsNone(error)
+        self.assertTrue(removed)
+
+    def test_stop_refuses_a_foreign_container_with_the_same_name(self):
+        payload = {
+            "tool": "Python-IsolatedSuite",
+            "endpoints": [
+                {
+                    "port": 27271,
+                    "container": "shoreline-pyiso-repl-20261111-mongo",
+                    "container_id": "id-live",
+                    "evidence": "docker inspect",
+                }
+            ],
+        }
+        # No harness label: this is somebody else's container that reused the name.
+        removed, error = self._stop(payload, live_label="")
+        self.assertIn("refusing to remove", error or "")
+        self.assertFalse(removed)
+
+    def test_stop_refuses_when_the_manifest_does_not_record_the_container(self):
+        payload = {"tool": "Python-IsolatedSuite", "endpoints": []}
+        removed, error = self._stop(payload)
+        self.assertIn("refusing to remove", error or "")
+        self.assertFalse(removed)
+
+    def test_stop_refuses_a_container_id_mismatch(self):
+        payload = {
+            "tool": "Python-IsolatedSuite",
+            "endpoints": [
+                {
+                    "port": 27271,
+                    "container": "shoreline-pyiso-repl-20261111-mongo",
+                    "container_id": "id-OTHER",
+                    "evidence": "docker inspect",
+                }
+            ],
+        }
+        removed, error = self._stop(payload, live_id="id-live")
+        self.assertIn("container id mismatch", error or "")
+        self.assertFalse(removed)
+
+    def test_second_run_in_the_same_second_gets_a_fresh_directory(self):
+        # A colliding run root must never be reused: the existing run's
+        # fixture/junit evidence would be silently deleted.
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            work = Path(tmp) / "work"
+            source.mkdir()
+            (source / "conftest.py").write_text("", encoding="utf-8")
+            (source / "pytest.ini").write_text("", encoding="utf-8")
+            (source / ".env.test.sample").write_text(TEMPLATE, encoding="utf-8")
+            digest = tool.snapshot_manifest_digest(source)
+            tool.write_json(
+                source / tool.PLAN_MARKER,
+                {"snapshot_sha256_manifest": digest},
+            )
+            args = argparse.Namespace(
+                source=source,
+                root=work,
+                db_name=DB,
+                workers=1,
+                timeout_seconds=60,
+                **_config_dict(),
+            )
+            first = tool.prepare_workdir(args, source, work)
+            stamp = first["run_root"].name
+            # Simulate another run that started within the same second.
+            colliding = work / "runs" / stamp
+            colliding.mkdir(exist_ok=True)
+            (colliding / "junit.xml").write_text("keep me", encoding="utf-8")
+            second = tool.prepare_workdir(args, source, work)
+            self.assertNotEqual(second["run_root"], colliding)
+            self.assertTrue((colliding / "junit.xml").is_file())
+            self.assertTrue(second["run_root"].name.startswith(stamp + "-"))
 
 
 if __name__ == "__main__":

@@ -57,6 +57,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -78,6 +79,9 @@ DEFAULT_PORTS = {
 }
 GATE_MARKER_ENV = "MOEFLOW_PYISO_GATES"
 PLAN_MARKER = ".pyiso-snapshot.json"
+# Label every endpoint container carries; ``stop`` refuses to remove a
+# container that does not carry exactly this label value.
+PYISO_CONTAINER_LABEL = "shoreline.pyiso=20261110"
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +159,14 @@ def compute_plan(args: argparse.Namespace) -> dict:
         raise GateFailure(
             f"git archive failed: {archive.stderr.decode('utf-8', 'replace')}"
         )
-    tar_path = target.parent / (target.name + ".tar")
+    # Extract through a uniquely named archive file.  A predictable
+    # ``<target>.tar`` path could overwrite an unrelated neighbouring file
+    # (or follow a planted symlink); mkstemp guarantees a fresh exclusive name.
+    fd, tar_name = tempfile.mkstemp(
+        dir=target.parent, prefix=target.name + "-", suffix=".tar"
+    )
+    os.close(fd)
+    tar_path = Path(tar_name)
     tar_path.write_bytes(archive.stdout)
     try:
         extract = subprocess.run(
@@ -356,7 +367,16 @@ def prepare_workdir(args: argparse.Namespace, source: Path, work: Path) -> dict:
     work.mkdir(parents=True, exist_ok=True)
     storage_dir = work / "storage"
     storage_dir.mkdir(exist_ok=True)
-    run_root = work / "runs" / time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    # Second-resolution timestamps can collide when two runs start within the
+    # same second; never reuse (and never delete) an existing run directory.
+    stamp = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    run_root = work / "runs" / stamp
+    suffix = 0
+    while run_root.exists():
+        suffix += 1
+        if suffix > 1000:
+            raise GateFailure(f"cannot allocate a fresh run directory under {work}")
+        run_root = work / "runs" / f"{stamp}-{suffix}"
     fixture_dir = run_root / "fixture"
     guard_dir = run_root / "guard"
     tmp_dir = run_root / "tmp"
@@ -592,11 +612,43 @@ def cmd_endpoints(args: argparse.Namespace) -> int:
         raise GateFailure("endpoint manifest needs an owned isolated database name")
 
     if args.action == "stop":
-        if docker_container_exists(name):
-            docker(["rm", "-f", name])
-            print(f"removed {name}")
-        else:
+        if not docker_container_exists(name):
             print(f"{name} not present")
+            return 0
+        # Remove only the exact disposable instance this harness started:
+        # the live container must carry the harness label and match the
+        # container id recorded in the manifest, so a foreign container that
+        # happens to reuse the name (or a rewritten manifest) is refused.
+        inspect = docker(
+            [
+                "inspect",
+                "-f",
+                "{{.Id}}\t{{index .Config.Labels \"shoreline.pyiso\"}}",
+                name,
+            ]
+        ).stdout.rstrip("\n")
+        live_id, _, live_label = inspect.partition("\t")
+        if live_label != PYISO_CONTAINER_LABEL.split("=", 1)[1]:
+            raise GateFailure(
+                f"container {name} does not carry this harness's "
+                f"{PYISO_CONTAINER_LABEL} label; refusing to remove it"
+            )
+        manifest = load_endpoint_manifest(args.manifest)
+        entries = [e for e in manifest.values() if e.get("container") == name]
+        if len(entries) != 1:
+            raise GateFailure(
+                f"endpoint manifest does not record exactly one endpoint for "
+                f"{name}; refusing to remove it"
+            )
+        recorded_id = str(entries[0].get("container_id", ""))
+        if not recorded_id or recorded_id != live_id:
+            raise GateFailure(
+                f"container id mismatch for {name}: manifest recorded "
+                f"{recorded_id!r} but the live container is {live_id!r}; "
+                "refusing to remove it"
+            )
+        docker(["rm", "-f", name])
+        print(f"removed {name}")
         return 0
 
     if docker_container_exists(name):
@@ -609,7 +661,7 @@ def cmd_endpoints(args: argparse.Namespace) -> int:
             "--name",
             name,
             "--label",
-            "shoreline.pyiso=20261110",
+            PYISO_CONTAINER_LABEL,
             "--tmpfs",
             "/data/db",
             "--memory",
