@@ -155,4 +155,58 @@ public sealed class JobFaultRecoveryTests(LocalServices services)
             $"backoff did not increase: first {firstAvailable:o}, second {secondAvailable:o}");
         Assert.True(JobQueue.RetryDelay(2) > JobQueue.RetryDelay(1));
     }
+
+    // StopAsync stops *claiming*: a job already in flight keeps its own
+    // execution token and finishes within bounds (marked done), while a job
+    // that was never claimed stays pending.
+    [Fact]
+    public async Task GracefulShutdown_StopsClaimingButFinishesInFlight()
+    {
+        var kind = "fault-shutdown-" + Guid.NewGuid().ToString("N");
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new BlockingHandler(kind, entered, release);
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
+        var queue = new JobQueue(services.Store, TimeProvider.System);
+        var worker = new JobWorker(queue, [handler], config, NullLogger<JobWorker>.Instance);
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            var firstId = ObjectId.GenerateNewId();
+            await queue.EnqueueOnceAsync(firstId, kind, new BsonDocument(), default);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var secondId = ObjectId.GenerateNewId();
+            await queue.EnqueueOnceAsync(secondId, kind, new BsonDocument(), default);
+            await Task.Delay(700); // Single-concurrency worker is busy in flight; second stays queued.
+
+            var stopTask = worker.StopAsync(CancellationToken.None);
+            release.TrySetResult(); // Let the bounded in-flight work finish.
+            await stopTask.WaitAsync(TimeSpan.FromSeconds(15));
+
+            Assert.Equal("done", (await RowAsync(firstId))["state"].AsString);
+            Assert.Equal(1, handler.Calls);
+            Assert.Equal("pending", (await RowAsync(secondId))["state"].AsString);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await worker.StopAsync(CancellationToken.None);
+        }
+    }
+
+    private sealed class BlockingHandler(
+        string kind,
+        TaskCompletionSource entered,
+        TaskCompletionSource release) : IJobHandler
+    {
+        public int Calls;
+        public string Kind => kind;
+        public async Task ExecuteAsync(BsonDocument payload, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Calls);
+            entered.TrySetResult();
+            await release.Task.WaitAsync(TimeSpan.FromSeconds(15), ct);
+        }
+    }
 }
