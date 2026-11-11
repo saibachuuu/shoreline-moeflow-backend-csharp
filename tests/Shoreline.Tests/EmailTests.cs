@@ -36,7 +36,7 @@ public sealed class EmailTests(LocalServices services)
         Assert.Equal(0, legacy["w"].AsInt32);
         using var mailpit = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + TestEnvironment.MailpitPort), Timeout = TimeSpan.FromSeconds(5) };
         JsonElement messages = default;
-        for (var attempt = 0; attempt < 50; attempt++)
+        for (var attempt = 0; attempt < 150; attempt++)
         {
             messages = await mailpit.GetFromJsonAsync<JsonElement>("/api/v1/search?query=" + Uri.EscapeDataString("to:" + email));
             if (messages.GetProperty("messages").GetArrayLength() > 0) break;
@@ -263,7 +263,7 @@ public sealed class EmailTests(LocalServices services)
         Assert.Equal("654321", row["verification"]["c"].AsString);
 
         JsonElement messages = default;
-        for (var attempt = 0; attempt < 50; attempt++)
+        for (var attempt = 0; attempt < 150; attempt++)
         {
             messages = await SearchMailpitAsync(email);
             if (messages.GetProperty("messages").GetArrayLength() > 0) break;
@@ -309,7 +309,7 @@ public sealed class EmailTests(LocalServices services)
         Assert.Equal("112233", row["verification"]["c"].AsString);
 
         JsonElement messages = default;
-        for (var attempt = 0; attempt < 50; attempt++)
+        for (var attempt = 0; attempt < 150; attempt++)
         {
             messages = await SearchMailpitAsync(email);
             if (messages.GetProperty("messages").GetArrayLength() >= 1) break;
