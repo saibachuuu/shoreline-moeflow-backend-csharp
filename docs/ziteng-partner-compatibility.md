@@ -52,6 +52,13 @@ Defaults match the Python module: API URL `https://partner-api.ziteng.org/partne
 cache TTL 604800 s, max pages 3, timeout 20 s, min interval 1.1 s, max results 5, task timeout 180 s.
 `Enabled` is exactly "non-empty API key". The key is never included in `ToString()`/`Redact()` output.
 
+`ApiUrl` must be an absolute `https://` URL without user info or fragment; an unset or empty value
+falls back to the default above. Anything else (for example a bare `host/path`, `http://`, or
+`https://user:pass@host/...`) makes startup fail with `InvalidOperationException` instead of being
+silently rewritten. This is fail-closed hardening: `UriBuilder` would otherwise invent `http://` for a
+scheme-less value and send `Authorization: Bearer <key>` in clear text, while Python's `requests`
+raises `MissingSchema` for the same input.
+
 ## 4. Persistence and generation fencing
 
 - `ziteng_work`: upsert by unique `work_id`; no TTL index (freshness is logical).

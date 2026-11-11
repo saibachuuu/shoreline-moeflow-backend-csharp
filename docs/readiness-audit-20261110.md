@@ -133,15 +133,21 @@ dotnet test Shoreline.sln --no-build --nologo --filter "FullyQualifiedName~Shore
 | 非 root 仅静态 | `Dockerfile:12` 为 `USER $APP_UID` | 容器内验证 UID、目录权限和 local/object storage 写入 |
 | readiness 仅 Mongo ping | `src/Shoreline.Api/Program.cs:163-168` | 明确关键依赖和失败返回；容器/反代 healthcheck、startup 验证 |
 | 配置失败可能延迟到首请求 | `ObjectStorage` 注册未主动解析；startup 有多处写入初始化 | 启动前完整校验、disposable 无凭证负测、避免无效配置先写 DB |
-| endpoint 限流顺序待运行时验证 | `src/Shoreline.Api/Program.cs:97` UseRateLimiter 在 `src/Shoreline.Api/Program.cs:121` UseRouting 前；Email/User endpoint RequireRateLimiting | 真实 HTTP 请求验证第 21 次及窗口/分区，不能仅测 limiter 类 |
-| 反代身份不明确 | 无显式可信 ForwardedHeaders；PartnerSearch 直接读 XFF / client_key | 限定 trusted proxy、抗伪造测试；不要信任任意头 |
+| endpoint 限流顺序已修复并验证 | 原 `UseRateLimiter` 在 `UseRouting` 前，endpoint 元数据不可见，`auth` 策略从未生效；现 `src/Shoreline.Api/Program.cs:119-120` 先 `UseRouting` 再 `UseRateLimiter` | `tests/Shoreline.Tests/AuthRateLimitTests.cs` 真实 HTTP：第 21 次 `POST /v1/user/token` 返回 429，修复前同用例返回 400 |
+| 反代身份已限定（默认不信任） | 默认无 ForwardedHeaders；仅当配置 `Security:TrustedProxies` 时安装，`ForwardLimit=1`，清空默认 KnownProxies/Networks；实现 `src/Shoreline.Api/Security/TrustedProxyConfiguration.cs` | `tests/Shoreline.Tests/TrustedProxyTests.cs` 断言未配置不信任、未列出的 peer 伪造 XFF 无效、CIDR 生效、非法配置启动失败 |
 | 上传资源放大 | File / ProjectImport 允许 1 GiB | 保持 Python 业务语义并建立并发、流式处理、反代/API 资源上限测试 |
 | SMTP TLS 形态 | `SecurityEmailHandler.cs:24-32` StartTls=false 使用 None | production fail-fast / 必须 TLS；Testing Mailpit 显式例外 |
-| Ziteng HTTP client 的 SSRF 防护需补证据 | `Modules/ZitengPartner/ZitengPartnerRegistration.cs:23-31`、`Modules/ZitengPartner/ZitengPartnerSettings.cs:38-55` | allowlist、DNS/连接地址、重定向、防私网及配置更新路径测试 |
+| Ziteng HTTP client 的 SSRF/密钥泄露面已收紧 | `Modules/ZitengPartner/ZitengPartnerSettings.cs:70-84` 现要求绝对 HTTPS、拒绝 userinfo/fragment；启动时 `Modules/ZitengPartner/ZitengPartnerRegistration.cs:45-47` 主动解析配置使非法值直接启动失败。`Modules/ZitengPartner/ZitengPartnerRegistration.cs:25-31` `AllowAutoRedirect=false` 阻止重定向绕过 | `tests/Shoreline.Tests/ZitengPartnerTests.cs:84-106` 断言 scheme-less/http/userinfo/fragment 均拒绝（原行为：`UriBuilder` 静默补 `http://` 并明文发送 Bearer key）。残余：未限制私网目标，见下方残余风险 |
 | 可观测性 / 安全响应策略不完整 | request error 只记录类型，未见 metrics exporter | 无密钥日志、request correlation、指标/告警和安全策略实际验收 |
 
 备份恢复、TLS/反代、资源限额、迁移与回滚的生产 runbook 尚待本轮实际演练支持。
 旧部署目录中的 nginx 模板不是生产生效配置，不能用模板推断生产 TLS 状态。
+
+本轮残余风险（未修复，需运维侧确认）：
+
+- `ZitengPartner:ApiUrl` 仍是运维可控配置，未对私网/环回目标做连接级过滤（不同于 `ArchiveImportTransport` 的 `PublicNetwork.ConnectAsync`）。误配指向内网地址时，请求会带上 `Authorization: Bearer <key>` 访问内网。若需与归档导入同级别防护，应在该模块注册 `ConnectCallback` 并复用 `PublicNetwork`；默认官方域名不在 allowlist 机制内，改动需单独评审。
+- `Security:TrustedProxies` 必须在反代部署中显式配置（例如 nginx 容器/网关地址），否则日志与限流分区看到的是反代 IP，所有用户共享同一 `auth` 限流桶。这是刻意的 fail-closed 默认值，不是回归。
+- `ForwardLimit=1` 假设仅一层受信反代；多层反代链需要按实际跳数调整，目前没有配置入口。
 
 ## 8. 容量与远程演练边界
 

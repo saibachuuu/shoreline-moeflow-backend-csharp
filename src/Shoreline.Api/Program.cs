@@ -97,6 +97,13 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .WithHeaders("Authorization", "Content-Type", "X-Label-Revision", "X-Request-ID", "Idempotency-Key")
     .WithExposedHeaders("X-Pagination-Page", "X-Pagination-Limit", "X-Pagination-Count", "X-Pagination-Page-Count", "X-Label-Revision", "X-Label-Project")));
 var app = builder.Build();
+// Trusted proxy support is opt-in and fail closed: with no explicit proxy list
+// the forwarded headers are not interpreted at all, so a client cannot choose
+// its own rate-limit partition by sending X-Forwarded-For. Operators behind the
+// bundled nginx must list the proxy address (Security:TrustedProxies:0=...).
+var trustedProxyOptions = TrustedProxyConfiguration.Create(
+    app.Configuration.GetSection(TrustedProxyConfiguration.SectionName).Get<string[]>());
+if (trustedProxyOptions is not null) app.UseForwardedHeaders(trustedProxyOptions);
 // Python's init_db always prepares the site setting, administrator and default
 // team. Tests run against disposable databases with their own fixtures, so the
 // bootstrap is opt-out there unless explicitly requested. Read the merged
@@ -105,6 +112,11 @@ var bootstrapEnabled = bool.TryParse(app.Configuration["Bootstrap:Enabled"], out
     ? configuredBootstrap
     : !app.Environment.IsEnvironment("Testing");
 app.UseCors();
+// Endpoint-scoped rate limiting policies are resolved from routing metadata, so
+// routing must run first. With the previous order (UseRateLimiter before
+// UseRouting) the "auth" policy silently never applied and login/email-code
+// endpoints were unthrottled.
+app.UseRouting();
 app.UseRateLimiter();
 app.Use(async (context, next) =>
 {
@@ -129,7 +141,6 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(new { error = "InternalServerError", code = 1, message = "Internal server error" });
     }
 });
-app.UseRouting();
 app.UseLabelRequestGuard();
 app.MapGet("/ping", () => Results.Text("pong"));
 app.MapLegacyDiagnostics();

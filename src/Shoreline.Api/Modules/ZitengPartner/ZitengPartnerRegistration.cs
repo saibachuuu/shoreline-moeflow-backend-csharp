@@ -42,6 +42,9 @@ public static class ZitengPartnerRegistration
     public static async Task InitializeZitengPartnerAsync(this IServiceProvider services,
         CancellationToken ct = default)
     {
+        // Resolve the settings once during startup so an invalid API URL fails the
+        // boot instead of surfacing as a per-request 500 after deployment.
+        _ = services.GetRequiredService<ZitengPartnerSettings>();
         try
         {
             await services.GetRequiredService<ZitengPartnerStore>().EnsureIndexesAsync(ct);
