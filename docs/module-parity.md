@@ -134,7 +134,7 @@ Python `manga_image_translator.py` 内部 `_run` 引用 `gpu`/`device=cuda` 仅�
 
 ## 跨模块记录（超出本次范围，仅 note）
 
-- `FileNotExistError` 编码：C# 全库 `8001` vs Python `4006`（`FileService.cs:286/292` 等）——系统性漂移，需全库统一决策，不在本轮改动。
+- `FileNotExistError` 在 Python 有**两个**定义，不是漂移：`app/exceptions/file.py:16` 是 **8001**（“文件/文件夹不存在，可能已被删除”，`app/exceptions/__init__.py` 最后导出，通用文件 API 用它）；`app/exceptions/project.py:56` 是 **4006**（“文件不存在”，只有 `app/apis/project.py:450` 的 send-proofread-draft 显式 import）。C# 通用路径的 8001 正确；send-proofread-draft 曾误用 8001，已改为 4006（`ProofreadFeedbackService.cs:98,365`，`ProofreadFeedbackTests.Send_RejectsForeignFile`）。
 - `NoPermissionError` 消息文本：Python 各模块多为具体中文消息，C# term/presence 等已对齐具体消息，其余为通用「没有权限」——code 一致，前端按 code 判断不受影响。
 - `docs/env-compat-audit-2026-11-11.md` 与本结论一致：`ARCHIVE_*` legacy env 为兼容读取项（本轮补齐 allowlist 一项）。
 
@@ -159,4 +159,4 @@ Python `manga_image_translator.py` 内部 `_run` 引用 `gpu`/`device=cuda` 仅�
 
 1. **OCR 真实执行**：Python `merge_and_ocr` 重构中不可运行；C# 501 fail-closed。待 OCR 方案确定后对齐配额/任务语义。原因：无可对齐的真实行为，伪造即造假。
 2. **MIT 真实执行**：双方均无可用 worker；C# 路由门控 fail-closed。待产品决策执行方案。原因：同上。
-3. **`FileNotExistError` 8001 vs 4006**：全库系统性编码漂移，需跨模块统一决策，不属可选模块范围。原因：改动面超出本任务，易引发回归。
+3. ~~**`FileNotExistError` 8001 vs 4006**~~（已关闭）：两个错误类在 Python 中并存，见上文；只有 send-proofread-draft 需 4006，已修。

@@ -395,7 +395,7 @@ public sealed class ProofreadFeedbackTests : IDisposable
             service.SendAsync(page.Actor, page.Project["_id"].AsObjectId.ToString(),
                 page.Target["_id"].AsObjectId.ToString(), Body(new { file_id = foreignFile["_id"].AsObjectId.ToString() }),
                 "key-0003", default));
-        Assert.Equal(8001, error.Code);
+        Assert.Equal(4006, error.Code);
     }
 
     [Fact]

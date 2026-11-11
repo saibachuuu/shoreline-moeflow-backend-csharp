@@ -95,7 +95,7 @@ public sealed partial class ProofreadFeedbackService(
         if (!string.IsNullOrWhiteSpace(fileId))
         {
             if (!ObjectId.TryParse(fileId, out var parsedFile))
-                throw new ApiError("FileNotExistError", 8001, "文件/文件夹不存在，可能已被删除");
+                throw new ApiError("FileNotExistError", 4006, "文件不存在");
             targetFileId = parsedFile;
         }
 
@@ -362,7 +362,7 @@ public sealed partial class ProofreadFeedbackService(
         {
             selected = await Files.Find(Builders<BsonDocument>.Filter.And(imageFilter, Builders<BsonDocument>.Filter.Eq("_id", only))).ToListAsync(ct);
             if (selected.Count == 0)
-                throw new ApiError("FileNotExistError", 8001, "文件/文件夹不存在，可能已被删除");
+                throw new ApiError("FileNotExistError", 4006, "文件不存在");
         }
         else
         {
