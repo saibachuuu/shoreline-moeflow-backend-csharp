@@ -46,8 +46,9 @@ services:
       Mail__From: ${MAIL_FROM:?set MAIL_FROM}
       Mail__Username: ${MAIL_USERNAME:-}
       Mail__Password: ${MAIL_PASSWORD:-}
-      # Optional: None|Auto|StartTls|StartTlsWhenAvailable|SslOnConnect.
-      # Empty keeps the legacy mapping (UseSsl ? SslOnConnect : StartTls).
+      # Notification mail only. Optional: None|Auto|StartTls|StartTlsWhenAvailable|SslOnConnect.
+      # Empty keeps the legacy mapping (UseSsl ? SslOnConnect : StartTls);
+      # verification-code mail still follows Mail__StartTls.
       Mail__SecureSocketOptions: ${MAIL_SECURE_SOCKET_OPTIONS:-}
       Cors__Origins__0: ${CORS_ORIGIN_0:?set CORS_ORIGIN_0 to the public frontend origin}
       Jobs__Concurrency: ${JOBS_CONCURRENCY:-2}
@@ -91,8 +92,9 @@ services:
       Mail__From: ${MAIL_FROM:?set MAIL_FROM}
       Mail__Username: ${MAIL_USERNAME:-}
       Mail__Password: ${MAIL_PASSWORD:-}
-      # Optional: None|Auto|StartTls|StartTlsWhenAvailable|SslOnConnect.
-      # Empty keeps the legacy mapping (UseSsl ? SslOnConnect : StartTls).
+      # Notification mail only. Optional: None|Auto|StartTls|StartTlsWhenAvailable|SslOnConnect.
+      # Empty keeps the legacy mapping (UseSsl ? SslOnConnect : StartTls);
+      # verification-code mail still follows Mail__StartTls.
       Mail__SecureSocketOptions: ${MAIL_SECURE_SOCKET_OPTIONS:-}
       Jobs__Concurrency: ${JOBS_CONCURRENCY:-2}
       # Only the worker consumes the Mongo-backed job queue.

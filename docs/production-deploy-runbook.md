@@ -118,10 +118,11 @@ curl -s http://127.0.0.1:8080/ping
 #   2. Confirm delivery and that the code verifies within its TTL.
 #   3. Confirm a second request for the same address reuses one durable code
 #      (see EmailTests.ConcurrentIssueCreatesOneDurableCode*).
-#   4. TLS policy: the default mirrors the legacy app (UseSsl -> SslOnConnect,
-#      otherwise mandatory STARTTLS). If the relay needs a different mode, set
-#      MAIL_SECURE_SOCKET_OPTIONS (None|Auto|StartTls|StartTlsWhenAvailable|
-#      SslOnConnect); leaving it empty keeps the legacy mapping.
+#   4. TLS policy: notification mail defaults to the legacy mapping (UseSsl ->
+#      SslOnConnect, otherwise mandatory STARTTLS). If the relay needs another
+#      mode, set MAIL_SECURE_SOCKET_OPTIONS (None|Auto|StartTls|
+#      StartTlsWhenAvailable|SslOnConnect) -- it applies to notification mail
+#      only; verification-code mail still follows MAIL_START_TLS.
 ```
 
 Also update the drain step above to use the checked-in helper instead of a
