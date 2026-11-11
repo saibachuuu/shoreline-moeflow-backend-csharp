@@ -183,6 +183,10 @@ public sealed class EmailTests(LocalServices services)
     private SecurityEmailHandler Handler() =>
         new(services.Store, services.Configuration, TimeProvider.System);
 
+    // BSON stores dates with millisecond precision.
+    private static DateTime BsonDate(DateTime value) =>
+        new(value.Ticks - value.Ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
+
     private static async Task<JsonElement> SearchMailpitAsync(string email)
     {
         using var mailpit = new HttpClient
@@ -253,7 +257,7 @@ public sealed class EmailTests(LocalServices services)
         var mirror = await services.Store.Collection("v_code")
             .Find(new BsonDocument { ["t"] = 2, ["i"] = email }).SingleAsync();
         Assert.Equal("654321", mirror["c"].AsString);
-        Assert.Equal(issued.AddHours(1), mirror["e"].ToUniversalTime());
+        Assert.Equal(BsonDate(issued.AddHours(1)), mirror["e"].ToUniversalTime());
         Assert.Equal(0, mirror["w"].AsInt32);
         var row = await jobs.Find(new BsonDocument("_id", jobId)).SingleAsync();
         Assert.Equal("654321", row["verification"]["c"].AsString);
@@ -299,7 +303,7 @@ public sealed class EmailTests(LocalServices services)
             .Find(new BsonDocument { ["t"] = 3, ["i"] = email }).ToListAsync();
         var only = Assert.Single(mirrors);
         Assert.Equal("112233", only["c"].AsString);
-        Assert.Equal(issued.AddHours(1), only["e"].ToUniversalTime());
+        Assert.Equal(BsonDate(issued.AddHours(1)), only["e"].ToUniversalTime());
         var row = await jobs.Find(new BsonDocument("_id", jobId)).SingleAsync();
         Assert.Equal("112233", row["verification"]["c"].AsString);
 

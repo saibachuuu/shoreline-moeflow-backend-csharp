@@ -48,6 +48,29 @@ public sealed class SecurityEmailHandler(MongoStore store, IConfiguration config
             Text = $"{configuration["Site:Name"] ?? "MoeFlow"}\n\n{subject}的验证码：{code["c"].AsString}\n\n有效期为48小时。若非本人操作，请忽略此邮件。"
         };
 
+        // Never deliver a code the legacy `v_code` schema cannot see: a rollback to
+        // the Python backend would otherwise reject a code we already emailed.
+        // IssueAsync writes the job first and mirrors afterwards, so a crash in
+        // between leaves a durable job with no mirror. Recreate it from the job's
+        // own verification (same code, same expiry, no rotation); if a matching
+        // mirror already exists it is left untouched. A failed write throws, which
+        // makes the queue retry the same job and keeps the mail unsent.
+        var mirror = await store.Collection("v_code")
+            .Find(new BsonDocument { ["t"] = code["t"], ["i"] = code["i"] })
+            .Sort(new BsonDocument("_id", 1))
+            .FirstOrDefaultAsync(ct);
+        var mirrorCode = mirror is not null && mirror.TryGetValue("c", out var existing) && existing.IsString
+            ? existing.AsString
+            : null;
+        if (mirrorCode != code["c"].AsString)
+        {
+            await store.Collection("v_code").UpdateOneAsync(
+                new BsonDocument { ["t"] = code["t"], ["i"] = code["i"] },
+                Builders<BsonDocument>.Update.Set("c", code["c"]).Set("e", code["e"])
+                    .Set("w", code["w"]).Set("s", code["s"]),
+                new UpdateOptions { IsUpsert = true }, ct);
+        }
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
 
