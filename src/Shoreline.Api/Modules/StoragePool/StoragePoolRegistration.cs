@@ -43,13 +43,9 @@ public static class StoragePoolRegistration
 
         var store = scope.ServiceProvider.GetRequiredService<MongoStore>();
         await EnsureNoDuplicateActiveTransfersAsync(store, cancellationToken).ConfigureAwait(false);
-        await store.Collection(StoragePoolConstants.SourceCollection).Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("e"),
-                new CreateIndexOptions { Name = "storage_pool_source_enabled" }),
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        await store.Collection(StoragePoolConstants.TransferCollection).Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(
+        await store.EnsureIndexTolerantAsync(StoragePoolConstants.SourceCollection, new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("e"),
+                new CreateIndexOptions { Name = "storage_pool_source_enabled" }), cancellationToken).ConfigureAwait(false);
+        await store.EnsureIndexTolerantAsync(StoragePoolConstants.TransferCollection, new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("p"),
                 new CreateIndexOptions<BsonDocument>
                 {
@@ -58,42 +54,22 @@ public static class StoragePoolRegistration
                     PartialFilterExpression =
                         Builders<BsonDocument>.Filter.Gte("st", 0) &
                         Builders<BsonDocument>.Filter.Lt("st", 4),
-                }),
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        await store.Collection(StoragePoolConstants.TransferCollection).Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(
+                }), cancellationToken).ConfigureAwait(false);
+        await store.EnsureIndexTolerantAsync(StoragePoolConstants.TransferCollection, new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("p").Ascending("s"),
-                new CreateIndexOptions { Name = "storage_transfer_project_source" }),
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        await store.Collection(StoragePoolConstants.TransferCollection).Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("st"),
-                new CreateIndexOptions { Name = "storage_transfer_status" }),
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        await store.Collection(StoragePoolConstants.TransferCollection).Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(
+                new CreateIndexOptions { Name = "storage_transfer_project_source" }), cancellationToken).ConfigureAwait(false);
+        await store.EnsureIndexTolerantAsync(StoragePoolConstants.TransferCollection, new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("st"),
+                new CreateIndexOptions { Name = "storage_transfer_status" }), cancellationToken).ConfigureAwait(false);
+        await store.EnsureIndexTolerantAsync(StoragePoolConstants.TransferCollection, new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Descending("ct").Descending("_id"),
-                new CreateIndexOptions { Name = "storage_transfer_create_time" }),
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        await store.Collection(StoragePoolConstants.ObjectCollection).Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(
+                new CreateIndexOptions { Name = "storage_transfer_create_time" }), cancellationToken).ConfigureAwait(false);
+        await store.EnsureIndexTolerantAsync(StoragePoolConstants.ObjectCollection, new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("t").Ascending("st"),
-                new CreateIndexOptions { Name = "storage_transfer_object_status" }),
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        await store.Collection(StoragePoolConstants.ObjectCollection).Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("sk"),
-                new CreateIndexOptions { Name = "storage_transfer_object_key" }),
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        await store.Collection("project").Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("csid"),
-                new CreateIndexOptions { Name = "project_storage_source" }),
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+                new CreateIndexOptions { Name = "storage_transfer_object_status" }), cancellationToken).ConfigureAwait(false);
+        await store.EnsureIndexTolerantAsync(StoragePoolConstants.ObjectCollection, new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("sk"),
+                new CreateIndexOptions { Name = "storage_transfer_object_key" }), cancellationToken).ConfigureAwait(false);
+        await store.EnsureIndexTolerantAsync("project", new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("csid"),
+                new CreateIndexOptions { Name = "project_storage_source" }), cancellationToken).ConfigureAwait(false);
 
         var settings = scope.ServiceProvider.GetRequiredService<StoragePoolSettingsService>();
         await settings.ReadAsync(cancellationToken).ConfigureAwait(false);

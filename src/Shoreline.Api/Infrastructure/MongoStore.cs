@@ -1,4 +1,5 @@
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 
 namespace Shoreline.Api.Infrastructure;
@@ -127,10 +128,11 @@ public sealed class MongoStore
     // Reconcile a named index instead of failing the whole startup when a
     // database prepared by the Python app already has the same name with
     // mongoengine's option shape (IndexOptionsConflict / IndexKeySpecsConflict).
-    private async Task EnsureIndexTolerantAsync(
+    internal async Task EnsureIndexTolerantAsync(
         string collection, CreateIndexModel<BsonDocument> model, CancellationToken ct)
     {
-        var indexes = Collection(collection).Indexes;
+        var coll = Collection(collection);
+        var indexes = coll.Indexes;
         var name = model.Options.Name;
         try
         {
@@ -139,7 +141,41 @@ public sealed class MongoStore
         catch (MongoCommandException ex) when (ex.Code is 85 or 86 && !string.IsNullOrEmpty(name))
         {
             await DropIndexIfExistsAsync(collection, name!, ct);
+            // A database prepared by mongoengine often holds the same key pattern
+            // under its default name (`e_1`), and Mongo refuses two indexes with
+            // the same key but different names ("already exists with a different
+            // name", code 86). Dropping by our name alone cannot resolve that, so
+            // also drop any index whose key pattern matches the one we want.
+            await DropIndexesWithSameKeyAsync(coll, model, ct);
             await indexes.CreateOneAsync(model, cancellationToken: ct);
+        }
+    }
+
+    private static async Task DropIndexesWithSameKeyAsync(
+        IMongoCollection<BsonDocument> coll, CreateIndexModel<BsonDocument> model, CancellationToken ct)
+    {
+        var registry = BsonSerializer.SerializerRegistry;
+        var serializer = registry.GetSerializer<BsonDocument>();
+        var wanted = model.Keys.Render(new RenderArgs<BsonDocument>(serializer, registry));
+        using var cursor = await coll.Indexes.ListAsync(ct);
+        var existing = await cursor.ToListAsync(ct);
+        foreach (var doc in existing)
+        {
+            if (!doc.TryGetValue("key", out var key) || !key.IsBsonDocument) continue;
+            var name = doc.TryGetValue("name", out var n) ? n.AsString : string.Empty;
+            if (name == "_id_") continue;
+            var keyDoc = key.AsBsonDocument;
+            if (keyDoc.ElementCount != wanted.ElementCount) continue;
+            var same = true;
+            foreach (var element in wanted)
+            {
+                if (!keyDoc.TryGetValue(element.Name, out var value) || !value.Equals(element.Value))
+                {
+                    same = false;
+                    break;
+                }
+            }
+            if (same) await coll.Indexes.DropOneAsync(name, ct);
         }
     }
 
