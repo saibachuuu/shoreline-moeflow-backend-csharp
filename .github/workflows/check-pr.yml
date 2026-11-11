@@ -1,0 +1,82 @@
+name: PR checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'Shoreline.sln'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - 'compose.test.yml'
+      - 'Dockerfile'
+      - '.github/workflows/check-pr.yml'
+  workflow_dispatch:
+
+# 同一个分支连续推送时取消上一轮：省 runner 时间，也省掉一堆过时的红叉。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    # 本地实测全量 1150+ 用例约 110 秒，加还原/构建/起容器，25 分钟是宽松上限。
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 依赖直接用仓库里的 compose.test.yml，而不是 actions 的 services: 块。
+      # 原因：services 不支持 command，mongo 4.4.1 需要显式
+      # `mongod --bind_ip_all --wiredTigerCacheSizeGB 0.25`；用同一个 compose
+      # 文件还能保证 CI 与本地跑的是同一组镜像、端口和内存限制。
+      - name: Start dependencies
+        run: docker compose -f compose.test.yml up -d --wait mongo s3 mailpit
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      # 仓库开了 RestorePackagesWithLockFile，用 --locked-mode 保证 CI 不会
+      # 悄悄解析出与本地不同的版本。
+      - name: Restore
+        run: dotnet restore Shoreline.sln --locked-mode
+
+      # Directory.Build.props 开了 TreatWarningsAsErrors，这里不需要额外的
+      # /warnaserror；Release 构建顺便验证发布配置也能过。
+      - name: Build
+        run: dotnet build Shoreline.sln --no-restore -c Release --nologo
+
+      - name: Test
+        env:
+          SHORELINE_TEST_MONGO_PORT: '27128'
+          SHORELINE_TEST_S3_PORT: '29128'
+          SHORELINE_TEST_SMTP_PORT: '21128'
+          SHORELINE_TEST_MAILPIT_PORT: '28128'
+        run: >
+          dotnet test Shoreline.sln
+          --no-build -c Release
+          --logger "trx;LogFileName=full.trx"
+          --results-directory "${{ runner.temp }}/trx"
+
+      - name: Dependency logs
+        if: failure()
+        run: docker compose -f compose.test.yml logs --tail 120
+
+      - name: Save test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ${{ runner.temp }}/trx
+          if-no-files-found: warn
+
+      - name: Stop dependencies
+        if: always()
+        run: docker compose -f compose.test.yml down -v
