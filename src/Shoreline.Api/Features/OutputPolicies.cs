@@ -24,15 +24,14 @@ public static class OutputStatus
 /// <summary>Python OutputStatus details, sorted by id (app/constants/output.py:16-23).</summary>
 public static class OutputStatusDetails
 {
-    public static object[] All() =>
-    [
-        new { id = 0, name = "排队中", intro = "" },
-        new { id = 1, name = "源文件整理中", intro = "" },
-        new { id = 2, name = "翻译整理中", intro = "" },
-        new { id = 3, name = "压缩中", intro = "" },
-        new { id = 4, name = "已完成", intro = "" },
-        new { id = 5, name = "导出错误，请重试", intro = "" }
-    ];
+    // app/translations/en/LC_MESSAGES/messages.po supplies the English names.
+    public static object[] All(bool chinese = true)
+    {
+        string[] zh = ["排队中", "源文件整理中", "翻译整理中", "压缩中", "已完成", "导出错误，请重试"];
+        string[] en = ["In queue.", "The source file is being organized.", "Translation in progress.", "Compressing.", "Completed.", "Export error, please try again."];
+        var names = chinese ? zh : en;
+        return [.. names.Select((name, id) => (object)new { id, name, intro = "" })];
+    }
 }
 
 public static class OutputPolicy

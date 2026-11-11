@@ -344,12 +344,10 @@ public sealed class OutputService(
                 .Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(userIds))))
                 .ToListAsync(ct);
         var userViews = new Dictionary<ObjectId, Dictionary<string, object?>>();
-        // Python Output.to_api calls user.to_api() without the current user,
-        // so the embedded output user must not gain viewer-only fields such as
-        // email/can_manage_site_admins when an admin lists outputs.
-        var anonymousViewer = new DefaultHttpContext();
+        // Python User.to_api reads g.current_user, so an admin viewer sees the
+        // output owner's email and the owner sees can_manage_site_admins.
         foreach (var user in userRows)
-            userViews[user["_id"].AsObjectId] = await userView.ToApiAsync(user, anonymousViewer);
+            userViews[user["_id"].AsObjectId] = await userView.ToApiAsync(user, context);
 
         var result = new List<object>(rows.Count);
         foreach (var (output, target) in rows)
@@ -382,7 +380,7 @@ public sealed class OutputService(
                 ["type"] = output.Integer("ty"),
                 ["status"] = status,
                 ["storage_bytes"] = statusBytes.IsNumeric ? statusBytes.ToInt64() : 0L,
-                ["status_details"] = OutputStatusDetails.All(),
+                ["status_details"] = OutputStatusDetails.All(chinese),
                 ["file_ids_include"] = StringIds(output.GetValue("file_ids_include", BsonNull.Value)),
                 ["file_ids_exclude"] = StringIds(output.GetValue("file_ids_exclude", BsonNull.Value)),
                 ["create_time"] = output.GetValue("ct", BsonNull.Value) is BsonDateTime created
