@@ -430,6 +430,14 @@
         "resolved": "13.0.3",
         "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
       },
+      "RabbitMQ.Client": {
+        "type": "Transitive",
+        "resolved": "7.2.2",
+        "contentHash": "k4b6RnTXpLbsF96V93ooNYxgPMnoA2tEm24B6AXNJr1mG8wwNYdA1XJtgU66L5xqeGyveS7SJriRzlX3cbqQNA==",
+        "dependencies": {
+          "System.Threading.RateLimiting": "8.0.0"
+        }
+      },
       "SharpCompress": {
         "type": "Transitive",
         "resolved": "0.48.1",
@@ -449,6 +457,11 @@
         "type": "Transitive",
         "resolved": "10.0.14",
         "contentHash": "Wz+IgL2xpg8KJ4i2VWj6uz1PmZNu4Q0Ljlwd73P9Vze5NcOBtctLii3itV0PB2MpOqwqDEGfB6RCdv94A4E5yQ=="
+      },
+      "System.Threading.RateLimiting": {
+        "type": "Transitive",
+        "resolved": "8.0.0",
+        "contentHash": "7mu9v0QDv66ar3DpGSZHg9NuNcxDaaAcnMULuZlaTpP9+hwXhrxNGsF5GmLkSHxFdb5bBc1TzeujsRgTrPWi+Q=="
       },
       "xunit.abstractions": {
         "type": "Transitive",
@@ -502,6 +515,7 @@
           "BouncyCastle.Cryptography": "[2.6.2, )",
           "MailKit": "[4.16.0, )",
           "MongoDB.Driver": "[3.13.0, )",
+          "RabbitMQ.Client": "[7.2.2, )",
           "Shoreline.Imaging": "[1.0.0, )",
           "System.Security.Cryptography.Pkcs": "[10.0.14, )"
         }
