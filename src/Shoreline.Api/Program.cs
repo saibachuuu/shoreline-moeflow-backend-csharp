@@ -6,6 +6,7 @@ using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Infrastructure.Migrations;
 using Shoreline.Api.Jobs;
 using Shoreline.Api.Modules.ArchiveImport;
+using Shoreline.Api.Modules.Mit;
 using Shoreline.Api.Modules.PartnerSearch;
 using Shoreline.Api.Modules.StoragePool;
 using Shoreline.Api.Modules.ZitengPartner;
@@ -67,6 +68,7 @@ builder.Services.AddAdminStorageOverviewServices();
 builder.Services.AddNotificationServices();
 builder.Services.AddNotificationPublishServices();
 builder.Services.AddMitServices();
+builder.Services.AddMitBridge();
 builder.Services.AddScoped<ProjectMemberService>();
 builder.Services.AddScoped<ProjectLifecycleService>();
 builder.Services.AddScoped<ProjectInvitationService>();
@@ -186,14 +188,23 @@ app.MapZitengPartner();
 var mitStorageRoot = builder.Configuration["Mit:StorageRoot"] ?? Environment.GetEnvironmentVariable("MIT_STORAGE_ROOT");
 if (!string.IsNullOrWhiteSpace(mitStorageRoot) && mitStorageRoot != "/MIT_STORAGE_ROOT_UNDEFINED")
 {
-    // MIT is fail closed: the routes are only advertised when every job kind
-    // they enqueue has a registered in-process consumer. Without one the
-    // insertion would be silently accepted and never executed, because
-    // JobWorker only claims kinds present in its IJobHandler registry and C#
-    // has no bridge to Python's external manga-image-translator worker.
+    // MIT is fail closed. The routes are mapped when queued work can actually
+    // run: either every job kind has a registered in-process consumer (the
+    // legacy path), or the Celery bridge is enabled (RabbitMq:Enabled=true
+    // with a non-empty RabbitMq:Url, 方案 A in docs/mit-bridge-spike.md §4).
+    // Otherwise the insertion would be silently accepted and never executed.
     var missingMitConsumers = MitEndpoints.FindMissingConsumers(app.Services);
-    if (missingMitConsumers.Length == 0)
+    var mitBridgeSettings = MitBridgeSettings.FromConfiguration(builder.Configuration);
+    if (missingMitConsumers.Length == 0 || mitBridgeSettings.IsBridgeEnabled)
     {
+        if (mitBridgeSettings.IsBridgeEnabled && missingMitConsumers.Length != 0)
+        {
+            app.Logger.LogInformation(
+                "Mapping /v1/mit via the RabbitMQ Celery bridge ({Settings}); " +
+                "in-process consumers missing for {Kinds}, results polled from celery_taskmeta.",
+                mitBridgeSettings.Describe(),
+                string.Join(", ", missingMitConsumers));
+        }
         app.MapMitEndpoints();
     }
     else

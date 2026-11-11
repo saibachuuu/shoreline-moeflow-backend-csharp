@@ -9,6 +9,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Jobs;
+using Shoreline.Api.Modules.Mit;
 
 namespace Shoreline.Api.Features;
 
@@ -188,7 +189,10 @@ public sealed class MitService(
     MongoStore store,
     JobQueue jobs,
     IConfiguration configuration,
-    ILogger<MitService> logger)
+    ILogger<MitService> logger,
+    MitBridgeSettings bridgeSettings,
+    MitBridgePublisher bridgePublisher,
+    MitBridgeResultReader bridgeResults)
 {
     public static ApiError UploadFileNotFound() =>
         new("UploadFileNotFoundError", 101, "Please select an image file", 400);
@@ -294,6 +298,20 @@ public sealed class MitService(
 
         payload["image_path"] = imagePath;
 
+        if (bridgeSettings.IsBridgeEnabled)
+        {
+            // 方案 A: Celery 直发。image_path 是位置参数（args[0]），其余
+            // 进 kwargs；Python 侧按 `tasks.mit.*` 签名绑定。
+            var bridgeArgs = new List<object?> { imagePath };
+            var bridgeKwargs = new Dictionary<string, object?>();
+            foreach (var element in payload)
+            {
+                if (element.Name == "image_path") continue;
+                bridgeKwargs[element.Name] = MitBridgeBson.ToNetObject(element.Value);
+            }
+            return await bridgePublisher.PublishAsync(taskName, bridgeArgs, bridgeKwargs, ct);
+        }
+
         var jobId = await jobs.EnqueueAsync(taskName, payload, ct);
         return jobId.ToString();
     }
@@ -306,12 +324,31 @@ public sealed class MitService(
             payload[prop.Name] = ConvertJsonElementToBsonValue(prop.Value);
         }
 
+        if (bridgeSettings.IsBridgeEnabled)
+        {
+            // 方案 A: translate 是纯 kwargs 任务（spike §1.2），args 为空。
+            var bridgeKwargs = new Dictionary<string, object?>();
+            foreach (var element in payload)
+            {
+                bridgeKwargs[element.Name] = MitBridgeBson.ToNetObject(element.Value);
+            }
+            return await bridgePublisher.PublishAsync(
+                MitBridgeEnvelope.TranslateKind, [], bridgeKwargs, ct);
+        }
+
         var jobId = await jobs.EnqueueAsync("mit_translate", payload, ct);
         return jobId.ToString();
     }
 
     public async Task<Dictionary<string, object?>> GetTaskStatusAsync(string taskId, CancellationToken ct)
     {
+        // 方案 A: 结果以 celery_taskmeta 为准（worker 的 MongoBackend 回写）；
+        // 1 秒级短轮询语义保持：查一次即返，无结果按 pending 处理。
+        if (bridgeSettings.IsBridgeEnabled)
+        {
+            return await bridgeResults.GetStatusAsync(taskId, ct);
+        }
+
         if (!ObjectId.TryParse(taskId, out var objectId))
         {
             return new Dictionary<string, object?>
@@ -386,18 +423,6 @@ public sealed class MitService(
         return doc;
     }
 
-    private static object? ConvertBsonValueToNetObject(BsonValue value) => value.BsonType switch
-    {
-        BsonType.Null or BsonType.Undefined => null,
-        BsonType.Boolean => value.AsBoolean,
-        BsonType.Int32 => value.AsInt32,
-        BsonType.Int64 => value.AsInt64,
-        BsonType.Double => value.AsDouble,
-        BsonType.String => value.AsString,
-        BsonType.ObjectId => value.AsObjectId.ToString(),
-        BsonType.DateTime => value.ToUniversalTime(),
-        BsonType.Array => value.AsBsonArray.Select(ConvertBsonValueToNetObject).ToList(),
-        BsonType.Document => value.AsBsonDocument.ToDictionary(e => e.Name, e => ConvertBsonValueToNetObject(e.Value)),
-        _ => value.ToString()
-    };
+    private static object? ConvertBsonValueToNetObject(BsonValue value) =>
+        MitBridgeBson.ToNetObject(value);
 }
