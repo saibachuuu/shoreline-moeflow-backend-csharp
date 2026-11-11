@@ -359,7 +359,7 @@ internal static class StoragePoolJson
     {
         if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty(field, out var value) ||
             value.ValueKind != JsonValueKind.String)
-            throw ApiError.Field(field, "缺少必填字段");
+            throw ApiError.Field(field, "Missing data for required field.");
         var text = value.GetString()!.Trim();
         if (text.Length == 0) throw ApiError.Field(field, "不能为空");
         if (text.EnumerateRunes().Count() > maxLength) throw ApiError.Field(field, "内容过长");
@@ -377,7 +377,7 @@ internal static class StoragePoolJson
     public static bool RequiredBoolean(JsonElement data, string field)
     {
         if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty(field, out var value))
-            throw ApiError.Field(field, "缺少必填字段");
+            throw ApiError.Field(field, "Missing data for required field.");
         if (value.ValueKind is JsonValueKind.True or JsonValueKind.False) return value.GetBoolean();
         throw ApiError.Field(field, "布尔值格式不正确");
     }
