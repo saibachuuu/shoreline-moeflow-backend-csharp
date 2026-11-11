@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Http;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
@@ -13,7 +14,7 @@ namespace Shoreline.Api.Features;
 // intentionally registered by TermRegistration and are not wired into Program.cs
 // by this slice.
 public sealed class TermService(MongoStore store, TimeProvider clock, IdentityPermissions permissions,
-    TeamMemberService members, UserView users)
+    TeamMemberService members, UserView users, IHttpContextAccessor? http = null)
 {
     public const int LegacyDefaultPageLimit = 30;
     public const int MaxPageLimit = 100;
@@ -34,8 +35,16 @@ public sealed class TermService(MongoStore store, TimeProvider clock, IdentityPe
             ?? throw TermMissing();
     }
 
-    private static ApiError BankMissing() => new("TermBankNotExistError", 7001, "术语库不存在");
-    private static ApiError TermMissing() => new("TermNotExistError", 7002, "术语不存在");
+    private bool Chinese()
+    {
+        try { return LanguageCatalog.ChinesePreferred(http?.HttpContext?.Request.GetTypedHeaders().AcceptLanguage); }
+        catch (FormatException) { return false; }
+    }
+
+    private ApiError BankMissing() => new("TermBankNotExistError", 7001,
+        Chinese() ? "术语库不存在" : "Termbase does not exist.");
+    private ApiError TermMissing() => new("TermNotExistError", 7002,
+        Chinese() ? "术语不存在" : "Term does not exist.");
 
     // ---- team term banks -------------------------------------------------
 

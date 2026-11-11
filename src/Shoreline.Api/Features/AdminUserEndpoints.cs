@@ -14,6 +14,10 @@ public static class AdminUserEndpoints
         app.MapGet("/v1/admin/users", async (HttpContext ctx, CurrentUser current, MongoStore store, UserView view, CancellationToken ct) =>
         {
             await current.RequireAdminAsync(ctx, ct);
+            // Deliberate C-class deviation: Python app/apis/user.py:161 does
+            // `word = query["word"]` and raises KeyError -> HTTP 500 when the
+            // parameter is absent. Accepting an empty word is a superset and
+            // does not change any successful legacy response.
             var word = ctx.Request.Query["word"].ToString();
             if (word.Length > 256) throw ApiError.Field("word", "内容过长");
             var page = Pagination.From(ctx.Request);

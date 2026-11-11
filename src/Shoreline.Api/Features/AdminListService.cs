@@ -10,17 +10,17 @@ namespace Shoreline.Api.Features;
 // inheritance), NOT the newer email-code source and NOT the captcha collection.
 public sealed class AdminListService(MongoStore store)
 {
-    private static readonly Dictionary<int, string> VCodeIntros = new()
+    private static readonly Dictionary<int, (string Zh, string En)> VCodeIntros = new()
     {
-        [1] = "人机验证码",
-        [2] = "验证邮箱",
-        [3] = "重设邮箱",
-        [4] = "重置密码",
-        [5] = "验证手机",
-        [6] = "重设手机"
+        [1] = ("人机验证码", "Human verification code"),
+        [2] = ("验证邮箱", "Verify email"),
+        [3] = ("重设邮箱", "Reset email"),
+        [4] = ("重置密码", "Reset password"),
+        [5] = ("验证手机", "Verify phone"),
+        [6] = ("重设手机", "Reset phone")
     };
 
-    public async Task<object[]> VCodesAsync(CancellationToken ct)
+    public async Task<object[]> VCodesAsync(bool chinese, CancellationToken ct = default)
     {
         // `type__ne=CAPTCHA` then limit(100) then order_by("-send_time"),
         // exactly matching the legacy orchestration order from the public API.
@@ -33,7 +33,8 @@ public sealed class AdminListService(MongoStore store)
         {
             ["id"] = row["_id"].ToString(),
             ["content"] = row.Text("c"),
-            ["intro"] = VCodeIntros.GetValueOrDefault((int)row.Integer("t"), "未知类型"),
+            ["intro"] = VCodeIntros.TryGetValue((int)row.Integer("t"), out var intro)
+                ? (chinese ? intro.Zh : intro.En) : "未知类型",
             ["info"] = row.Text("i"),
             ["expires"] = IsoTimestamp(row.GetValue("e", BsonNull.Value)),
             ["wrong_count"] = row.Integer("w"),

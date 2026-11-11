@@ -46,7 +46,10 @@ public static class UserEndpoints
         {
             await current.RequireAsync(ctx, ct);
             var word = ctx.Request.Query["word"].ToString();
-            if (word.Length == 0 || word.Length > 256) throw ApiError.Invalid("word: 搜索词不可为空");
+            if (word.Length == 0 || word.Length > 256)
+                // app/apis/user.py:53-56 raises RequestDataEmptyError (110).
+                throw new ApiError("RequestDataEmptyError", 110,
+                    "Request parameters cannot be empty or lack the required values.");
             var page = Pagination.From(ctx.Request);
             var pattern = new BsonRegularExpression(Regex.Escape(SearchText.Normalize(word)), "i");
             var filter = new BsonDocument("$or", new BsonArray { new BsonDocument("ns", pattern), new BsonDocument("asrch", pattern) });
@@ -116,7 +119,7 @@ public sealed class UserView(IConfiguration configuration, IServiceProvider serv
             ["signature"] = user.Text("s"), ["has_avatar"] = avatar.Length > 0,
             ["avatar"] = avatar.Length == 0 ? configuration["Storage:DefaultUserAvatar"] :
                 await services.GetRequiredService<ObjectStorage>().SignGetAsync(AvatarStoragePrefixes.User(configuration) + avatar, ObjectStorage.DefaultSignedUrlValidity),
-            ["locale"] = new { id = locale, name, intro = locale == "auto" ? (chinese ? "遵循浏览器设置" : "Follow browser settings") : "" },
+            ["locale"] = new { id = locale, name, intro = locale == "auto" ? (chinese ? "遵循浏览器设置" : "Follow browser settings.") : "" },
             ["admin"] = user.Flag("admin"),
             ["aliases"] = user.GetValue("as", new BsonArray()).AsBsonArray.Select(v => v.AsString).ToArray()
         };

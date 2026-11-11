@@ -450,9 +450,15 @@ public sealed class ApplicationService(
 
     private static bool Chinese(HttpContext context)
     {
-        var value = context.Request.Headers.AcceptLanguage.ToString();
-        return string.IsNullOrWhiteSpace(value) ||
-               value.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            // app/translations/__init__.py:37: best_match(["zh","en"], default="en").
+            return LanguageCatalog.ChinesePreferred(context.Request.GetTypedHeaders().AcceptLanguage);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static int RoleLevel(object role) =>

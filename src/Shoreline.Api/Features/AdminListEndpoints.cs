@@ -13,7 +13,10 @@ public static class AdminListEndpoints
             AdminListService lists, CancellationToken ct) =>
         {
             await current.RequireAdminAsync(ctx, ct);
-            return await lists.VCodesAsync(ct);
+            bool chinese;
+            try { chinese = LanguageCatalog.ChinesePreferred(ctx.Request.GetTypedHeaders().AcceptLanguage); }
+            catch (FormatException) { chinese = false; }
+            return await lists.VCodesAsync(chinese, ct);
         });
     }
 }
