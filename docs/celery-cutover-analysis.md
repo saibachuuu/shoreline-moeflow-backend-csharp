@@ -28,13 +28,13 @@
 1. 停止 Python beat（避免新定时任务入队）。
 2. 等待 RabbitMQ 各队列 `messages_ready = 0` 且 `messages_unacknowledged = 0`：
    - `default`、`output`、`security_email`、`notification`、`mit`、模块队列。
-   - 用 `tools/celery-drain-check.sh`（管理 API + `jq`，只读）自动检查并给出退出码：`0` 已排空、`1` 仍有残留、`2` 管理 API 不可达。凭证只从 `RABBITMQ_USER`/`RABBITMQ_PASS` 环境变量读入。
+   - 用 `tools/celery-drain-check.sh`（管理 API + `jq`，只读）自动检查并给出退出码：`0` 已排空、`1` 仍有残留、`2` 管理 API 不可达或读不到消息计数（fail-closed）。凭证只从 `RABBITMQ_USER`/`RABBITMQ_PASS` 环境变量读入。
    ```bash
    RABBITMQ_HOST=<broker> RABBITMQ_USER=<user> RABBITMQ_PASS=<pass> ./tools/celery-drain-check.sh
    ```
+   > 脚本对每个队列请求 `?columns=messages,messages_ready,messages_unacknowledged,consumers`。RabbitMQ 的对象接口默认不返回这些计数，缺字段会被读成 0，于是未排空的 broker 也会显示 `DRAINED`；脚本改为在字段缺失时返回 `2`。
 3. 停止 Python worker；确认没有 in-flight（unacked 为 0）。
-4. 切换 nginx/流量到 C#；C# bootstrap/`StoragePoolWorker`/`NotificationScanWorker` 接管。
-5. 观察 30 分钟：`csharp_job` pending 深度、失败率、邮件投递。
+4. 切换 nginx/流量到 C#；C# bootstrap/`StoragePoolWorker`/`NotificationScanWorker` 接管。5. 观察 30 分钟：`csharp_job` pending 深度、失败率、邮件投递。
 
 窗口内未被处理的任务：请求方会看到超时/失败，可重试；不存在"消息丢失后无人知晓"的情况（HTTP 请求本身会失败）。
 

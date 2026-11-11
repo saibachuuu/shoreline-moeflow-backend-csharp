@@ -55,14 +55,22 @@ BASE="http://${HOST}:${PORT}/api/queues/${VHOST_ENC}"
 
 probe() {
   local queue=$1 payload
-  if ! payload=$(curl -fsS -u "${USER}:${PASS}" "${BASE}/$(urlencode "$queue")" 2>/dev/null); then
+  # RabbitMQ omits the message counters from the object response unless they
+  # are requested explicitly as columns; without this the fields read as
+  # absent and a queued backlog would look drained.
+  if ! payload=$(curl -fsS -u "${USER}:${PASS}" \
+      "${BASE}/$(urlencode "$queue")?columns=messages,messages_ready,messages_unacknowledged,consumers" 2>/dev/null); then
     printf '%-24s %s\n' "$queue" "MISSING"
     return 0
   fi
   local ready unacked consumers
-  ready=$(jq -r '.messages_ready // 0' <<<"$payload")
-  unacked=$(jq -r '.messages_unacknowledged // 0' <<<"$payload")
-  consumers=$(jq -r '.consumers // 0' <<<"$payload")
+  ready=$(jq -r '.messages_ready // "?"' <<<"$payload")
+  unacked=$(jq -r '.messages_unacknowledged // "?"' <<<"$payload")
+  consumers=$(jq -r '.consumers // "?"' <<<"$payload")
+  if [ "$ready" = "?" ] || [ "$unacked" = "?" ]; then
+    printf '%-24s %s\n' "$queue" "UNKNOWN: the management API returned no message counters"
+    return 2
+  fi
   printf '%-24s ready=%-6s unacked=%-6s consumers=%s\n' "$queue" "$ready" "$unacked" "$consumers"
   if [ "$ready" -ne 0 ] || [ "$unacked" -ne 0 ]; then
     return 1
@@ -76,17 +84,31 @@ if ! curl -fsS -u "${USER}:${PASS}" "http://${HOST}:${PORT}/api/overview" >/dev/
 fi
 
 pending=0
+unknown=0
 echo "vhost=${VHOST} host=${HOST}:${PORT}"
 for q in $QUEUES; do
-  probe "$q" || pending=$((pending + 1))
+  probe "$q"
+  case $? in
+    1) pending=$((pending + 1)) ;;
+    2) unknown=$((unknown + 1)) ;;
+  esac
 done
 
 if [ -n "$PREFIX" ]; then
   echo "--- queues with prefix ${PREFIX}"
   while IFS= read -r q; do
     [ -z "$q" ] && continue
-    probe "$q" || pending=$((pending + 1))
+    probe "$q"
+    case $? in
+      1) pending=$((pending + 1)) ;;
+      2) unknown=$((unknown + 1)) ;;
+    esac
   done < <(curl -fsS -u "${USER}:${PASS}" "${BASE}" | jq -r --arg p "$PREFIX" '.[].name | select(startswith($p))')
+fi
+
+if [ "$unknown" -gt 0 ]; then
+  echo "UNKNOWN: ${unknown} queue(s) returned no counters; treat as NOT drained" >&2
+  exit 2
 fi
 
 if [ "$pending" -eq 0 ]; then
