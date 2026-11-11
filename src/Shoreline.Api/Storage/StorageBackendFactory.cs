@@ -74,10 +74,12 @@ public sealed class StorageBackendDescriptor
 
     public static string NormalizePrefix(string? value)
     {
-        var raw = (value ?? "").Trim();
-        while (raw.StartsWith('/')) raw = raw[1..];
+        // Matches Python normalize_sub_path (storage_pool/models.py): leading
+        // and trailing slashes are all stripped, then exactly one trailing
+        // slash is added. Interior runs are preserved on both sides.
+        var raw = (value ?? "").Trim().Trim('/');
         if (raw.Length == 0) return "";
-        return raw.EndsWith('/') ? raw : raw + "/";
+        return raw + "/";
     }
 }
 
