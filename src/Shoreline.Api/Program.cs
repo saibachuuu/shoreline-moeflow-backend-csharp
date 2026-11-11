@@ -17,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 LegacyEnvironmentConfiguration.Apply(builder.Configuration);
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MongoStore>();
 builder.Services.AddSingleton<MigrationStartupState>();

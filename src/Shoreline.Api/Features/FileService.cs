@@ -92,6 +92,7 @@ public sealed partial class FileService
     private readonly IMongoCollection<BsonDocument> _sourceDocuments;
     private readonly IMongoCollection<BsonDocument> _translationDocuments;
     private readonly IMongoCollection<BsonDocument> _tipDocuments;
+    private readonly IHttpContextAccessor? _http;
 
     public FileService(
         MongoStore store,
@@ -105,7 +106,8 @@ public sealed partial class FileService
         ProjectLabelLock? labelLock = null,
         LabelRequestContext? labelContext = null,
         ProjectStorageRouter? router = null,
-        IThumbnailScheduler? thumbnails = null)
+        IThumbnailScheduler? thumbnails = null,
+        IHttpContextAccessor? http = null)
     {
         _store = store;
         _projects = projects;
@@ -128,6 +130,7 @@ public sealed partial class FileService
         _sourceDocuments = store.Collection("source");
         _translationDocuments = store.Collection("translation");
         _tipDocuments = store.Collection("tip");
+        _http = http;
     }
 
     private DateTimeOffset Now => _clock.GetUtcNow();

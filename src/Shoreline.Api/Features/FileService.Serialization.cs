@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.AspNetCore.Http;
 using MongoDB.Bson;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Storage;
@@ -47,8 +48,59 @@ public sealed partial class FileService
         [100] = "自动标记完成",
     };
 
-    private static string DetailName(IReadOnlyDictionary<int, string> names, long value)
-        => value is >= int.MinValue and <= int.MaxValue && names.TryGetValue((int)value, out var name) ? name : "";
+    // English msgstr values come from app/translations/en/LC_MESSAGES/messages.po;
+    // Python resolves them with flask_babel lazy_gettext at request time.
+    private static readonly Dictionary<int, string> ParseStatusNamesEn = new()
+    {
+        [0] = "Analysis not started.",
+        [1] = "Parsing in queue.",
+        [2] = "Analyzing.",
+        [3] = "Parsing failed.",
+        [4] = "Parsing successful.",
+    };
+
+    private static readonly Dictionary<int, string> ImageParseStatusNamesEn = new()
+    {
+        [0] = "Auto Mark as Not Started",
+        [1] = "In queue.",
+        [2] = "Auto-tagging in progress.",
+        [3] = "Automatic tagging failed.",
+        [4] = "Auto Mark Complete",
+    };
+
+    private static readonly Dictionary<int, string> ParseErrorTypeNamesEn = new()
+    {
+        [0] = "Other error.",
+        [1] = "Unknown character set.",
+        [2] = "The file cannot be read. Please ensure the file is intact or try re-uploading.",
+        [3] = "Failed to load image, please try again later (1).",
+        [4] = "Failed to load image, please try again later (2).",
+        [5] = "Images larger than 20MB cannot be tagged.",
+        [6] = "Automatic tagging service is offline, please try again later.",
+    };
+
+    private static readonly Dictionary<int, string> ImageOcrPercentNamesEn = new()
+    {
+        [0] = "Queued",
+        [1] = "Retrying.",
+        [10] = "Searching in images.",
+        [20] = "Organizing data.",
+        [55] = "Image recognition in progress.",
+        [90] = "Marked in progress.",
+        [100] = "Auto Mark Complete",
+    };
+
+    private bool ChinesePreferred()
+    {
+        try { return LanguageCatalog.ChinesePreferred(_http?.HttpContext?.Request.GetTypedHeaders().AcceptLanguage); }
+        catch (FormatException) { return false; }
+    }
+
+    private static string DetailName(IReadOnlyDictionary<int, string> names, IReadOnlyDictionary<int, string> english, long value, bool chinese)
+    {
+        var source = chinese ? names : english;
+        return value is >= int.MinValue and <= int.MaxValue && source.TryGetValue((int)value, out var name) ? name : "";
+    }
 
     private async Task<Dictionary<string, object?>> ToApiAsync(
         BsonDocument file,
@@ -58,7 +110,8 @@ public sealed partial class FileService
         var type = file.Integer("t");
         var parent = file.Contains("f") && !file["f"].IsBsonNull ? file["f"].AsObjectId.ToString() : null;
         var parseStatus = file.Integer("ps");
-        var parseError = file.Contains("pe") && !file["pe"].IsBsonNull ? file["pe"].ToInt32() : 0;
+        // app/models/file.py serializes an absent parse_error_type as null.
+        int? parseError = file.Contains("pe") && !file["pe"].IsBsonNull ? file["pe"].ToInt32() : null;
 
         var data = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
@@ -77,7 +130,7 @@ public sealed partial class FileService
             ["safe_status"] = file.Integer("ss"),
             ["parse_status"] = parseStatus,
             ["parse_error_type"] = parseError,
-            ["parse_error_type_detail_name"] = DetailName(ParseErrorTypeNames, parseError),
+            ["parse_error_type_detail_name"] = parseError is int errorValue ? DetailName(ParseErrorTypeNames, ParseErrorTypeNamesEn, errorValue, ChinesePreferred()) : "",
             ["parent_id"] = parent,
         };
 
@@ -87,7 +140,7 @@ public sealed partial class FileService
             var thumbnailStatus = file.Integer("th");
             await using var storageLease = await LeaseForProjectAsync(project, ct);
             var storage = storageLease?.Backend ?? _storage;
-            data["parse_status_detail_name"] = DetailName(ImageParseStatusNames, parseStatus);
+            data["parse_status_detail_name"] = DetailName(ImageParseStatusNames, ImageParseStatusNamesEn, parseStatus, ChinesePreferred());
             data["url"] = await OriginalUrlAsync(saveName, storage, ct);
             data["cover_url"] = await ProcessedUrlAsync(file, storage, "cover", thumbnailStatus, ct);
             data["resample_url"] = await ProcessedUrlAsync(file, storage, "resample", thumbnailStatus, ct);
@@ -95,11 +148,11 @@ public sealed partial class FileService
             data["thumbnail_error"] = file.Text("the");
             var ocrPercent = file.Integer("op");
             data["image_ocr_percent"] = ocrPercent;
-            data["image_ocr_percent_detail_name"] = DetailName(ImageOcrPercentNames, ocrPercent);
+            data["image_ocr_percent_detail_name"] = DetailName(ImageOcrPercentNames, ImageOcrPercentNamesEn, ocrPercent, ChinesePreferred());
         }
         else
         {
-            data["parse_status_detail_name"] = DetailName(ParseStatusNames, parseStatus);
+            data["parse_status_detail_name"] = DetailName(ParseStatusNames, ParseStatusNamesEn, parseStatus, ChinesePreferred());
         }
 
         return data;
@@ -143,9 +196,12 @@ public sealed partial class FileService
         }
 
         var key = FilePrefix + processName + "-" + stem + ".webp";
-        // Probe even for SUCCEEDED rows: an overwrite can remove the old derived
-        // object before a new thumbnail exists, and this slice must not return a
-        // fabricated success URL for an object that is not there.
+        // app/models/file.py:758-800: object storage signs without probing when
+        // the row is SUCCEEDED or when the legacy status is UNKNOWN; only local
+        // storage (or an explicit failure state) probes the backend.
+        var objectStorage = storage is not LocalStorageBackend;
+        if (objectStorage && thumbnailStatus is 0 or 3)
+            return await storage.SignGetAsync(key, UrlValidity);
         var exists = await storage.HeadAsync(key, ct);
         return exists is null ? "generating" : await storage.SignGetAsync(key, UrlValidity);
     }
