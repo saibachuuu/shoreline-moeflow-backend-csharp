@@ -10,7 +10,7 @@
 | 硬门槛 | 状态 | 证据 / 阻塞 / 仍需执行 |
 |---|---|---|
 | 核心有效路由注册 | 已验证（静态 + 测试机抽查） | 静态 160/160；`/urls`、`/error`、`/warning`、`/docs/<path>` 在测试机容器内经 nginx 返回 200/500/500/404；`/ping`、`/health/*`、`/v1/site/homepage` 均 200 |
-| 全核心路由 C# HTTP 行为与权限 | 已验证 | 静态 160/160；全量 suite 1129/1129；端点×身份授权矩阵 30/30（矩阵 9 + 读门 4 + 写门 5 + 扩展 12），计划外差异仅 3 条且均有 oracle 依据 |
+| 全核心路由 C# HTTP 行为与权限 | 已验证 | 静态 160/160；全量 suite 1138/1138；端点×身份授权矩阵 33/33（矩阵 9 + 读门 4 + 写门 5 + 扩展 12 + 团队申请 3），计划外差异仅 3 条且均有 oracle 依据 |
 | archive_import HTTP | 部分验证 | 已装配；legacy `ARCHIVE_MAX_*` 按 MB 换算（`1933b9a`）；`ARCHIVE_PROVIDER_API_ALLOWED_HOSTS` allowlist（`94a06a8`）；`PublicNetworkGuard` + `UseProxy=false`（`8efc6c7`）。**Python oracle 差分未做** |
 | partner_search HTTP | 部分验证 | 已有 HTTP 测试；写/索引排序与 Python oracle 未逐条对拍 |
 | storage_pool HTTP | 部分验证 | 已装配；每日扫描 `lsd` 原子 claim（`06c1d6a`）；`StoragePool:WorkerEnabled` 可关；跨天/真实 OSS 未验 |
@@ -20,7 +20,7 @@
 | 真实 Flask / C# 同种子 BSON | 部分验证 | 旧 fixture 有局部种子；完整 app/modules 可复现 fresh run 未做 |
 | 真实差分读与成功写 | 部分验证 | 只读 19/19 匹配、0 business differences（`docs/runtime-differential.md`）；写请求仍未纳入差分；11-10 测试机 E2E 已覆盖主要写路径 |
 | 差分 status/body/error/headers/前后 digest | 已验证（只读 19 例） | 19 例全匹配；框架级 wire 差异单独记录；写请求与 4 个可选模块未覆盖 |
-| BSON collection/alias/type/index/unique | 部分验证 | Mongo 4.4.1 实测修复 `$lookup` `localField`+`pipeline`（5.0 才支持）；team_member 默认名索引与 `team_member_alias_search_v1` 由 `MongoSchemaReadinessTests` 验证；生产 dump 副本上的全集合对比未执行 |
+| BSON collection/alias/type/index/unique | 部分验证 | Mongo 4.4.1 实测修复 `$lookup` `localField`+`pipeline`（5.0 才支持）；team_member 默认名索引与 `team_member_alias_search_v1` 由 `MongoSchemaReadinessTests` 验证；`a8b46e9` 修掉接管 Python 库时 `IndexOptionsConflict` 打死启动的问题（`MongoStore.EnsureIndexTolerantAsync` + 迁移 0004 的 `$type` 对齐，`MongoStoreIndexCompatTests`），并在镜像上用 mongoengine 形态的索引实测接管启动成功。**生产 dump 副本上的全集合对比未执行** |
 | Python auth token 互操作 | 已验证（双向） | `SECRET_KEY` 下 Python 签发 → C# 200；C# 登录 token → Python `URLSafeTimedSerializer.loads` 解出 `{id,pc}`；C# 同时接受 itsdangerous 与历史 HS512 JWS（`Security/LegacyToken.cs`） |
 | storage key/prefix/R2 | 部分验证 | `docs/storage-contract.md`：prefix 尾斜杠归一化（`25f460a`）、签名 URL 统一 7 天（`ac81252`，对齐 Python 604800s）、>16 MB `TransferUtility` 分片（`0167826`）；`StorageContract` 23/23。**真实 R2 写入/读取仍未用生产凭证验证** |
 | 设置、语言/类型/角色种子 | 部分验证 | bootstrap/`LegacyTypes`/`LanguageCatalog` 已逐项复核，测试机空库初始化通过；逐集合 BSON 差分未做 |
@@ -30,10 +30,10 @@
 | 重试/lease/幂等/崩溃恢复 | 部分验证 | `Jobs:MaxAttempts=5`、`RetryDelay=min(300s, 5·2^n)`、优雅停机（`30ea5ea`,`e176e0d`）；邮件 `verification.sent` CAS 防重发（`30878c5`）；通知扫描 lease 语义由 `NotificationE2ETests` 14/14 锁定。**故障注入（kill -9 / 网络分区）未做** |
 | 本机基线 dotnet build 0 warning/0 error | 已验证 | `96eef2a`：`dotnet build Shoreline.sln --nologo` 0/0 |
 | 最终合并后的 dotnet build 0/0 | 已验证 | 同上（本轮每次合并后均复跑） |
-| C# 全量 suite | 已验证 | `ae56433`：`tools/Run-FullSuite.ps1 -BasePort 33110` → **1129 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；1028 → 1092 → 1101 → 1129） |
+| C# 全量 suite | 已验证 | `bacd343`：`tools/Run-FullSuite.ps1 -BasePort 33190` → **1138 passed / 0 failed / 0 skipped**（Mongo 4.4.1 隔离栈；1028 → 1092 → 1101 → 1129 → 1138） |
 | Python 全量 suite | 已验证 | `836 passed, 48 subtests passed`，446 s（`.env.test`，mongomock/memory broker/local storage） |
 | 真实差分全量 suite | 部分验证 | 只读 19/19；写路径与可选模块未覆盖 |
-| 可复现镜像 / lock / digest | 部分验证 | 11-10 两次 `--no-cache` 冷构建 ImageID 相同；本轮新增 RabbitMQ.Client 后**未重建镜像/未复验 digest** |
+| 可复现镜像 / lock / digest | 已验证（层内容） | 两次 `--no-cache` 冷构建：19 个层的 Layer ID、大小（497130313 bytes）、`CreatedBy` 全部一致；ImageID 因 image config 的 `created` 时间戳不同而不相等（Docker 默认行为），需要 bit-identical 时用 buildx `--rewrite-timestamp`（本机 0.13.1 可用）。另有空库 `Migrations:Mode=apply` 首启冒烟与「Python 库已有同名索引」接管冒烟，均 `/ping`、`/health/live`、`/health/ready` 200。见 `docs/image-reproducibility.md`（`b4f77f9`, `bacd343`） |
 | 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | UID 1654；bind mount 需 `chown -R 1654:1654 storage`，否则首传 500；已写入 runbook §0 第 7 条（`16a6fab`） |
 | health / readiness / 配置校验 | 部分验证 | `/health/live` 200、`/health/ready` 200；迁移闸门 503 `migrations-pending` 已实现并有测试；反代/部署形状未验收 |
 | 日志 / metrics / 告警 | 可选增强（非 parity 阻塞） | Python 老版同样无 metrics 导出（`app/**/*.py` 无 prometheus/statsd 匹配）；runbook 已有阈值表与排查路径。接入监控属运维增强，不构成替换阻塞 |
