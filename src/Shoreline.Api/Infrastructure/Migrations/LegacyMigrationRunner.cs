@@ -214,6 +214,14 @@ public sealed class LegacyMigrationRunner
                 await RecordAppliedAsync(migration, durationMs, ct);
                 applied.Add(new AppliedMigration(migration.Version, migration.Name, durationMs));
                 _log?.LogInformation("Applied migration {Version} in {Duration}ms", migration.Version, durationMs);
+                // The lease is only renewed between migrations, so a future long
+                // run can be taken over mid-way (mirrors the Python runner warning).
+                if (durationMs / 1000.0 > LockLease.TotalSeconds * 0.6)
+                    _log?.LogWarning(
+                        "Migration {Version} took {Duration}ms, more than 60% of the {Lease} lease. " +
+                        "The lease is only renewed between migrations, so a future long run can be taken " +
+                        "over mid-way; raise the lock lease or split the migration into smaller steps",
+                        migration.Version, durationMs, LockLease);
                 await RenewLockAsync(holder, ct);
             }
             return applied;
