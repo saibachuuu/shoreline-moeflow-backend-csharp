@@ -1,6 +1,6 @@
 # Image Build Readiness
 
-Status: the repository Dockerfile pins both bases by version tag plus digest and builds a Linux image from a cold cache; `tools/Test-ReadinessImage.ps1` passed 8/8 runtime checks against that image with a disposable Local storage root and a disposable Mongo. One earlier smoke-script revision failed for real and its evidence is retained.
+Status (2026-11-11): the repository Dockerfile pins both bases by version tag plus digest. Two independent no-cache builds of the current source produced the same linux/amd64 image ID, and `tools/Test-ReadinessImage.ps1` passed its disposable Local storage, Mongo, bootstrap, Imaging, non-root and health checks. One earlier smoke-script revision failed for real and its evidence is retained.
 
 ## Build inputs
 
@@ -41,7 +41,7 @@ docker build --no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64 -
 docker build --no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64 -t shoreline-moeflow-readiness:repro-b-20261110 .
 ```
 
-both produced ImageID `sha256:61b67b429da83d78e9d79492a65aeec65d531bfe7b17e9a36300b55fee4fead9` with identical layer digests and creation time `1970-01-01T00:00:00Z`. `tools/Test-ReadinessImage.ps1 -SkipBuild -Image shoreline-moeflow-readiness:repro-a-20261110` passed non-root UID 1654, writable disposable local storage, native Imaging processing, `/health/live` 200 and `/health/ready` 200; evidence is `C:\Users\88888888\AppData\Local\Temp\shoreline-readiness-7b38a1bcf67842b4af3c9aa156a45cd8.log`. This only proves these two builds on this machine, architecture, builder and source tree. Other platforms, builders, source metadata and the final release image still require separate verification. Normalized published file mtimes are intentional and must be considered if future runtime code depends on them.
+both produced ImageID `sha256:61b67b429da83d78e9d79492a65aeec65d531bfe7b17e9a36300b55fee4fead9` with identical layer digests and creation time `1970-01-01T00:00:00Z`. `tools/Test-ReadinessImage.ps1 -SkipBuild -Image shoreline-moeflow-readiness:repro-a-20261110` passed non-root UID 1654, writable disposable local storage, native Imaging processing, `/health/live` 200 and `/health/ready` 200; evidence is `C:\Users\88888888\AppData\Local\Temp\shoreline-readiness-7b38a1bcf67842b4af3c9aa156a45cd8.log`. That evidence applies only to those two builds on this machine, architecture, builder and source tree; current-source results are recorded below. Other platforms and builders remain unverified. Normalized published file mtimes are intentional and must be considered if future runtime code depends on them.
 
 `tools/Test-ReadinessImage.ps1 -SkipBuild -Image shoreline-moeflow-readiness:tagged-20261110` passed:
 
@@ -72,10 +72,14 @@ The container exited with code 139 before listening, so liveness was never reach
 
 ## Smoke test design
 
-- Only owned resources: a per-run random network, Mongo container, API container, database name and label. Each is identity-checked (label, container name, attached network ID, alias) before use, and only those container/network IDs are removed. Mongo runs on tmpfs with no published port; the API publishes only `127.0.0.1:25221`.
-- No external storage or credentials: `Storage__Type=Local`, a tmpfs root mounted `uid=1654,gid=1654,mode=0700`, and a synthetic `Storage__Domain=http://127.0.0.1:25221/readiness-objects`. `Auth__Secret` is a per-run 64-character hex value and `Auth__AdminEmail` is a per-run `@example.invalid` address.
+- Only owned resources: a per-run random network, Mongo container, API container, database name and label. Each is identity-checked (label, container name, attached network ID, alias) before use, and only those container/network IDs are removed. Mongo runs on tmpfs with no published port; the API publishes only `127.0.0.1:<configured Port>`.
+- No external storage or credentials: `Storage__Type=Local`, a tmpfs root mounted `uid=1654,gid=1654,mode=0700`, and a synthetic `Storage__Domain` using the configured loopback port. `Auth__Secret` and `Auth__AdminInitialPassword` are per-run 64-character hex values; `Auth__AdminEmail` is a per-run `@example.invalid` address. The initial password is never logged or reused.
 - Evidence is written to `%TEMP%\shoreline-readiness-<token>.log` with container state and the last 60 log lines, so startup failures stay inspectable after cleanup.
 - Startup is checked before any HTTP probe; if the container exits, the script reports the first exception line and the evidence path.
-- The Imaging probe binary is built in a temporary directory and mounted read-only; it is removed afterwards. The only published port is the exclusive `25221` for the API.
+- The Imaging probe binary is built in a temporary directory and mounted read-only; it is removed afterwards. The only published port is the exclusive configured loopback port for the API.
 
-Known limitations: the test requires the host `dotnet` SDK and cached NuGet packages to compile the Imaging probe, the Mongo image is pinned to `mongo:8.0@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142` but other packages are not image-level pinned, and no orchestration healthcheck is defined in the image.
+## 2026-11-11 local image run
+
+After the StoragePool and security integrations, the smoke script was corrected to test the supported MongoDB 4.4.1 target (pinned image digest below; readiness probe uses the 4.4 `mongo` shell). A build-and-smoke run and two independent `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` builds all produced ImageID `sha256:0e6cfcd530aa6f1e248a58f0995d1f0bb3e203e098bfa76c157ed906a96a4d13`. `tools/Test-ReadinessImage.ps1 -SkipBuild -Port 25543 -Image shoreline-replacement-integrated-cold-a:20261111` passed against MongoDB 4.4.1: configured/process UID 1654, writable disposable Local storage, native dependency resolution and real Imaging decode, bootstrap, `/health/live` 200 and `/health/ready` 200. Probe: `MAGICK_OK format=Xc bytes=310; IMAGING_OK cover=180x140 resample=2x2`. Evidence: `C:\Users\88888888\AppData\Local\Temp\shoreline-readiness-82d2751abbf647c18ee9c27f7668960c.log`. The script removed only its labeled temporary network and containers; image tags were retained locally.
+
+Known limitations: the test requires the host `dotnet` SDK and cached NuGet packages to compile the Imaging probe; Mongo is pinned to `mongo:4.4.1@sha256:ca31e7cf0ba12b6e7cdbf8b888a6c66f2a4351ad862e13390c9aa9e289d46701`, but other packages are not image-level pinned; and no orchestration healthcheck is defined in the image.

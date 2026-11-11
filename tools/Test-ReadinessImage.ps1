@@ -19,6 +19,7 @@ $apiName = "shoreline-api-$token"
 $database = "readiness_$token"
 # Disposable, per-run secret: 64 hex characters, never a real credential.
 $secret = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+$adminPassword = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
 $adminEmail = "readiness-admin-$token@example.invalid"
 $storageDomain = "http://127.0.0.1:$Port/readiness-objects"
 $storageTmpfs = "/tmp/shoreline-$token"
@@ -26,8 +27,8 @@ $storageRoot = "$storageTmpfs/storage"
 $evidencePath = Join-Path $env:TEMP "shoreline-readiness-$token.log"
 $probeRoot = Join-Path $env:TEMP "shoreline-imaging-probe-$token"
 $onWindows = $IsWindows -or $env:OS -eq 'Windows_NT'
-# mongo:8.0 index digest resolved by the local WSL Engine on 2026-11-10.
-$mongoImage = 'mongo:8.0@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142'
+# Match the supported MongoDB 4.4.1 compatibility target.
+$mongoImage = 'mongo:4.4.1@sha256:ca31e7cf0ba12b6e7cdbf8b888a6c66f2a4351ad862e13390c9aa9e289d46701'
 $ownedNetwork = $null
 $ownedMongo = $null
 $ownedApi = $null
@@ -109,7 +110,7 @@ try {
     $ready = $false
     $deadline = [DateTime]::UtcNow.AddSeconds(90)
     do {
-        try { Invoke-Docker exec $ownedMongo mongosh --quiet --eval $pingExpression 2>$null | Out-Null; $ready = $true }
+        try { Invoke-Docker exec $ownedMongo mongo --quiet --eval $pingExpression 2>$null | Out-Null; $ready = $true }
         catch { Start-Sleep -Seconds 2 }
     } while (-not $ready -and [DateTime]::UtcNow -lt $deadline)
     if (-not $ready) { throw 'Disposable Mongo did not become available' }
@@ -120,7 +121,8 @@ try {
         'run', '--detach', '--name', $apiName, '--network', $ownedNetwork,
         '--label', "shoreline.readiness=$token", '--publish', "127.0.0.1:${Port}:8080",
         '--tmpfs', "${storageTmpfs}:rw,uid=$configuredUser,gid=$configuredUser,mode=0700",
-        '--env', "Mongo__Uri=$mongoUri", '--env', "Auth__Secret=$secret", '--env', "Auth__AdminEmail=$adminEmail"
+        '--env', "Mongo__Uri=$mongoUri", '--env', "Auth__Secret=$secret",
+        '--env', "Auth__AdminEmail=$adminEmail", '--env', "Auth__AdminInitialPassword=$adminPassword"
     )
     if (-not $SimulateStorageFailure) {
         $runArguments += @('--env', 'Storage__Type=Local', '--env', "Storage__Root=$storageRoot", '--env', "Storage__Domain=$storageDomain")
