@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Shoreline.Api.Features;
 using Shoreline.Api.Jobs;
 
 namespace Shoreline.Tests;
@@ -117,6 +118,14 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
         {
             Assert.DoesNotContain(kind, registeredKinds);
         }
+
+        // The literal list above guards the production gate: if a new MIT task
+        // kind is added to RequiredJobKinds the regression test must be updated
+        // instead of silently passing.
+        Assert.Equal(MitJobKinds, MitEndpoints.RequiredJobKinds);
+
+        var missing = MitEndpoints.FindMissingConsumers(services.App.Services);
+        Assert.Equal(MitEndpoints.RequiredJobKinds, missing);
     }
 
     [Fact]

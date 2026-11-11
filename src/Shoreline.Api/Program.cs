@@ -181,7 +181,23 @@ app.MapZitengPartner();
 var mitStorageRoot = builder.Configuration["Mit:StorageRoot"] ?? Environment.GetEnvironmentVariable("MIT_STORAGE_ROOT");
 if (!string.IsNullOrWhiteSpace(mitStorageRoot) && mitStorageRoot != "/MIT_STORAGE_ROOT_UNDEFINED")
 {
-    app.MapMitEndpoints();
+    // MIT is fail closed: the routes are only advertised when every job kind
+    // they enqueue has a registered in-process consumer. Without one the
+    // insertion would be silently accepted and never executed, because
+    // JobWorker only claims kinds present in its IJobHandler registry and C#
+    // has no bridge to Python's external manga-image-translator worker.
+    var missingMitConsumers = MitEndpoints.FindMissingConsumers(app.Services);
+    if (missingMitConsumers.Length == 0)
+    {
+        app.MapMitEndpoints();
+    }
+    else
+    {
+        app.Logger.LogWarning(
+            "MIT_STORAGE_ROOT is configured but no job consumer is registered for {Kinds}; /v1/mit routes stay unmapped. " +
+            "Actual MIT parity requires an in-process handler or a supported external worker bridge.",
+            string.Join(", ", missingMitConsumers));
+    }
 }
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (MongoStore store, CancellationToken ct) =>
