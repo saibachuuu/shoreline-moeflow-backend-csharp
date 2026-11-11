@@ -28,6 +28,10 @@
 1. 停止 Python beat（避免新定时任务入队）。
 2. 等待 RabbitMQ 各队列 `messages_ready = 0` 且 `messages_unacknowledged = 0`：
    - `default`、`output`、`security_email`、`notification`、`mit`、模块队列。
+   - 用 `tools/celery-drain-check.sh`（管理 API + `jq`，只读）自动检查并给出退出码：`0` 已排空、`1` 仍有残留、`2` 管理 API 不可达。凭证只从 `RABBITMQ_USER`/`RABBITMQ_PASS` 环境变量读入。
+   ```bash
+   RABBITMQ_HOST=<broker> RABBITMQ_USER=<user> RABBITMQ_PASS=<pass> ./tools/celery-drain-check.sh
+   ```
 3. 停止 Python worker；确认没有 in-flight（unacked 为 0）。
 4. 切换 nginx/流量到 C#；C# bootstrap/`StoragePoolWorker`/`NotificationScanWorker` 接管。
 5. 观察 30 分钟：`csharp_job` pending 深度、失败率、邮件投递。
@@ -51,7 +55,7 @@
 |---|---|
 | 切换瞬间 beat 刚写入的任务 | 排空检查包含所有队列；`mit` 队列可等待其外部 worker 完成 |
 | 前端持有旧 `task_id` 轮询 | 页面刷新后由 C# 新 id 接管；不承诺旧 id 可查 |
-| MIT 外部 worker | 不受切换影响；但 C# 无 `mit` 入队路径，MIT 功能在 C# 侧仍不可用（fail-closed） |
+| MIT 外部 worker | 不受切换影响；C# 侧通过 `MitBridgePublisher`（`RabbitMQ:Enabled` + `Mit:StorageRoot` 门控）向同一 `mit` 队列投递并读 `celery_taskmeta` 结果，需在切换前用 `docs/mit-bridge-spike.md` 的实测报文验证一次 |
 | Python 回滚 | `tools/legacy-rollback-strip.js` 清理 C# 专有字段；`csharp_job` 留在库中不影响 Python |
 | 迁移版本表 | C# 必须能读/写 Python 的迁移版本记录（见 `docs/migrations.md`），否则回滚判断失真 |
 
