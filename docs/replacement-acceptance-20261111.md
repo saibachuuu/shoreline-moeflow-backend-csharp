@@ -43,6 +43,9 @@
 | 镜像 | 冷构建层内容可复现；空库 `Migrations:Mode=apply` 与「Python 库已有同名索引」两种首启冒烟均 200 | ✅ | `docs/image-reproducibility.md`、`b4f77f9`、`bacd343` |
 | 切换前排队排空 | Celery 队列 `ready`/`unacked` 均为 0 才停 worker；读不到计数即 fail-closed | ✅ 工具就绪（一次性 broker 实测 0/1/2） | `tools/celery-drain-check.sh`（`1e7e9d3`） |
 | 切换方案 | 排空冷切换（方案 A）步骤可执行 | ✅ | `docs/celery-cutover-analysis.md` |
+| 并发启动 | 多副本同时 `Migrations:Mode=apply` 时只有一个建库，其余按 Python 同样语义退出（`Another instance holds the migration lock…`）；扩容副本用 `check` 等待 ready | ✅ 容器实测 | `docs/production-deploy-runbook.md`、`f882601` |
+| 迁移闸门 | `check`+空库 → 503 `{"status":"migrations-pending"}`；`apply` 后 → 200；`Migrations:Enabled=false` → 200 | ✅ 容器实测 | `4fa3338` |
+| 边缘前缀 | 反代必须剥离 `/api`；不带前缀的 `/ping`、`/v1/...` 落到前端 SPA fallback | ✅ 一次性 `nginx:alpine` 实测 | `848af30`、runbook §0 第 8 条 |
 | 观察指标 | `csharp_job` 深度/失败率、邮件投递、5xx 率 | ⚪ 可选增强 | Python 老版同样没有 metrics/prometheus 导出（`app/**/*.py` 无匹配），因此**不构成 parity 阻塞**；runbook 已给出阈值表与排查路径，接入监控属运维增强 |
 
 ## 5. D 组：残余风险（需产品/运维显式接受）
@@ -53,6 +56,8 @@
 4. **通知 TLS**：策略已与 Python 对齐（含 `Mail:SecureSocketOptions` 显式 opt-out），但真实 SMTP 服务器（TLS 证书、中继认证）仍未实测。
 5. **多实例 worker**：lease 竞争与 SIGTERM 回收只在测试环境验证过一次，生产需单实例起步。
 6. **迁移的单向性**：C# 写 int64 + 自有 checksum，Python 无法识别；回滚必须走 strip 脚本。
+7. **镜像 ImageID 非 bit-identical**：层内容与层 ID 两次冷构建完全一致，但 image config 的 created 时间戳不同；本机 buildx 0.13.1 不支持 --rewrite-timestamp，需要 buildx ≥ 0.14 才能求同 ID。部署请按 digest 或层 ID 仲裁，不要按 ImageID 比对。
+8. **边缘配置约束**：client_max_body_size 必须 ≥ 单文件上限（api 允许 1 GiB），且 Storage:Domain 必须指向与 Storage:Root 同一宿主目录的 /storage alias；配置错位会表现为「上传 413」或「所有文件链接 404」，不是后端 bug。
 
 ## 6. GO / NO-GO 结论（2026-11-11 19:55）
 
