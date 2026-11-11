@@ -89,8 +89,12 @@ jobs:
 
       # 生成与老仓库 report.html 对齐的自包含 HTML 覆盖率报告，
       # 并把汇总写进本次 run 的 Summary 页。
+      # 注意：这里不能拿 hashFiles() 做条件——它只解析相对 GITHUB_WORKSPACE
+      # 的路径，runner.temp 的绝对路径永远匹配不到，step 会被静默跳过
+      # （首轮 CI 就是这个现象：job 成功但没有 coverage-report artifact）。
       - name: Generate coverage report
-        if: always() && hashFiles(format('{0}/trx/**/coverage.cobertura.xml', runner.temp)) != ''
+        if: always()
+        continue-on-error: true
         uses: danielpalme/ReportGenerator-GitHub-Action@5.4.4
         with:
           reports: '${{ runner.temp }}/trx/**/coverage.cobertura.xml'
@@ -110,7 +114,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Save coverage report
-        if: always() && hashFiles(format('{0}/coverage/index.html', runner.temp)) != ''
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
