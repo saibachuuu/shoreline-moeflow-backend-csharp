@@ -106,3 +106,12 @@ services:
   # confirm no in-flight, then cut traffic). Point the check at the real
   # management endpoint; no client container is needed:
   #   RABBITMQ_MANAGEMENT_URL=https://rabbitmq.internal:15672/api/queues
+
+# Optional: enable the MIT Celery bridge. It is OFF by default; /v1/mit stays
+# unmapped unless Mit__StorageRoot is set AND (all three in-process mit_* job
+# handlers exist OR RabbitMq__Enabled=true with a non-empty RabbitMq__Url).
+#   Mit__StorageRoot=/srv/mit
+#   RabbitMq__Enabled=true
+#   RabbitMq__Url=amqp://user:pass@rabbitmq.internal:5672/
+# The external MIT worker must mount the same storage root; the C# image does
+# not ship it. See docs/mit-bridge-spike.md.
