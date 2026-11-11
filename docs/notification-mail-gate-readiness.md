@@ -123,10 +123,14 @@ Protected delivery through the dispatch path is covered by the existing
 fake-transport delivery tests (`Deliver_RetriesThenAcceptsAndRecordsBoundary`,
 `Deliver_RevokedBeforeSmtpDoesNotSend`, etc.). The accepted-delivery tests use
 the fake transport rather than Mailpit because the production MailKit transport
-always requires STARTTLS and the disposable Mailpit SMTP listener does not
-offer STARTTLS; a real Mailpit accepted mail test would need either TLS
-termination or a test-only TLS bypass, and no production security option was
-weakened for this change.
+defaults to the legacy TLS policy (mandatory STARTTLS unless `Mail:UseSsl`,
+mirroring Python `app/services/notification_mail.py:72-83`) while the
+disposable Mailpit SMTP listener offers no TLS. An explicit, non-default
+opt-out now exists for that case: `Mail:SecureSocketOptions=None` selects
+plaintext SMTP without changing the default (`tests/Shoreline.Tests/
+NotificationMailTlsTests.cs`: default branch selection, explicit `None`
+delivering to real Mailpit with an API receipt check, legacy default failing
+closed against Mailpit, explicit `SslOnConnect` never downgrading).
 
 ## Verification evidence
 
@@ -146,6 +150,8 @@ weakened for this change.
 - No C# log-mail sender exists; the log gate is tested but not wired to a
   runtime log channel.
 - Security-code handler and code-issuing service were not changed.
-- The accepted MailKit path was not exercised against Mailpit for the TLS
-  reason above; accepted delivery through the notification service uses the
-  fake transport.
+- The accepted MailKit path is now also exercised against real Mailpit via
+  the explicit `Mail:SecureSocketOptions=None` opt-out
+  (`NotificationMailTlsTests.SendAsync_ExplicitNone_DeliversToTlsLessMailpit`);
+  accepted delivery through the notification service still uses the fake
+  transport.

@@ -494,6 +494,37 @@ public sealed class MitHttpTests(LocalServices services) : IDisposable
         Assert.Equal("pending", json2.GetProperty("status").GetString());
     }
 
+    [Fact]
+    public async Task MitEndpoints_ImageTask_InpaintTaskName_IsRejectedLikePython()
+    {
+        // Oracle: app/tasks/mit.py defines a tasks.mit.inpaint Celery stub,
+        // but app/apis/manga_image_translator.py:62-74 only routes
+        // mit_detect_text/mit_ocr through /v1/mit/image-tasks — inpaint has no
+        // HTTP surface, so C# rejects it with the same "Invalid task name"
+        // ValidateError instead of inventing an endpoint.
+        var storageRoot = CreateTempStorageRoot();
+        using var app = CreateApp(storageRoot, MitJobKinds, withWorker: false);
+        using var client = app.CreateClient();
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent([1, 2, 3]), "file", "sample.jpg");
+        var uploadRes = await client.PostAsync("/v1/mit/images", form);
+        var uploadJson = await uploadRes.Content.ReadFromJsonAsync<JsonElement>();
+        var uploadedFilename = uploadJson.GetProperty("filename").GetString()!;
+
+        var inpaintRes = await client.PostAsJsonAsync("/v1/mit/image-tasks", new
+        {
+            filename = uploadedFilename,
+            task_name = "mit_inpaint"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, inpaintRes.StatusCode);
+        var inpaintJson = await inpaintRes.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ValidateError", inpaintJson.GetProperty("error").GetString());
+        Assert.Equal("Invalid task name", inpaintJson.GetProperty("message").GetString());
+
+        Assert.Equal(0, await CountMitJobsAsync());
+    }
+
     /// <summary>
     /// Test-only stand-in for a future in-process consumer. It deliberately does
     /// nothing: the tests assert that the routes are only mapped when a handler

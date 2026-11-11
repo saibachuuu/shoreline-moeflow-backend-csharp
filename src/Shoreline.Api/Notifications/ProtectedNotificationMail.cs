@@ -142,6 +142,27 @@ public static partial class ProtectedNotificationMail
     public static SecureSocketOptions SocketOptions(bool useSsl) =>
         useSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
 
+    /// <summary>
+    /// Legacy-compatible TLS selection with an explicit opt-out.
+    /// The Python oracle (<c>app/services/notification_mail.py:72-83</c>)
+    /// uses implicit TLS (<c>SMTP_SSL</c>) iff <c>EMAIL_USE_SSL</c>, otherwise
+    /// mandatory <c>starttls()</c>; <see cref="SocketOptions(bool)"/> is that
+    /// mapping and stays the default. <c>Mail:SecureSocketOptions</c>
+    /// (<c>None|Auto|StartTls|StartTlsWhenAvailable|SslOnConnect</c>,
+    /// case-insensitive) overrides it explicitly — e.g. <c>None</c> for a
+    /// disposable Mailpit listener with no TLS. An absent or unparsable value
+    /// falls back to the legacy mapping; the override never downgrades
+    /// implicitly.
+    /// </summary>
+    public static SecureSocketOptions SocketOptions(IConfiguration configuration, bool useSsl)
+    {
+        var raw = configuration["Mail:SecureSocketOptions"];
+        if (!string.IsNullOrWhiteSpace(raw) &&
+            Enum.TryParse<SecureSocketOptions>(raw.Trim(), ignoreCase: true, out var parsed))
+            return parsed;
+        return SocketOptions(useSsl);
+    }
+
     private static bool HasHeaderBreak(string? value) =>
         value is not null && (value.Contains('\r') || value.Contains('\n'));
 }
@@ -203,7 +224,7 @@ public sealed class MailKitNotificationTransport(
             await client.ConnectAsync(
                 settings.Host,
                 settings.Port,
-                ProtectedNotificationMail.SocketOptions(settings.UseSsl),
+                ProtectedNotificationMail.SocketOptions(configuration, settings.UseSsl),
                 ct);
             if (!string.IsNullOrEmpty(settings.Username))
                 await client.AuthenticateAsync(settings.Username, settings.Password ?? "", ct);
