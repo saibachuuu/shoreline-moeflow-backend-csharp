@@ -109,4 +109,50 @@ public sealed class JobFaultRecoveryTests(LocalServices services)
         Assert.Null(await queue.ClaimAsync("replacement", [kind], default));
         Assert.Equal("failed", (await RowAsync(jobId))["state"].AsString);
     }
+
+    // The retry backoff grows as min(300s, 5 * 2^attempts): strictly increasing
+    // until the 5-minute cap.
+    [Fact]
+    public void BackoffSchedule_IncreasesAndCapsAt300s()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), JobQueue.RetryDelay(0));
+        Assert.Equal(TimeSpan.FromSeconds(10), JobQueue.RetryDelay(1));
+        Assert.Equal(TimeSpan.FromSeconds(20), JobQueue.RetryDelay(2));
+        Assert.Equal(TimeSpan.FromSeconds(40), JobQueue.RetryDelay(3));
+        Assert.Equal(TimeSpan.FromSeconds(80), JobQueue.RetryDelay(4));
+        Assert.Equal(TimeSpan.FromSeconds(160), JobQueue.RetryDelay(5));
+        Assert.Equal(TimeSpan.FromSeconds(300), JobQueue.RetryDelay(6));
+        Assert.Equal(TimeSpan.FromSeconds(300), JobQueue.RetryDelay(7));
+        Assert.Equal(TimeSpan.FromSeconds(300), JobQueue.RetryDelay(100));
+        Assert.Equal(JobQueue.DefaultMaxAttempts, 5);
+    }
+
+    // FailAsync applies that schedule to available_at: each failure pushes the
+    // next eligibility further out.
+    [Fact]
+    public async Task FailAsync_SchedulesIncreasingAvailableAt()
+    {
+        var clock = new TestClock();
+        var queue = new JobQueue(services.Store, clock, maxAttempts: 10);
+        var kind = "fault-backoff-" + Guid.NewGuid().ToString("N");
+        var jobId = ObjectId.GenerateNewId();
+        await queue.EnqueueOnceAsync(jobId, kind, new BsonDocument(), default);
+
+        var first = await queue.ClaimAsync("worker", [kind], default);
+        Assert.NotNull(first);
+        await queue.FailAsync(jobId, "worker", first["attempts"].AsInt32, default);
+        var firstAvailable = (await RowAsync(jobId))["available_at"].ToUniversalTime();
+        Assert.Equal(clock.Now.UtcDateTime.Add(JobQueue.RetryDelay(1)), firstAvailable);
+
+        clock.Now = clock.Now.Add(JobQueue.RetryDelay(1)).Add(TimeSpan.FromSeconds(1));
+        var second = await queue.ClaimAsync("worker", [kind], default);
+        Assert.NotNull(second);
+        await queue.FailAsync(jobId, "worker", second["attempts"].AsInt32, default);
+        var secondAvailable = (await RowAsync(jobId))["available_at"].ToUniversalTime();
+        Assert.Equal(clock.Now.UtcDateTime.Add(JobQueue.RetryDelay(2)), secondAvailable);
+
+        Assert.True(secondAvailable > firstAvailable,
+            $"backoff did not increase: first {firstAvailable:o}, second {secondAvailable:o}");
+        Assert.True(JobQueue.RetryDelay(2) > JobQueue.RetryDelay(1));
+    }
 }
