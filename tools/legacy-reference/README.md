@@ -53,9 +53,9 @@ hand-written C# or Python equivalent.
 | `fixtures/goldens.json` | Checked-in typed references, raw BSON bytes, and digests |
 | `fixtures/README.md` | Fixture schema and C# consumption notes |
 | `runtime_reference.py` | Safe temp copy + synthetic config + real temp Flask import/test client |
-| `fixtures/runtime_flask_reference.json` | Eight real HTTP responses plus seed BSON/provenance |
+| `fixtures/runtime_flask_reference.json` | 20 real HTTP responses (including successful term-bank creation) plus seed BSON/provenance |
 | `tests/test_reference_tools.py` | 10 stdlib `unittest` safety/determinism checks |
-| `tests/test_runtime_reference.py` | 12 stdlib `unittest` runtime fixture/security checks |
+| `tests/test_runtime_reference.py` | 13 stdlib `unittest` runtime fixture/security checks |
 
 ## Environment used
 
@@ -143,9 +143,10 @@ fixture tests only read JSON or exercise pure guard helpers, so both suites
   `/v1/user/info`, missing `word` 110, team list, term-bank list, approved
   application with applicant role, and a 405 response. The fixture also records
   the seeded user/team/role/member/language/term-bank/application BSON and the
-  exact owned database lifecycle.
+  exact owned database lifecycle. `POST /v1/teams/<team>/term-banks` is a real
+  successful write case with complete before/after collection BSON digests.
 
-Known non-coverage is explicit in `docs/reference-validation.md`: the runtime
-is read-only and does not cover registration/mail, writes, optional modules,
-real storage, background tasks, or a C# differential comparison yet. The
-original test suite is still forbidden.
+Known non-coverage is explicit in `docs/reference-validation.md`: only the listed
+term-bank creation write is covered; registration/mail, other writes, optional
+modules, real storage, and background tasks remain outside scope. The original
+test suite is still forbidden.

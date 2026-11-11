@@ -31,11 +31,7 @@ class RuntimeReferenceFixtureTests(unittest.TestCase):
             self.fixture["schema"], "shoreline.python-runtime-reference/v1"
         )
         cases = self.fixture["cases"]
-        self.assertGreaterEqual(len(cases), 5)
-        self.assertEqual(
-            [case["response"]["status"] for case in cases],
-            [200, 401, 200, 400, 200, 200, 200, 405],
-        )
+        self.assertEqual(len(cases), self.fixture["coverage"]["cases"])
         self.assertEqual(
             [case["name"] for case in cases],
             [
@@ -46,15 +42,24 @@ class RuntimeReferenceFixtureTests(unittest.TestCase):
                 "team_list",
                 "term_bank_list",
                 "application_list",
+                "user_by_name", "my_teams", "my_projects", "team_detail",
+                "team_members", "team_project_sets", "term_bank_terms",
+                "team_invitations", "languages", "team_insight_users",
+                "team_insight_projects",
                 "method_not_allowed_ping_post",
+                "term_bank_create",
             ],
         )
+        self.assertEqual([c["response"]["status"] for c in cases[:7]],
+                         [200, 401, 200, 400, 200, 200, 200])
+        self.assertEqual(cases[-2]["response"]["status"], 405)
+        self.assertEqual(cases[-1]["name"], "term_bank_create")
 
     def test_ping_and_405_are_real_http_responses(self) -> None:
         ping = self.fixture["cases"][0]["response"]
         self.assertEqual(ping["body"], {"kind": "text", "value": "pong"})
         self.assertEqual(ping["headers"]["Content-Type"], "text/html; charset=utf-8")
-        method_not_allowed = self.fixture["cases"][7]["response"]
+        method_not_allowed = self.fixture["cases"][-2]["response"]
         self.assertEqual(method_not_allowed["status"], 405)
         self.assertIn(
             "Method Not Allowed", method_not_allowed["body"]["value"]
@@ -134,9 +139,16 @@ class RuntimeReferenceFixtureTests(unittest.TestCase):
             },
         )
         for case in self.fixture["cases"]:
-            self.assertEqual(
-                case["database_before"], case["database_after"], case["name"]
-            )
+            if case["name"] == "term_bank_create":
+                self.assertEqual(case["response"]["status"], 200)
+                self.assertNotEqual(case["database_before"], case["database_after"])
+                for collection, before in case["database_before"].items():
+                    if collection == "term_bank":
+                        self.assertEqual(case["database_after"][collection]["count"], before["count"] + 1)
+                    else:
+                        self.assertEqual(case["database_after"][collection], before)
+            else:
+                self.assertEqual(case["database_before"], case["database_after"], case["name"])
 
     def test_no_secrets_and_owned_database_guard(self) -> None:
         self.assertRegex(
@@ -168,7 +180,7 @@ class RuntimeReferenceFixtureTests(unittest.TestCase):
         self.assertEqual(bootstrap["celery"], "memory")
         self.assertEqual(bootstrap["mail"], "disabled")
         self.assertEqual(bootstrap["optional_modules"], "disabled")
-        self.assertIn("127.0.0.1:27128", bootstrap["network_guard"])
+        self.assertRegex(bootstrap["network_guard"], r"^only 127\.0\.0\.1:2728[1-9]$")
         self.assertIn("no production config read", bootstrap["synthetic_config"])
         self.assertGreaterEqual(self.fixture["coverage"]["cases"], 5)
         self.assertTrue(self.fixture["coverage"]["not_covered"])

@@ -727,6 +727,18 @@ def run_cases(flask_app: Any, database: Any, token: str) -> list[dict[str, Any]]
             "path": "/ping",
             "headers": {},
         },
+        {
+            "name": "term_bank_create",
+            "method": "POST",
+            "path": f"/v1/teams/{FIXED_IDS['team']}/term-banks",
+            "headers": auth,
+            "json": {
+                "name": "Differential Glossary",
+                "source_language_id": FIXED_IDS["ja"],
+                "target_language_id": FIXED_IDS["en"],
+                "tip": "created by runtime differential",
+            },
+        },
     ]
 
     records: list[dict[str, Any]] = []
@@ -743,6 +755,7 @@ def run_cases(flask_app: Any, database: Any, token: str) -> list[dict[str, Any]]
             case["path"],
             method=case["method"],
             query_string=case.get("query"),
+            json=case.get("json"),
             headers={"Accept-Language": "zh", **case["headers"]},
         )
         after = database_digest(database)
@@ -754,6 +767,7 @@ def run_cases(flask_app: Any, database: Any, token: str) -> list[dict[str, Any]]
                     "method": case["method"],
                     "path": case["path"],
                     "query": case.get("query", {}),
+                    **({"json": case["json"]} if "json" in case else {}),
                     "accept_language": "zh",
                     "authorization": "redacted" if case["headers"] else "absent",
                 },

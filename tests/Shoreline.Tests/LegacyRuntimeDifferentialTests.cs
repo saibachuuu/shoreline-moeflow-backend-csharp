@@ -147,6 +147,8 @@ public sealed class LegacyRuntimeDifferentialTests
             "bson_before", "GET request baseline differs from the Python fixture seed.");
 
         using var message = new HttpRequestMessage(new HttpMethod(method), url);
+        if (request.TryGetProperty("json", out var requestJson))
+            message.Content = new StringContent(requestJson.GetRawText(), Encoding.UTF8, "application/json");
         if (request.TryGetProperty("accept_language", out var acceptLanguage) &&
             acceptLanguage.GetString() is { Length: > 0 } language)
             message.Headers.AcceptLanguage.ParseAdd(language);

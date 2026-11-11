@@ -259,7 +259,7 @@ $pyStateless = "C:\Users\88888888\AppData\Local\Temp\opencode\legacy-reference-v
 ```
 
 Measured stateless result: `Ran 10 tests ... OK`. Runtime fixture result:
-`Ran 12 tests ... OK`. The two fixture suites also pass together under the
+`Ran 13 tests ... OK`. The two fixture suites also pass together under the
 Python 3.10 venv (`test_reference_tools test_runtime_reference`:
 `Ran 22 tests ... OK`), because the runtime tests only inspect the checked-in
 JSON or exercise pure guard helpers; they never import the legacy `app`.
@@ -271,16 +271,20 @@ recorded `python`/`pymongo` environment and is not the supported check.
 
 - Authentication is exercised with a seeded local user and a token generated
   from the synthetic `SECRET_KEY`; registration/mail delivery is not run.
-- All HTTP cases are reads. No write/mutation semantics, invite flows, file
-  upload, real label lock/recovery, or background Celery tasks are covered.
+- The runtime includes one successful term-bank creation write. Other writes,
+  invite flows, file upload, real label lock/recovery, and background Celery
+  tasks are not covered.
 - Optional modules, translation catalogs, real OSS/R2, SMTP, Google Vision,
   and real production data are disabled or absent.
-- No C# differential comparison has been run yet; this fixture is the Python
-  side of that future comparison.
+- C# differential replay was run: statuses and JSON bodies matched, but the
+  term-bank after-write BSON SHA-256 differed (Python
+  `31504d7cbb58335d9a6e399c0a1e80fb4d3481f2e830d5ad8dd9293ae855f471` vs C#
+  `889bde3c00e1636642ef9854a5bdc91b004701535164adbffac335d5cf0d31cb`); this
+  remains a genuine write-side discrepancy.
 - The original `tests/__init__.py` and `conftest.py` remain forbidden because
   of `*_test` database drops and in-source `.mo` compilation.
-- The runtime addition is pending review and is intentionally not committed;
-  commit `738b617a2729` covers the stateless harness only.
+- The runtime fixture and differential changes are tracked on the isolated
+  readiness worktree branch; commit state is recorded in its git history.
 
 ## Explicit non-coverage (do not treat as expected)
 
@@ -301,7 +305,8 @@ These areas were intentionally not fabricated:
   rendering are not extracted; only `parse_body`, `safe_url`, normalization,
   search tokens, and the access primitive are.
 - The stateless fixtures are function-level oracles. The separate runtime
-  fixture executes the eight read-only Flask cases listed above; it does not
-  claim coverage of writes, registration, background tasks, optional modules,
-  or real storage.
-- No shared C# build/test was run for this Python-only step.
+  fixture executes 20 Flask cases, including one term-bank creation POST; it
+  does not claim coverage of other writes, registration, background tasks,
+  optional modules, or real storage.
+- The targeted C# differential test ran and reports the after-write BSON
+  difference above; its TRX is `tests/Shoreline.Tests/TestResults/legacy-runtime-write-diff-final.trx`.
