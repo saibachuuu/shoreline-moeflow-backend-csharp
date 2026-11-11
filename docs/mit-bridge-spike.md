@@ -47,6 +47,11 @@
     `mit_ocr_default_params`（`:68-74`：`ocr_key="48px", verbose=True`）。
   - `mit_translate`: 纯 kwargs（`:92-106`）：
     `query, translator="gpt3.5", target_lang="CHT"`。
+- `tasks.mit.inpaint`（`:33-35`）只有 Celery stub，没有 HTTP 入口：
+  `MitImageTaskApi.post`（`:62-74`）仅接受 `mit_detect_text`/`mit_ocr`，
+  其余 `task_name` 一律 `ValueError("Invalid task name")`。C# 与之对齐，
+  同样不暴露 inpaint（见 `module-parity.md` §9，非缺口；
+  `MitEndpoints_ImageTask_InpaintTaskName_IsRejectedLikePython` 锁定）。
 
 ### 1.3 结果回写与轮询
 

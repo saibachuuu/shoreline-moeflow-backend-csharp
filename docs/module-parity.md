@@ -130,6 +130,8 @@
 |---|---|---|
 | `POST /v1/mit/images`、`POST /v1/mit/image-tasks`、`GET /v1/mit/image-tasks/<task_id>`、`POST /v1/mit/translate-tasks`、`GET /v1/mit/translate-tasks/<task_id>`（`mit` blueprint 仅当 `MIT_STORAGE_ROOT` 配置时挂载；**无鉴权**；默认 `detector_key=default/detect_size=2560/text_threshold=0.5/box_threshold=0.7/unclip_ratio=2.3/ocr_key=48px`） | `Features/MitEndpoints.cs:274-287` 默认值逐项一致；同样无鉴权；`Program.cs` 仅当 `Mit:StorageRoot` 配置 **且** `FindMissingConsumers` 为空才挂载路由，否则路由不存在 + fail-closed 日志 | **fail-closed**（有意） |
 
+`tasks.mit.inpaint`（`app/tasks/mit.py:33-35`）**非缺口**：Python 只有 Celery stub，`MitImageTaskApi.post`（`manga_image_translator.py:62-74`）仅接受 `mit_detect_text`/`mit_ocr`，其余 `task_name` 一律 `ValueError("Invalid task name")`——inpaint 无 HTTP 入口，C# 同样不接（`MitEndpoints` 的 `task_name` 白名单不变），`MitEndpoints_ImageTask_InpaintTaskName_IsRejectedLikePython` 锁定该行为。
+
 Python `manga_image_translator.py` 内部 `_run` 引用 `gpu`/`device=cuda` 仅属本地推理路径，不在 API 路径语义内。**待决策**：真实翻译执行（worker/consumer）双方均无可用实现，C# 不伪造；执行语义待产品决策。
 
 ## 跨模块记录（超出本次范围，仅 note）
