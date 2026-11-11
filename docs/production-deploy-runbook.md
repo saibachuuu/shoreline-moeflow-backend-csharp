@@ -30,6 +30,21 @@
    A root-owned `0755` directory makes the first upload fail with 500
    `Request failed (UnauthorizedAccessException)` — observed on the
    2026-11-10 test host and fixed by the same `chown`.
+8. Edge proxy limits and paths must agree with the api, otherwise uploads and
+   local storage break in ways that look like backend bugs:
+   - `client_max_body_size` must be **at least** the largest upload you allow.
+     The file endpoint accepts up to 1 GiB (`src/Shoreline.Api/Features/FileEndpoints.cs:83`
+     sets `MultipartBodyLengthLimit = 1024L * 1024 * 1024`) and avatars add
+     1 MiB over their own limit; nginx's 1 MiB default returns 413 before the
+     api ever sees the request.
+   - `Storage:Domain` is used verbatim as the download URL prefix
+     (`src/Shoreline.Api/Storage/LocalStorageBackend.cs:190-198` returns
+     `domain.TrimEnd('/') + "/" + EncodePath(key)`). Point it at the edge's
+     `/storage` location, and make that location's `alias` the **same host
+     directory** that the api mounts as `Storage:Root` — two different
+     directories produce 404s on every file link.
+   - Keep the `/api` prefix stripping described in §1; Python's template used
+     `location /api { proxy_pass http://moeflow-backend:5000/; }`.
 
 ## 1. Start order
 
