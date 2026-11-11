@@ -1,100 +1,63 @@
 # 生产替换硬门槛检查表
 
-日期：2026-11-10（晚间更新）。Python 参考 `be0b717`；C# 主分支 `4476911` + 回滚/索引兼容工作树（Python 环境变量兼容 + 896 用例）。
+日期：2026-11-11（深夜更新）。C# main `96eef2a`（本轮 13 个分支全部 `--no-ff` 合并）；Python 参考 `be0b717`。
+本轮增量、分支 hash 与证据：[readiness-20261111.md](readiness-20261111.md)。迁移逐字段对拍：[migration-parity.md](migration-parity.md)。存储契约：[storage-contract.md](storage-contract.md)。可选模块：[module-parity.md](module-parity.md)。通知：[notification-contract.md](notification-contract.md)。
 
-**发布结论：阻塞，不能替换生产 Python。**
+**发布结论：仍然阻塞，不能替换生产 Python。**
 “已验证”只代表表中具体证据；静态实现、测试发现、旧快照绿色结果均不等于生产验收。
-本表当前没有产品批准的“不适用”项。README 的 WIP 表述不得提前移除。
-
-详细诊断：[readiness-audit-20261110.md](readiness-audit-20261110.md)。Python 环境变量映射：[legacy-environment.md](legacy-environment.md)。
+本表没有产品批准的“不适用”项。README 的 WIP 表述不得提前移除。
 
 | 硬门槛 | 状态 | 证据 / 阻塞 / 仍需执行 |
 |---|---|---|
-| 核心有效路由注册 | 已验证（静态 + 测试机抽查） | 静态 160/160；`LegacyDiagnosticsEndpoints` 的 `/urls`、`/error`、`/warning`、`/docs/<path>` 已在测试机容器内经 nginx 返回 200/500/500/404，`/ping`、`/health/*`、`/v1/site/homepage` 均为 200 |
-| 全核心路由 C# HTTP 行为与权限 | 未验证 | 静态审计命中 160/160；不等于 HTTP 执行通过，未跑全量 |
-| archive_import HTTP | 未验证 | 已装配；需 request/body/errors/auth/digest 测试 |
-| partner_search HTTP | 未验证 | 已有 HTTP 测试；需全契约、写/索引排序和 Python oracle |
-| storage_pool HTTP | 未验证 | 已装配；需完整 admin HTTP 及权限/任务状态测试 |
-| ziteng_partner HTTP | 未验证 | 已有 HTTP 测试；不能误报全缺失；需全契约及安全检查 |
-| MIT 条件模块 | 部分验证（仅 fail closed） | 未配置存储根时 5 条路由 404（默认生产形态不变）；配置后无消费者时同样 404 且不入队、不落盘。`tests/Shoreline.Tests/MitHttpTests.cs` 9/9（`eb13ab4`+`c5b9218`）。**MIT 功能未实现**：真实 parity 需进程内 `mit_*` handler 或外部 `manga-image-translator` Celery（`mit` 队列）桥接，二者均不存在；启用形态/Python 契约仍未验收 |
-| OCR / 405 / 注释禁用路由的逐条例外 | 未验证 | 已记录候选原因，尚无产品批准；须核对真实响应 |
-| 真实 Flask / C# 同种子 BSON | 未验证 | 旧 fixture 有局部种子；需完整 app / modules、可复现 fresh run |
-| 真实差分读与成功写 | 部分验证 | 真实 Flask 生成 19 个只读用例，C# replay **19/19 匹配，0 business differences**（`docs/runtime-differential.md`）；写请求仍未纳入差分，测试机 E2E 已覆盖建团队/项目/术语库/上传/源文/译文/导出/邀请/申请审批/密码重置 |
-| 差分 status/body/error/headers/前后 digest | 已验证（只读 19 例） | 19 例 status/body/前后 digest 全匹配；框架级 wire 差异单独记录；写请求和 4 个可选模块仍未覆盖 |
-| BSON collection/alias/type/index/unique | 部分验证 | Mongo 4.4.1 实测发现两处 `$lookup` 同时使用 `localField`+`pipeline`（5.0 才支持），成员列表 500；已改为 `let` 形式并回归（[mongodb-compatibility.md](mongodb-compatibility.md)）。 team_member 默认名索引（`team_1_status_1` / `team_1_aliases_1` / `team_1_worker_qualifications_1`）与 C# 查询索引 `team_member_alias_search_v1` on `{team,status,asrch}` 由 `MongoSchemaReadinessTests` 验证；`t_1_sn_-1` 等 MongoEngine 默认名已对齐；测试机空库 BSON 字段与 Python 对齐。生产 dump 副本上的全集合对比未执行 |
-| Python auth token 互操作 | 已验证（双向） | 用生产同款 `SECRET_KEY` 在 Python `itsdangerous` 中签发 `{id,pc}` token，测试机 C# `GET /api/v1/user/info` 返回 **200**；反向用 C# 登录签发的 token 交给 Python `URLSafeTimedSerializer.loads`，解出相同 `{id,pc}`。C# 同时接受 itsdangerous 与历史 HS512 JWS 格式（`src/Shoreline.Api/Security/LegacyToken.cs`） |
-| storage key/prefix/R2 | 部分验证 | 已实现 Python `.env-backend` 存储变量自动映射（`STORAGE_TYPE`/`OSS_BUCKET_STYLE`/`OSS_*`/`STORAGE_DOMAIN`），S3 分支在 `STORAGE_TYPE=OSS` 且未显式设置前缀时默认 `OSS_KEY_PREFIX=storage/`；`StorageLegacyEnvironmentTests` 4/4。生产为 R2 + `OSS_BUCKET_STYLE=S3`，CDN 模式在 Python S3 分支同样不签名，C# 行为一致。真实 R2 写入/读取仍未用生产凭证验证 |
-| 设置、语言/类型/角色种子 | 部分验证 | bootstrap/`LegacyTypes`/`LanguageCatalog` 已与 Python 逐项复核，测试机空库初始化通过；逐个种子集合的完整 BSON 差分仍未执行 |
-| 管理员/默认团队初始化 | 已验证（测试机空库） | 测试机 `moeflow` 原为空库；新镜像启动日志 `Created bootstrap administrator …`、`Created bootstrap Default Team …`，二次重启无重复创建；验证码 + 密码登录 `POST /v1/user/token` 成功，`/v1/user/info`、`/v1/user/teams` 正常 |
-| 迁移及回滚数据兼容 | 已验证（回滚演练） | 邮件/安全码已双写：C# 签发时同时写入 Python `v_code`，验证消费后删除；测试机实测重置密码验证码在 `v_code` 可见、消费后为 0。另用测试机 165 文档 dump 演练 Python 回滚：`tools/legacy-rollback-strip.js` 清理 C# 专有字段与冲突索引后，不启动 C# 直接由 Python 读取，`/v1/user/info`、`/v1/user/teams`、项目详情/文件/输出、团队成员均 200；步骤见 [legacy-rollback.md](legacy-rollback.md) |
-| 每个 Celery 任务对应 handler/接受替代 | 未验证 | 静态映射 20 个真实 task；普通创建 LabelPlus 已由 `ba56379` 接入并 focused 61/61；MIT 缺消费者，现改为无消费者时不装配 `/v1/mit`（`c5b9218`，测试 `eb13ab4`，9/9），功能本身仍未实现；storage-pool worker 存在但默认关闭；其他 handler、队列等价及产品接受仍未验收 |
-| 重试/lease/幂等/崩溃恢复 | 未验证 | 需全 handler 及 unknown commit / stale lock / worker crash 故障证据 |
-| 本机基线 dotnet build 0 warning/0 error | 已验证 | 当前 `bc9557f` 执行 `dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error |
-| 最终合并后的 dotnet build 0/0 | 已验证 | `c4f3639` + 环境变量兼容工作树：`dotnet build Shoreline.sln --nologo` 成功，0 warning / 0 error（2026-11-10） |
-| C# 全量 suite | 已验证 | `c4f3639` + 环境变量兼容工作树：`dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --no-build`，**896 passed / 0 failed / 0 skipped**，Mongo **4.4.1** 上 7 m 17 s；五端口隔离服务（Mongo 27241 / S3 29241 / SMTP 21241 / Mailpit 28241 / API 25241）。包含 19 例 `LegacyRuntimeDifferentialTests`，0 business differences；新增 8 例 Python 环境变量映射测试 |
-| Python 全量 suite | 已验证 | `venv-moeflow/bin/pytest -q`：**836 passed, 48 subtests passed**, 446 s（`.env.test`，mongomock/memory broker/local storage） |
-| 真实差分全量 suite | 部分验证 | 只读扩展 19/19、0 business differences；写路径和可选模块差分未覆盖，不能称全量 |
-| 可复现镜像 / lock / digest | 部分验证 | `bc9557f` 内容两次 `--no-cache --build-arg SOURCE_DATE_EPOCH=0 --platform linux/amd64` 冷构建 ImageID 均为 `sha256:7a1936a2db68f84572a0ff41ce701f162b9f4873ef9361234faed19ebedd662e`，层摘要相同；SDK 10.0.403/runtime 10.0.8 按 digest 锁定。仅同 builder、平台和源树，不代表跨构建机或跨平台 |
-| 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | 镜像与进程 UID 均为 1654；测试机 bind mount `./storage` 初始为 root:root 755，首次上传 500 `UnauthorizedAccessException`，`chown -R 1654:1654 storage` 后上传/缩略图/导出全部通过。部署文档必须包含该 chown |
-| health / readiness / 配置校验 | 部分验证 | 最终镜像 `/health/live` 与 Mongo-backed `/health/ready` 均 HTTP 200；配置校验矩阵、反代及部署形状仍未验收 |
-| 日志 / metrics / 告警 | 未验证 | 需可观测性、隐私与故障告警验证 |
-| 备份 / 副本恢复 / 恢复后的业务 smoke | 已验证（测试机） | `mongodump --gzip --archive` 13 KB / 158 文档；恢复到 `moeflow_restore` 后启动只读验证容器，登录/团队/成员/项目/文件/术语库均 200；验证后 drop 临时库。未在生产数据规模上计时 |
-| TLS / 反代 / trusted proxy | 未验证 | 不读取生产 env/凭证；需 disposable 测试栈验收 |
-| 资源限制 / graceful stop / rollback | 未验证 | 测试机可用磁盘约 2.1 GiB，需安全隔离部署及回滚演练 |
-| 测试机负载 / 长稳 / 内存比较 | 未验证 | 现有资源快照不是等负载基准；需约定时长、数据和通过阈值 |
-| 密钥与依赖安全 | 未验证 | 首轮依赖工具未报 vulnerable，不等于完整安全通过；禁止读取真实密钥 |
-| 认证 / 越权 / 授权竞争窗口 | 未验证 | 需按 Python oracle 验证所有修改/删除/管理端及并发路径 |
-| SSRF / allowlist / DNS / redirects | 部分验证 | archive 连接防护已抽为 `Infrastructure.PublicNetworkGuard`（archive 语义不变）；Ziteng 注册 handler 接入同一防护（`AllowAutoRedirect=false` 不变 + HTTPS 配置校验不变），Bearer key 不会发往私有 HTTPS；新增 `PublicNetworkGuardTests`（29）与注册 client 回归测试 `ZitengPartnerSsrfTests`（5，真实 handler、私有目标建 socket 前拒绝、无外部请求）。仍未覆盖：其他全部出站路径（邮件/存储等）的源码及 HTTP/连接矩阵 |
-| 上传限制 / 内存放大 | 部分验证 | 测试机真实 multipart 上传图片成功，缩略图 worker 生成 cover/resample，导出 zip 可下载；1 GiB 边界与并发资源仍未验证 |
-| 真实 HTTP 限流 / XFF 防伪造 | 未验证 | limiter/routing 顺序、反代身份和 client_key 均需真实请求验证 |
-| 部署 / 迁移 / 回滚 runbook | 部分验证 | 测试机空库部署、备份恢复、Python 回滚演练均有命令与证据；仍需固化为一页生产 runbook 并在测试机复跑 |
+| 核心有效路由注册 | 已验证（静态 + 测试机抽查） | 静态 160/160；`/urls`、`/error`、`/warning`、`/docs/<path>` 在测试机容器内经 nginx 返回 200/500/500/404；`/ping`、`/health/*`、`/v1/site/homepage` 均 200 |
+| 全核心路由 C# HTTP 行为与权限 | 部分验证 | 静态 160/160；全量 suite 1028/1028 已覆盖大量 HTTP 行为；**端点×身份授权矩阵仍在收尾**（`docs/authz-matrix.md` + `AuthzMatrixTests`，commit `cc99635` 起） |
+| archive_import HTTP | 部分验证 | 已装配；legacy `ARCHIVE_MAX_*` 按 MB 换算（`1933b9a`）；`ARCHIVE_PROVIDER_API_ALLOWED_HOSTS` allowlist（`94a06a8`）；`PublicNetworkGuard` + `UseProxy=false`（`8efc6c7`）。**Python oracle 差分未做** |
+| partner_search HTTP | 部分验证 | 已有 HTTP 测试；写/索引排序与 Python oracle 未逐条对拍 |
+| storage_pool HTTP | 部分验证 | 已装配；每日扫描 `lsd` 原子 claim（`06c1d6a`）；`StoragePool:WorkerEnabled` 可关；跨天/真实 OSS 未验 |
+| ziteng_partner HTTP | 部分验证 | 契约测试 + 连接级 SSRF（`5817439`，`ZitengPartnerSsrfTests` 5）；错误码 403→400 修正（`bc016eb`） |
+| MIT 条件模块 | 已实现（opt-in，默认 fail-closed） | Python `tasks.mit.*` 是 stub，真实实现在外部 `manga_translator/moeflow_worker.py`。C# 新增 `Modules/Mit/MitBridgePublisher.cs`：Celery protocol v2 → durable `mit` 队列 + `celery_taskmeta` 轮询；门控 = `Mit:StorageRoot` 且（三个 handler 齐全 **或** `RabbitMq:Enabled=true` 且 `Url` 非空），否则 404。`MitHttpTests|MitBridge` 19/19，含 throwaway broker 集成。**未做真实 MIT worker 联调**（`inpaint` 未接、共享卷/凭证待定） |
+| OCR / 405 / 注释禁用路由的逐条例外 | 未验证 | 已记录候选原因，尚无产品批准；OCR 在 Python 侧同样 `NotImplementedError`，C# 501 fail-closed 等价 |
+| 真实 Flask / C# 同种子 BSON | 部分验证 | 旧 fixture 有局部种子；完整 app/modules 可复现 fresh run 未做 |
+| 真实差分读与成功写 | 部分验证 | 只读 19/19 匹配、0 business differences（`docs/runtime-differential.md`）；写请求仍未纳入差分；11-10 测试机 E2E 已覆盖主要写路径 |
+| 差分 status/body/error/headers/前后 digest | 已验证（只读 19 例） | 19 例全匹配；框架级 wire 差异单独记录；写请求与 4 个可选模块未覆盖 |
+| BSON collection/alias/type/index/unique | 部分验证 | Mongo 4.4.1 实测修复 `$lookup` `localField`+`pipeline`（5.0 才支持）；team_member 默认名索引与 `team_member_alias_search_v1` 由 `MongoSchemaReadinessTests` 验证；生产 dump 副本上的全集合对比未执行 |
+| Python auth token 互操作 | 已验证（双向） | `SECRET_KEY` 下 Python 签发 → C# 200；C# 登录 token → Python `URLSafeTimedSerializer.loads` 解出 `{id,pc}`；C# 同时接受 itsdangerous 与历史 HS512 JWS（`Security/LegacyToken.cs`） |
+| storage key/prefix/R2 | 部分验证 | `docs/storage-contract.md`：prefix 尾斜杠归一化（`25f460a`）、签名 URL 统一 7 天（`ac81252`，对齐 Python 604800s）、>16 MB `TransferUtility` 分片（`0167826`）；`StorageContract` 23/23。**真实 R2 写入/读取仍未用生产凭证验证** |
+| 设置、语言/类型/角色种子 | 部分验证 | bootstrap/`LegacyTypes`/`LanguageCatalog` 已逐项复核，测试机空库初始化通过；逐集合 BSON 差分未做 |
+| 管理员/默认团队初始化 | 已验证（测试机空库） | 新镜像日志 `Created bootstrap administrator …`、`Created bootstrap Default Team …`，二启不重复；验证码 + 密码登录成功 |
+| 迁移及回滚数据兼容 | 部分验证（实现 + 对拍完成，生产 dump 未跑） | `Infrastructure/Migrations` 落地 m0001–m0009 + `migration_record`/`migration_lock`；`docs/migration-parity.md` 逐字段对拍：9 个迁移等价、0004 修 7 个 bug（含 F7 成员合并 projection bug）；`Migrations` 37/37。`Migrations:Mode=check` 有 pending 时 `/health/ready` 503。11-10 回滚演练（`legacy-rollback-strip.js`）仍有效，本轮补 `deleteMany({runner:"csharp"})` + 清 `migrate` 锁（`ead3e33`）。**生产 dump 副本未执行** |
+| 每个 Celery 任务对应 handler/接受替代 | 部分验证 | 静态映射 20 个 task；MIT 已从 fail-closed 升级为 opt-in 桥；`docs/celery-cutover-analysis.md` 结论：排空 + 冷切换，不需要 MQ 协议兼容。**未在真实 broker 演练排空** |
+| 重试/lease/幂等/崩溃恢复 | 部分验证 | `Jobs:MaxAttempts=5`、`RetryDelay=min(300s, 5·2^n)`、优雅停机（`30ea5ea`,`e176e0d`）；邮件 `verification.sent` CAS 防重发（`30878c5`）；通知扫描 lease 语义由 `NotificationE2ETests` 14/14 锁定。**故障注入（kill -9 / 网络分区）未做** |
+| 本机基线 dotnet build 0 warning/0 error | 已验证 | `96eef2a`：`dotnet build Shoreline.sln --nologo` 0/0 |
+| 最终合并后的 dotnet build 0/0 | 已验证 | 同上（本轮每次合并后均复跑） |
+| C# 全量 suite | 已验证 | `523ebeb` 后 `tools/Run-FullSuite.ps1 -BasePort 33090`：**1028 passed / 0 failed / 0 skipped**，1m27s，Mongo 4.4.1 隔离栈。本轮之后新增 MIT/通知/迁移测试，最终合并后需再跑一次 |
+| Python 全量 suite | 已验证 | `836 passed, 48 subtests passed`，446 s（`.env.test`，mongomock/memory broker/local storage） |
+| 真实差分全量 suite | 部分验证 | 只读 19/19；写路径与可选模块未覆盖 |
+| 可复现镜像 / lock / digest | 部分验证 | 11-10 两次 `--no-cache` 冷构建 ImageID 相同；本轮新增 RabbitMQ.Client 后**未重建镜像/未复验 digest** |
+| 实际非 root / 文件权限 | 已验证（镜像 + 测试机） | UID 1654；bind mount 需 `chown -R 1654:1654 storage`，否则首传 500；已写入 runbook §0 第 7 条（`16a6fab`） |
+| health / readiness / 配置校验 | 部分验证 | `/health/live` 200、`/health/ready` 200；迁移闸门 503 `migrations-pending` 已实现并有测试；反代/部署形状未验收 |
+| 日志 / metrics / 告警 | 未验证 | 无 metrics 导出、无告警阈值落地 |
+| 备份 / 副本恢复 / 恢复后的业务 smoke | 已验证（测试机） | 11-10：`mongodump --gzip --archive` 158 文档，恢复到 `moeflow_restore` 后登录/团队/成员/项目/文件/术语库均 200；生产规模计时未做 |
+| TLS / 反代 / trusted proxy | 未验证 | 不读生产 env/凭证；需 disposable 测试栈验收 |
+| 资源限制 / graceful stop / rollback | 部分验证 | `compose.prod.example.yml` 有 `mem_limit 512m`、`stop_grace_period 40s`、`Jobs:WorkerEnabled` 开关与 shutdown 测试（`cc1ae8c`）；未做真实 SIGTERM 下 lease reclaim 演练 |
+| 测试机负载 / 长稳 / 内存比较 | 未验证 | 无等负载基准 |
+| 密钥与依赖安全 | 未验证 | 依赖扫描非完整安全结论；`RabbitMq:Url` 含明文密码需 secret 管理；禁止读取真实密钥 |
+| 认证 / 越权 / 授权竞争窗口 | 部分验证 | 授权矩阵收尾中；`admin=false` 不绕过业务权限、项目 `st!=0` 时 normal-only 权限失效等语义已文档化 |
+| SSRF / allowlist / DNS / redirects | 部分验证 | `PublicNetworkGuard`（29 测试）+ Ziteng 注册 client（5）+ archive transport；`UseProxy=false` 防环境代理绕过（`8efc6c7`）。其余出站路径（邮件/存储 SDK）未系统覆盖 |
+| 上传限制 / 内存放大 | 部分验证 | >16 MB 走 multipart 分片，消除全量进内存；1 GiB 边界与并发资源未验 |
+| 真实 HTTP 限流 / XFF 防伪造 | 未验证 | limiter/routing 顺序、反代身份与 client_key 未真实请求验证 |
+| 部署 / 迁移 / 回滚 runbook | 部分验证（已固化） | `docs/production-deploy-runbook.md`：启动顺序（mongo → api 跑迁移 → worker → nginx）、回滚删 csharp 迁移行、bind mount `chown`、前端 restart 解 502、告警阈值表；`scripts/verify-deploy.ps1` 只读自检。**未在测试机复跑本轮版本** |
 
-## 明确阻塞
+## 明确阻塞（2026-11-11 夜）
 
-1. 真实运行时差分只覆盖 19 个只读请求；成功写、邮件、四可选模块、真实 OSS/R2 尚未纳入。
-2. 静态路由 160/160 已覆盖，但全路由 HTTP 行为/越权矩阵未执行；20 个 Celery task 的故障/重试/幂等证据不足，MIT 缺外部消费者（C# 已 fail closed，未实现功能）。
-3. 最新镜像 `shoreline-moeflow:ready-20261110` 只做过单次构建；未重跑双构建 digest 一致性，也未在 CI 中复现。
-4. 2026-11-11 在隔离本地资源（Mongo 27128 / S3 29128 / Mailpit 28128）复跑 C# 全量：**922 总 / 920 通过 / 0 跳过 / 2 失败**（2 m 0 s，`dotnet test tests/Shoreline.Tests/Shoreline.Tests.csproj --nologo`）。两项失败均与 MIT 无关，且排除 `MitHttpTests` 后同样失败（913 总 / 911 通过 / 2 失败）：`LegacyRuntimeDifferentialTests.CSharpRuntimeMatchesPythonReferenceBusinessPayloads`（fixture `tools/legacy-reference/fixtures/runtime_flask_reference.json` 的 `term_bank` `c`/`e` 时间戳只有 5 分钟新鲜窗口，`tests/Shoreline.Tests/LegacyRuntimeDifferentialTests.cs:389-393`）、`StoragePoolHttpTests.ProjectMigrateRestoreMove_ValidateBeforeSideEffects`（单跑 1/1、类内 15/15 通过，仅全量并行时失败）。测试机只做了单用户 E2E；第二用户邀请/申请/密码重置邮件、跨天 StoragePool、并发/长稳未验证。
-5. 备份恢复、迁移回滚、生产 dump 副本上的 schema/索引校验未执行；生产机仅只读参考。
-6. 可观测性、限流/XFF、安全自查与部署 runbook 仍未完成。
+1. **生产 dump 副本上的迁移 dry-run/check/apply 未执行**；这是数据正确性的最后一道门（语义对拍已完成）。
+2. **授权矩阵未收尾**：全部写/管理端点 × 身份的 Python oracle 对齐仍缺。
+3. **真实 R2 / SMTP+TLS 未验收**（按约定不读生产凭证）；邮件 STARTTLS 强制策略与一次性 Mailpit 不兼容，真实投递计数需真实/带 TLS 的 SMTP。
+4. **RabbitMQ 排空演练未做**；MIT 桥未与真实 worker 联调。
+5. **镜像 digest/可复现构建**在本轮新增依赖后未复验；观测性、限流/XFF、load/soak 仍空白。
 
+## 测试机生产形状部署（2026-11-10，历史证据）
 
-## 测试机生产形状部署（2026-11-10）
+镜像 `shoreline-moeflow:ready-20261110d`（ImageID `sha256:d0edc71f…def8b`）经 `docker save | ssh | docker load` 部署到 `/root/moeflow-csharp-isolated`（Mongo 4.4.1、Local storage、nginx 反代、无 RabbitMQ）。已执行：空库 bootstrap（管理员/Default Team/默认项目集）、登录（验证码 + token）、团队/项目/术语库创建、multipart 上传 + worker 生成 `cover-*`/`resample-*`、原文/译文、导出 zip（`translations.txt`/`project.json`/`images/smoke.png`）、第二用户邀请、密码重置邮件（Mailpit）、团队申请审批、`mongodump`/`mongorestore` 恢复后只读 smoke。踩坑：bind mount `chown`、`$lookup` 需 Mongo 5.0 语法（已改 `let`）、重建后端容器后需 `docker compose restart moeflow-frontend` 否则 502。
 
-镜像 `shoreline-moeflow:ready-20261110d`（ImageID `sha256:d0edc71ff1b8abf4d9a96900ef5336e11ef8dd2fdb56eebd5b2646b4b93def8b`）经 `docker save | ssh | docker load` 部署到 `103.195.188.139:50600` 的 `/root/moeflow-csharp-isolated`（Mongo 4.4.1、Local storage、nginx 反代、无 RabbitMQ）。
-
-已执行的端到端路径（全部经 nginx `http://127.0.0.1:5080/api`）：
-
-1. 空库启动：自动创建管理员、`Default Team`、默认项目集、creator 成员和 `site_setting.ajt`；重启后不重复创建。
-2. 登录：`POST /v1/captchas` → 直接读 `csharp_captcha.digest` 反解 4 位码 → `POST /v1/user/token` 返回 token。
-3. 团队/项目：`POST /v1/teams`、`POST /v1/teams/<id>/project-sets`、`POST /v1/teams/<id>/projects` 均成功，返回结构与 Python 紧凑 BSON 兼容。
-4. 术语库：`POST /v1/teams/<id>/term-banks` 成功。
-5. 文件：multipart `POST /v1/projects/<id>/files` 上传 PNG，`/storage/files/...` 原图 200，worker 生成 `cover-*.webp`/`resample-*.webp` 且 `thumbnail_status=3`。
-6. 标注：`POST /v1/files/<id>/sources` 新增原文，`POST /v1/sources/<id>/translations` 新增韩语翻译。
-7. 导出：`POST /v1/projects/<id>/outputs` 为两个 target 建任务，轮询 target outputs 到 `status=4`，zip 下载 200，含 `translations.txt`、`project.json`、`images/smoke.png`。
-8. 第二用户：管理员 `POST /v1/admin/users` 创建 `SmokeTwo`；owner `POST /v1/teams/<id>/invitations`（role member），第二用户登录后 `PATCH /v1/invitations/<id>` `{allow:true}` 接受；`user_count=2`，成员列表返回两人，重复邀请返回 `UserAlreadyJoinedError` 5003。
-9. 密码重置邮件：Stack 临时加入 `axllent/mailpit:v1.27` 与 `Mail__Host=mailpit`/`Mail__Port=1025`；`POST /v1/reset-password-codes` 后 Mailpit 收到主题“重置您的密码”和 6 位验证码；`DELETE /v1/user/password` 成功，旧密码登录 400，新密码登录 200。
-10. 项目/团队申请：`SmokeThree` 登录后 `POST /v1/teams/<id>/applications`，owner `GET /v1/teams/<id>/applications` 看到 pending，`PATCH /v1/applications/<id>` `{allow:true}` 通过；第三人 `GET /v1/user/teams` 出现 `SmokeTeam`，成员数 3。
-11. 备份/恢复：`mongodump --gzip --archive` 导出 `moeflow`（158 文档），`mongorestore --nsFrom=moeflow.* --nsTo=moeflow_restore.*` 恢复成功；用同一镜像、`Bootstrap__Enabled=false`、`moeflow_restore` 连接串启动第二个容器，登录、团队/成员/项目/文件/术语库读取全部 200；结束后删除容器并 `dropDatabase`。
-12. Mongo 4.4.1 实测：第二成员加入后 `GET /v1/teams/<id>/members` 首次返回 500（`MongoCommandException`），原因是 `$lookup` 同时使用 `localField` 和 `pipeline`（Mongo 5.0 才支持）；改为 `let` 形式后返回 200。详见 [mongodb-compatibility.md](mongodb-compatibility.md)。
-
-部署前置条件（必须写入 runbook）：
-
-```bash
-# 容器进程 UID 1654，bind mount 目录必须先交给该 UID
-chown -R 1654:1654 /path/to/stack/storage
-```
-
-权限未修正时首次上传返回 500，日志为 `Request failed (UnauthorizedAccessException)`；修正后同一请求 200。挂载目录不能是 root:root 755。
-
-`docker-compose up -d` 重建后端容器后必须重启 frontend：nginx 在启动时解析 `moeflow-csharp` 上游地址，容器 IP 变化后不重启会持续返回 502（本次实测）。命令：
-
-```bash
-docker-compose restart moeflow-frontend
-```
-
-本次未覆盖：修改邮箱、OCR、MIT 外部消费（C# 仅在无消费者时 fail closed，功能仍未实现）、跨天 StoragePool、生产数据规模的备份恢复计时、并发与长稳。项目申请/审批、第二用户邀请、密码重置邮件、备份恢复均已在上文验证。
-
-数据/任务详细复核：[data-job-parity-audit-20261110.md](data-job-parity-audit-20261110.md)。
-
-更新本表时必须附具体 commit、命令、通过/失败/跳过数及环境；如状态改为“不适用”，必须记录逐项原因和明确的产品接受决定。
+更新本表时必须附具体 commit、命令、通过/失败/跳过数及环境；状态改为“不适用”必须记录逐项原因与产品接受决定。
