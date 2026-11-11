@@ -142,7 +142,9 @@ public sealed partial class FileService
             var storage = storageLease?.Backend ?? _storage;
             data["parse_status_detail_name"] = DetailName(ImageParseStatusNames, ImageParseStatusNamesEn, parseStatus, ChinesePreferred());
             data["url"] = await OriginalUrlAsync(saveName, storage, ct);
-            data["cover_url"] = await ProcessedUrlAsync(file, storage, "cover", thumbnailStatus, ct);
+            // app/models/file.py:749-751: the small cover always lives on the
+            // default storage; only resample follows the project backend.
+            data["cover_url"] = await ProcessedUrlAsync(file, _storage, "cover", thumbnailStatus, ct);
             data["resample_url"] = await ProcessedUrlAsync(file, storage, "resample", thumbnailStatus, ct);
             data["thumbnail_status"] = thumbnailStatus;
             data["thumbnail_error"] = file.Text("the");
