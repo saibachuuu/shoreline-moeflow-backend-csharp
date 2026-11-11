@@ -103,12 +103,14 @@ Runtime fixture generation and tests use the Python 3.12 venv:
 
 ```powershell
 $pyRuntime = "C:\Users\88888888\AppData\Local\Temp\opencode\flask-reference-runtime-20261109\venv\Scripts\python.exe"
-& $pyRuntime tools\legacy-reference\runtime_reference.py
+& $pyRuntime tools\legacy-reference\runtime_reference.py --mongo-port 27281
 $env:PYTHONPATH = (Resolve-Path tools\legacy-reference\tests)
 & $pyRuntime -m unittest -v test_runtime_reference
 ```
 
-The runtime requires local MongoDB at `127.0.0.1:27128`. It creates only
+The runtime defaults to local MongoDB at `127.0.0.1:27128`; `--mongo-port`
+may select only an owned test port from `27281-27289` (the default remains
+available for historical runs). It creates only
 `shoreline_reference_<32 hex>`, installs a socket guard that permits only that
 Mongo endpoint, and asserts `get_db().name` before touching seed collections.
 After collecting the fixture it drops and verifies that exact database, then

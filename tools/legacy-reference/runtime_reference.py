@@ -51,7 +51,8 @@ APPROVED_TEMP_ROOT = Path(
 ).resolve()
 
 MONGO_HOST = "127.0.0.1"
-MONGO_PORT = 27128
+DEFAULT_MONGO_PORT = 27128
+TEST_MONGO_PORTS = frozenset(range(27281, 27290))
 DB_PREFIX = "shoreline_reference_"
 DB_RE = re.compile(r"^shoreline_reference_[0-9a-f]{32}$")
 
@@ -206,9 +207,9 @@ def copy_public_sources(python_root: Path, temp_root: Path) -> list[dict[str, An
     return provenance
 
 
-def write_synthetic_config(temp_root: Path, db_name: str) -> None:
+def write_synthetic_config(temp_root: Path, db_name: str, mongo_port: int = DEFAULT_MONGO_PORT) -> None:
     values: dict[str, Any] = {
-        "DB_URI": f"mongodb://{MONGO_HOST}:{MONGO_PORT}/{db_name}",
+        "DB_URI": f"mongodb://{MONGO_HOST}:{mongo_port}/{db_name}",
         "SECRET_KEY": "reference-only-synthetic-secret-change-me",
         "TESTING": True,
         "DEBUG": False,
@@ -305,7 +306,13 @@ def write_synthetic_config(temp_root: Path, db_name: str) -> None:
     (temp_root / "app" / "config.py").write_text("\n".join(lines), encoding="utf-8")
 
 
-def install_local_socket_guard() -> None:
+def validate_mongo_port(port: int) -> int:
+    if port != DEFAULT_MONGO_PORT and port not in TEST_MONGO_PORTS:
+        raise ValueError("runtime Mongo port must be historical default 27128 or an owned test port 27281-27289")
+    return port
+
+
+def install_local_socket_guard(mongo_port: int = DEFAULT_MONGO_PORT) -> None:
     """Allow only the owned local MongoDB endpoint.
 
     The guard is installed before the application package is imported.  It is
@@ -321,7 +328,7 @@ def install_local_socket_guard() -> None:
             port_number = int(port)
         except (TypeError, ValueError):
             return False
-        return host == MONGO_HOST and port_number == MONGO_PORT
+        return host == MONGO_HOST and port_number == mongo_port
 
     def guarded_getaddrinfo(host: Any, port: Any, *args: Any, **kwargs: Any):
         if not allowed_host_port(host, port):
@@ -768,6 +775,7 @@ def make_fixture(
     database: Any,
     seeded: dict[str, Any],
     db_name: str,
+    mongo_port: int = DEFAULT_MONGO_PORT,
 ) -> dict[str, Any]:
     from bson import BSON
 
@@ -794,7 +802,7 @@ def make_fixture(
             "mail": "disabled",
             "optional_modules": "disabled",
             "translations": "not copied; passthrough/noop",
-            "network_guard": "only 127.0.0.1:27128",
+            "network_guard": f"only 127.0.0.1:{mongo_port}",
             "synthetic_config": "generated app/config.py; no production config read",
         },
         "database": {
@@ -866,7 +874,9 @@ def main() -> int:
         help="a directory under the approved disposable temp root",
     )
     parser.add_argument("--keep-temp", action="store_true")
+    parser.add_argument("--mongo-port", type=int, default=DEFAULT_MONGO_PORT)
     args = parser.parse_args()
+    mongo_port = validate_mongo_port(args.mongo_port)
 
     python_root = args.python_root.expanduser().resolve()
     output = resolve_output_path(args.output)
@@ -884,8 +894,8 @@ def main() -> int:
     db_owned = False
     try:
         provenance = copy_public_sources(python_root, temp_root)
-        write_synthetic_config(temp_root, db_name)
-        install_local_socket_guard()
+        write_synthetic_config(temp_root, db_name, mongo_port)
+        install_local_socket_guard(mongo_port)
         os.environ["APP_ROLE"] = "web"
         os.environ.pop("LOG_LEVEL", None)
         sys.path.insert(0, str(temp_root))
@@ -894,7 +904,7 @@ def main() -> int:
         from pymongo import MongoClient
 
         drop_client = MongoClient(
-            f"mongodb://{MONGO_HOST}:{MONGO_PORT}/",
+            f"mongodb://{MONGO_HOST}:{mongo_port}/",
             serverSelectionTimeoutMS=3000,
         )
         drop_client.admin.command("ping")
@@ -910,7 +920,7 @@ def main() -> int:
             db_owned = True
             seeded = seed_reference_data()
             fixture = make_fixture(
-                provenance, flask_app, database, seeded, db_name
+                provenance, flask_app, database, seeded, db_name, mongo_port
             )
 
         # Write the fixture only after the exact owned database has actually

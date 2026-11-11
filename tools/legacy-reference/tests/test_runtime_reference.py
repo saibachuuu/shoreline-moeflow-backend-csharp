@@ -187,6 +187,14 @@ class RuntimeReferenceFixtureTests(unittest.TestCase):
 
 
 class RuntimeGuardTests(unittest.TestCase):
+    def test_mongo_port_allows_default_and_owned_range_only(self) -> None:
+        self.assertEqual(runtime.validate_mongo_port(27128), 27128)
+        self.assertEqual(runtime.validate_mongo_port(27281), 27281)
+        self.assertEqual(runtime.validate_mongo_port(27289), 27289)
+        for port in (0, 27017, 27280, 27290, 29281, 65536):
+            with self.subTest(port=port), self.assertRaises(ValueError):
+                runtime.validate_mongo_port(port)
+
     def test_database_guard_rejects_mismatch_without_query(self) -> None:
         class Database:
             name = "shoreline_reference_" + "0" * 32
