@@ -62,11 +62,10 @@ already exists with different options.
 
 根因：迁移 0004 建 `project_member_identity_key_v1`（`{ik:1}` unique，无 partial filter，与 `app/models/project_member.py:40-46` 一致），而 `MongoStore.InitializeCoreAsync` 又用同名但带 `partialFilterExpression: {ik: {$type: "string"}}` 的定义重建；同一个集合的第二份定义触发 `IndexOptionsConflict`。同一处还有两个 `$exists` / `$type` 不一致：`project_member_project_user_v1`、`project_member_project_external_v1`。
 
-修复（`569be7b fix(schema): align identity index options with the legacy model`）：
+修复分两步：
 
-- `src/Shoreline.Api/Infrastructure/Migrations/M0004IdentityMembers.cs:378-383` 的 partial filter 从 `$exists` 改为 `$type`（与 mongoengine 定义一致）
-- `src/Shoreline.Api/Infrastructure/MongoStore.cs:94-97` 去掉 `project_member_identity_key_v1` 上多余的 partial filter
-- 新增 `tests/Shoreline.Tests/MongoStoreIndexCompatTests.cs`：先按 Python 的 options 建好三个索引，再跑 `MongoStore.InitializeAsync`，断言不抛且索引仍在
+1. `569be7b fix(schema): align identity index options with the legacy model` —— 把 `src/Shoreline.Api/Infrastructure/Migrations/M0004IdentityMembers.cs:378-383` 的 partial filter 从 `$exists` 改为 `$type`（与 mongoengine 定义一致），并新增 `tests/Shoreline.Tests/MongoStoreIndexCompatTests.cs`。
+2. `a8b46e9 fix(schema): reconcile legacy identity indexes instead of aborting startup` —— 迁移与 `MongoStore` 统一使用 `{"ik": {"$type": "string"}}`；`MongoStore` 新增 `EnsureIndexTolerantAsync`，遇到同名不同 options（code 85/86）时先 drop 再按 C# 的 options 重建，而不是让 `createIndexes` 打死进程。中间曾尝试完全照抄 Python 的无 partial 定义，实测 200 个用例因 `ik: null` 重复键失败，已回退并记录理由（见第 4 节）。
 
 修复后同一组命令：
 
@@ -78,7 +77,36 @@ already exists with different options.
 
 启动日志依次 `APPLIED 0001`…`APPLIED 0009`，然后 `Now listening on: http://[::]:8080`。
 
-## 4. 剩余待验证
+## 4. 接管 Python 现网库的冒烟
+
+空库能起来只证明一半；真正要验证的是「库里已经有 Python 建的同名索引」时 C# 能不能启动。为此在一次性 mongo 上先造出 mongoengine 的形态：
+
+```bash
+docker exec r4img-mongo mongo --quiet moeflow_takeover --eval \
+  'db.project_member.createIndex({ik:1},{unique:true,name:"project_member_identity_key_v1"})'
+```
+
+注意 `app/models/project_member.py:40-46` 给这个索引的 options 是 `{"unique": True}`，**没有** `partialFilterExpression`；而 `src/Shoreline.Api/Infrastructure/MongoStore.cs` 要的是带 `{"ik": {"$type": "string"}}` 的版本。两者名字相同、options 不同，MongoDB 会直接拒绝。
+
+结果（镜像 `r4img-d:fix`，`Migrations__Mode=apply`）：
+
+```
+/ping         -> 200 pong
+/health/live  -> 200 {"status":"ok"}
+/health/ready -> 200 {"status":"ok"}
+
+identity index after boot:
+{ "unique": true, "key": {"ik": 1}, "name": "project_member_identity_key_v1",
+  "partialFilterExpression": {"ik": {"$type": "string"}} }
+```
+
+即 `MongoStore.EnsureIndexTolerantAsync` 捕获 `IndexOptionsConflict`（code 85/86）、丢弃同名索引、按 C# 的 options 重建，启动继续。
+
+### 为什么 C# 保留 partial filter 而不是照抄 Python
+
+`ik` 在 Python 侧是 `StringField(required=True)`，mongoengine 保证每行都有值，所以无 partial 的唯一索引能成立。C# 的写入路径与测试夹具并非都写 `ik`，去掉 partial 后同一集合里多条 `ik: null` 直接触发 `E11000 duplicate key`（实测 200 个用例失败）。保留 `{"$type": "string"}` 的语义是「凡是字符串形态的 ik 必须唯一」，对符合 Python 模型的数据与无 partial 等价，对缺失 ik 的历史行则放行。差异已记录在 `docs/storage-contract.md` 与 `docs/migration-parity.md`。
+
+## 5. 剩余待验证
 
 - 真实 R2 / 真实 SMTP 的端到端 walkthrough（需要凭证，本机不执行）
 - 从 Python 现网库接管：索引已由 mongoengine 建好，C# 启动不再重建冲突（由上面的测试覆盖）；迁移 0004 的 7 个 parity 修复见 `docs/migration-parity.md`
