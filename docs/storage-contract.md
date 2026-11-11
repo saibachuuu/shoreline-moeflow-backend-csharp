@@ -88,3 +88,47 @@ C# 直接 409（`FileTests.cs:286-291` 已把该行为锁死）。也就是说�
 - 百 MB 级以上大文件上传（GAP-2 的另一半）。
 - 阿里云 oss2 分支（C# 不支持，fail-fast；见 GAP-6）。
 - `copy_object` 跨桶/跨服务商（Python 明确只支持同桶，阶段 3 才用 `S3Transfer`；C# 同为同桶语义）。
+
+## 9. 真实 Cloudflare R2 实测（2026-11-11 夜，`7d77d3f`）
+
+用 WSL `moeflow-deploy` 现有 R2 凭证（`Storage:BucketStyle=R2`、`PathStyle=true`、`Region=auto`）跑了一次真实写入/读取。所有对象写在**独立前缀** `_csharp-verify-20261111-225841/` 下，不触碰任何历史对象；完整清单在 `docs/r2-live-verify-manifest-20261111.txt`。
+
+### 9.1 发现：R2 拒绝 aws-chunked 负载签名
+
+`PutObjectAsync` 与 `TransferUtility.UploadAsync` 默认对请求体使用
+`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` 签名，R2 直接返回：
+
+```
+Amazon.S3.AmazonS3Exception : STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented
+```
+
+1 KB 与 20 MB 均复现。s3mock 接受该签名，因此本地测试全绿、真实 R2 全红。
+
+### 9.2 修法
+
+- 单次 PUT：`PutObjectRequest.UseChunkEncoding = false`（长度已知时走普通签名）。
+- 大文件：不再用 `TransferUtility`，改为手写 `InitiateMultipartUploadAsync` → `UploadPartAsync`（每个 part `UseChunkEncoding = false`）→ `CompleteMultipartUploadAsync`，异常时 `AbortMultipartUploadAsync`。
+- 阈值仍为 16 MB、part 16 MB，与 Python `upload_fileobj` 的分片行为一致。
+
+### 9.3 验证结果
+
+| 用例 | 大小 | Put | Head | Get | 7 天签名 URL 下载 | SHA-256 一致 |
+|---|---|---|---|---|---|---|
+| 小文件 | 1 KB | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 大文件（手动 multipart） | 20 MB | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 前缀列举 | — | — | — | — | — | ✅ |
+
+复跑方式（可选，需显式环境变量）：
+
+```powershell
+# 从 WSL 现有容器导出 OSS_* 到临时 env 文件后：
+dotnet test tests\Shoreline.Tests\Shoreline.Tests.csproj -c Release --filter 'FullyQualifiedName~R2LiveVerify'
+```
+
+测试在 `OSS_ENDPOINT` 缺失时直接返回（不算跳过也不算失败），因此常规全量不受影响。
+
+### 9.4 遗留
+
+- 未做 >100 MB 与并发分片压测；未验证断点续传（与 Python 同：均不支持续传）。
+- 凭据仅从 WSL 容器读取，未写入仓库、未打印到日志。
+- 清理：按 `docs/r2-live-verify-manifest-20261111.txt` 的 key 逐个 `DeleteObject` 即可，前缀内无其他对象。
