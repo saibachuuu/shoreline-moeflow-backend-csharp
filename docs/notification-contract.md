@@ -28,7 +28,8 @@ Python oracle：`shoreline-moeflow-backend`；C# 实现：本 worktree。
 
 ## 待确认（需求不明确）
 
-- [ ] G1：Mailpit 真实投递数量断言。当前 `Scan_ConcurrentScansDeliverExactlyOnce` 用 fake transport 精确计数；生产 MailKit 传输要求 STARTTLS，而一次性 Mailpit 无 TLS（`docs/notification-mail-gate-readiness.md:121-129` 同结论）。若任务要求 Mailpit 真实投递，需要 TLS 方案或测试专用放宽——标**待确认**。
+- [x] G1（已关闭）：Mailpit 真实投递。Python 通知路径就是**强制** STARTTLS（`app/services/notification_mail.py:72-83`，`starttls()` 无 try/except），所以「一次性 Mailpit 投递失败」是忠实复刻。新增 `Mail:SecureSocketOptions` 显式 opt-out（`4d87c2e`）后，测试可用 `None` 对 Mailpit 真实投递并断言收件数（`NotificationMailTlsTests` 12/12）；默认行为零变化。
+- 附：验证码邮件路径不同——Python `app/tasks/email.py:99-104` 是**机会式** STARTTLS（只吞 `SMTPNotSupportedError`），C# 已改为 `StartTlsWhenAvailable`（`71eebb6`，`SecurityEmailTlsTests` 5/5）。两条路径的差异是 legacy 事实，不要统一。
 - [ ] G2：`同一 target 的聚合（更新 vs 新增）`——Python 无“同一事件更新已有通知”语义（幂等键相同内容复用、不同内容 409；重复 dispatch 只补回执）。若“聚合”指别的（如同类通知合并计数），无 oracle 对应——标**待确认**（`app/services/notifications.py:502-535`）。
 - [ ] G3：个人通知（`personal`）端到端：仅内部受信来源可发，无 HTTP 入口（`notifications.py:875-885`）。本次未覆盖 `PublishPersonalAsync` 的真实来源注册——标**待确认**是否需要。
 
