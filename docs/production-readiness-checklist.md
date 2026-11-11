@@ -54,7 +54,7 @@
 2. **授权矩阵仍缺写/管理端点的系统覆盖**：读门 4 例 + 写门 5 例已固化，项目成员/邀请/申请/文件标签/团队管理 × 身份的扩展用例在 `agents/r3-authz-extend-20261111` 收尾中。
 3. **真实 R2 / SMTP+TLS 未验收**（按约定不读生产凭证）；通知邮件 TLS 策略已与 Python 对齐并新增显式 `Mail:SecureSocketOptions` opt-out（`4d87c2e`），但 TLS 证书/中继认证仍只能在真实 SMTP 上验证。
 4. **RabbitMQ 排空演练未做**；MIT 桥未与真实 worker 联调。
-5. **镜像 digest/可复现构建**在本轮新增依赖后未复验；限流/XFF、load/soak 仍空白（Python 老版亦无压测基线，属同等水平）。
+5. **镜像 digest/可复现构建**在本轮新增依赖后未复验（层 ID 一致、ImageID 需 buildx ≥ 0.14）；限流/XFF 已有 `AuthRateLimitTests` 与 `TrustedProxyTests` 覆盖、未走真实边缘 IP 链路；load/soak 仍空白（Python 老版亦无压测基线，属同等水平）。
 
 ## 测试机生产形状部署（2026-11-10，历史证据）
 
