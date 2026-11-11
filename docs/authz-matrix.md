@@ -251,6 +251,8 @@ team `member` 只有 ACCESS，连 term-bank 列表都不可见。
 | `AuthzMemberFileGateTests.cs` | §4 bind/merge/hard-delete；§5 文件改名/移动/删除；§7 输出创建 | `ProjectMemberBind_RequiresManager`, `ProjectMemberMerge_RequiresManager`, `ProjectMemberHardDelete_RequiresOwnerOrTeamCreator`, `FileRenameMoveDelete_RequireFilePermissions`, `ProjectOutputsPost_RequiresOutputPermission` |
 | `AuthzJoinAdminGateTests.cs` | §8 邀请、§9 申请、§11 terms、§10 管理员 | `ProjectInvitations_MutationGates`, `TeamInvitations_ListAndCreateGates`, `ProjectApplications_FlowGates`, `ProjectApplications_DeleteOnlyByApplicant`, `TeamApplications_ListRequiresCheckUser`, `Terms_MutationGates`, `AdminEndpoints_RequireSiteAdmin` |
 | `AuthzTailGateTests.cs` | §8 PUT 邀请角色层级、§6 快照恢复/合并/clear/recover 门、§10 admin-status 配置 owner 门 | `InvitationsPut_TeamRoleHierarchy_OwnerRaises_AdminCannotRaisePeer_TranslatorDenied`, `InvitationsPut_ProjectTagsRequireInviteUser`, `Snapshots_RestoreRequiresManager_MergeRequiresProofreadTriple`, `LabelClear_ProofreadVsFullGates_RecoverRequiresManager`, `AdminStatus_OnlyConfiguredOwnerMayGrant_BannedOwnerDenied` |
+| `AuthzCapabilityMatrixTests.cs` | §6 三动作 × 七角色完整矩阵（owner / project-admin / proofreader / translator / teamMember / stranger / banned，另加 anon / siteAdmin 参照行） | `LabelClear_FullCapabilityMatrix`, `LabelMerge_FullCapabilityMatrix`, `LabelRecover_FullCapabilityMatrix` |
+| `AuthzConcurrencyTests.cs` | §4 成员信封并发窗口（`Task.WhenAll` 双打） | `ConcurrentMemberUpdate_OneWinner_NoLostUpdateOrDuplicates`, `ConcurrentAddSameStranger_OnlyOneWins_LoserGetsBusinessError` |
 
 ## 15. 已知差异（Known differences — C# 现行行为，测试按此断言）
 
@@ -271,3 +273,19 @@ team `member` 只有 ACCESS，连 term-bank 列表都不可见。
   文件 `MOVE/RENAME/DELETE_FILE` 分字段门、输出 `OUTPUT_TRA` 先于 `type`
   校验、邀请/申请的 `INVITE_USER/CHECK_USER`/仅本人门、terms 的
   `ACCESS/CHANGE/DELETE_TERM*` 门，均与 Python oracle 一致，无需 `TODO(parity)`。
+- D-4（并发观察，非缺陷）：`ConcurrentMemberUpdate` 双打下恰好一个 200、
+  另一个 409/5108（`ProjectMemberVersionConflictError`），终态单行、版本号 +1、
+  无合并写入；`ConcurrentAddSameStranger` 双打下恰好一个 200、另一个
+  409/5106（`MemberAlreadyExistsError`），终态单行 active。进程内
+  `InvitationMutationGate` 把同项目 add 串行化（loser 走重读后 `AlreadyExists`）；
+  唯一索引 `(project, user)` / `ik` 是跨进程 backstop。若多进程真并发同时穿过
+  `existing is null` 检查，loser 的 `InsertOneAsync` 抛 `MongoWriteException`
+  （DuplicateKey）会被 `ApplyChangesAsync` 的通用 `catch (Exception)` 以
+  400/`INVALID_REQUEST`（`error_code` 为 null）吞掉，而非 409/5106——单后端测试
+  环境无法触发，未修（修了也验证不了）；多写进程部署前值得加一个
+  DuplicateKey → AlreadyExists 的最小映射。
+- D-5（用例修正记录，非服务端缺陷）：初版 `ConcurrentMemberUpdate` 用 tags
+  双打， bilateral 422/5102（`TeamQualificationRequiredError`）——目标用户无团队
+  工作人员资格时，manager 指派 worker tag 同样拒绝（Python
+  `identity_permission.py:599-617`，两端一致）。改测 display_name 后 CAS 窗口
+  行为符合预期。
