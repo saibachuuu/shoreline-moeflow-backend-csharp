@@ -160,9 +160,11 @@ public sealed class ZitengPartnerClient(
             {
                 throw new ZitengPartnerApiException("请求超时");
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException exception)
             {
-                throw new ZitengPartnerApiException("请求失败: 网络错误");
+                // Keep the transport cause (for example the public-network
+                // guard rejection) for diagnostics; only Message is user-visible.
+                throw new ZitengPartnerApiException("请求失败: 网络错误", exception);
             }
 
             using (response)

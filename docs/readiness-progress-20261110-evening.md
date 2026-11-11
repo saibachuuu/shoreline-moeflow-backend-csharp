@@ -125,3 +125,25 @@ or a reliable count of product failures. Compose stopped only this run's S3/Mail
 and confirmed the test Mongo exited; the running user stack remained up. Do not
 retry before power-off. A later run needs a larger dedicated Mongo memory budget and
 must preserve full TRX output.
+
+## Ziteng SSRF guard (2026-11-11, this worktree)
+
+- Phase 1 `ac71020` extracted the archive-import connection-time DNS/IP guard
+  into `src/Shoreline.Api/Infrastructure/PublicNetworkGuard.cs` and migrated
+  `ArchiveImportTransport` to it with identical semantics (archive host label
+  preserved); added `PublicNetworkGuardTests` (29 cases, Mongo-free).
+- Phase 2 wired the Ziteng typed-client handler to the same guard
+  (`ZitengPartnerRegistration`, redirects stay disabled, HTTPS config
+  validation unchanged) and preserved the transport `HttpRequestException` as
+  `InnerException` of `ZitengPartnerApiException("请求失败: 网络错误")`
+  (user-visible message unchanged; service persists/logs only `Message`).
+  Added `ZitengPartnerSsrfTests` (5 cases, Mongo-free): the real
+  DI-registered handler rejects `127.0.0.1`/`10/8`/`192.168/16`/`::1` HTTPS
+  targets with the guard message before any socket opens, so the Bearer key
+  can never be sent there; no test contacts a real external host.
+- `dotnet build Shoreline.sln --nologo`: 0 warnings / 0 errors.
+  Focused `dotnet test --filter "FullyQualifiedName~ZitengPartnerSsrfTests|
+  FullyQualifiedName~PublicNetworkGuardTests"`: **34/34 passed**.
+  Checklist SSRF row moved to 部分验证 with residual limits (other outbound
+  paths still need source + HTTP/connection review). Full suite was not run
+  here; no full-suite claim is made. `git diff --check` clean.

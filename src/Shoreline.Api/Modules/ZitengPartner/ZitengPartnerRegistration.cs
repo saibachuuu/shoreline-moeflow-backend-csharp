@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using Shoreline.Api.Features;
+using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Jobs;
 
 namespace Shoreline.Api.Modules.ZitengPartner;
@@ -28,6 +29,9 @@ public static class ZitengPartnerRegistration
                 AutomaticDecompression = DecompressionMethods.All,
                 ConnectTimeout = TimeSpan.FromSeconds(20),
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                // Same connection-time DNS rebinding guard as archive import:
+                // a configured private HTTPS destination can never receive the Bearer API key.
+                ConnectCallback = (context, ct) => PublicNetworkGuard.ConnectAsync(context, ct, "合作方主机"),
             });
         services.AddTransient<ZitengPartnerService>();
         services.AddTransient<ZitengPartnerProjectCreatedNotifier>();
