@@ -2,6 +2,7 @@ using System.Linq;
 using System.Text.Json;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Shoreline.Api.Formats;
 using Shoreline.Api.Infrastructure;
 using Shoreline.Api.Security;
 
@@ -601,7 +602,7 @@ public sealed class InvitationService(
             ["operator"] = operatorDoc is null ? BsonNull.Value
                 : BsonDocument.Parse(JsonSerializer.Serialize(await userView.ToApiAsync(operatorDoc, ctx))),
             ["create_time"] = invitation.GetValue("c", BsonNull.Value) is BsonDateTime created
-                ? created.ToString() : invitation.Text("c"),
+                ? PythonValue.Iso(created) : invitation.Text("c"),
             ["status"] = (int)invitation.Integer("s")
         };
     }

@@ -16,7 +16,7 @@ public static class BsonApi
         BsonType.Double => value.AsDouble,
         BsonType.Decimal128 => Decimal128.ToDecimal(value.AsDecimal128),
         BsonType.ObjectId => value.AsObjectId.ToString(),
-        BsonType.DateTime => value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.ffffff", System.Globalization.CultureInfo.InvariantCulture),
+        BsonType.DateTime => Formats.PythonValue.Iso(value.AsBsonDateTime),
         _ => throw new InvalidOperationException("Unsupported API BSON type")
     };
 }
