@@ -59,6 +59,20 @@ then stop the old pair. Never run old + new workers against the same
 database longer than the cutover window (Mongo leases make it safe, but two
 consumers double-claim and spam `owner` churn).
 
+**Two api replicas booting together**: the second one exits instead of waiting —
+`MigrationException: Another instance holds the migration lock. If no migration
+is running, the previous run left a lease that expires within 30 minutes; wait
+for it or clear the 'migrate' document in the migration_lock collection.` This
+is deliberate parity with `app/migrations/runner.py:288-299`, which raises the
+same message. Practically: with `restart: unless-stopped` the second replica
+crashes, restarts, finds the records already applied and comes up clean — but to
+avoid the churn, start one api with `MIGRATIONS_MODE=apply`, wait for
+`/health/ready` = 200, then scale the rest with `MIGRATIONS_MODE=check`.
+Measured on 2026-11-11 with two containers on one empty database: replica 1
+applied 0000–0009 in 594 ms total and served 200; replica 2 exited with the
+message above; `migration_record` held exactly 10 rows.
+
+
 ## 2. Rollback
 
 Prefer image rollback; the database needs attention only when downgrading
