@@ -457,6 +457,96 @@ public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDispo
         Assert.Null(await storage.HeadAsync(CoverKey(save), ct));
     }
 
+    [Fact]
+    public async Task JobRecovery_AbandonedLeaseReclaimedAndConverges()
+    {
+        var project = await ProjectAsync();
+        var save = Save("recovery.jpg");
+        var file = await FileAsync(project, save);
+        await PutAsync(Storage(), $"files/{save}", ImageBytes(1200, 800, MagickFormat.Jpeg));
+        var service = Service(Storage());
+        var payload = await ScheduleAndPayloadAsync(service, file, project);
+        var jobId = (await LatestJobAsync(file))["_id"].AsObjectId;
+        var queue = new JobQueue(services.Store, TimeProvider.System);
+
+        // Other tests in this collection schedule thumbnail jobs they never
+        // claim; drain the queue until this test's own job is claimed. State
+        // changes on abandoned rows are invisible to those tests (they only
+        // read by file id ordered by creation time).
+        BsonDocument? first = null;
+        for (var i = 0; i < 100 && first is null; i++)
+        {
+            var candidate = await queue.ClaimAsync("owner-a", [ThumbnailService.JobKind], ct);
+            if (candidate is null) break;
+            if (candidate["_id"].AsObjectId == jobId) first = candidate;
+        }
+        Assert.NotNull(first);
+        await service.RunAsync(payload, first["attempts"].AsInt32, ct);
+        Assert.Equal(ThumbnailService.ThumbnailSucceeded, (await LoadFileAsync(file)).Integer("th"));
+
+        // Crash: the process dies after the business write but before the
+        // queue Complete. Abandon the lease so another worker can reclaim it.
+        await services.Store.Collection("csharp_job").UpdateOneAsync(
+            new BsonDocument("_id", first["_id"].AsObjectId),
+            new BsonDocument("$set", new BsonDocument("lease_until", DateTime.UtcNow.AddMinutes(-1))));
+        var second = await queue.ClaimAsync("owner-b", [ThumbnailService.JobKind], ct);
+        if (second is null || second["_id"].AsObjectId != jobId)
+        {
+            // Another abandoned job from this collection may sort earlier;
+            // keep reclaiming until this test's own job is redelivered.
+            second = null;
+            for (var i = 0; i < 100 && second is null; i++)
+            {
+                var candidate = await queue.ClaimAsync("owner-b", [ThumbnailService.JobKind], ct);
+                if (candidate is null) break;
+                if (candidate["_id"].AsObjectId == jobId) second = candidate;
+            }
+        }
+        Assert.NotNull(second);
+        Assert.Equal(2, second["attempts"].AsInt32);
+        await service.RunAsync(payload, second["attempts"].AsInt32, ct);
+        await queue.CompleteAsync(second["_id"].AsObjectId, "owner-b", ct);
+
+        var row = await LoadFileAsync(file);
+        Assert.Equal(ThumbnailService.ThumbnailSucceeded, row.Integer("th"));
+        var covers = await Storage().ListAsync(
+            "files/cover-" + Path.GetFileNameWithoutExtension(save), null, 100, ct);
+        Assert.Single(covers.Objects, item => item.Key == CoverKey(save));
+        var resamples = await Storage().ListAsync(
+            "files/resample-" + Path.GetFileNameWithoutExtension(save), null, 100, ct);
+        Assert.Single(resamples.Objects, item => item.Key == ResampleKey(save));
+        var staging = await Storage().ListAsync(
+            "files/.thumbnail-staging/" + payload["run_id"].AsString, null, 100, ct);
+        Assert.Empty(staging.Objects);
+        var storedProject = await LoadProjectAsync(project);
+        Assert.Equal(row["cover_bytes"].ToInt64(), storedProject["cover_bytes"].ToInt64());
+        Assert.Equal(row["resample_bytes"].ToInt64(), storedProject["resample_bytes"].ToInt64());
+        Assert.Equal("done", (await LatestJobAsync(file)).Text("state"));
+    }
+
+    [Fact]
+    public async Task JobRecovery_ConcurrentDuplicateRunsAfterSuccessConverge()
+    {
+        var project = await ProjectAsync();
+        var save = Save("concurrent.jpg");
+        var file = await FileAsync(project, save);
+        await PutAsync(Storage(), $"files/{save}", ImageBytes(1200, 800, MagickFormat.Jpeg));
+        var service = Service(Storage());
+        var payload = await ScheduleAndPayloadAsync(service, file, project);
+        await service.RunAsync(payload, 1, ct);
+        Assert.Equal(ThumbnailService.ThumbnailSucceeded, (await LoadFileAsync(file)).Integer("th"));
+
+        await Task.WhenAll(
+            service.RunAsync(payload, 2, ct),
+            service.RunAsync(payload, 2, ct));
+
+        var row = await LoadFileAsync(file);
+        Assert.Equal(ThumbnailService.ThumbnailSucceeded, row.Integer("th"));
+        var covers = await Storage().ListAsync(
+            "files/cover-" + Path.GetFileNameWithoutExtension(save), null, 100, ct);
+        Assert.Single(covers.Objects, item => item.Key == CoverKey(save));
+    }
+
     public void Dispose()
     {
         foreach (var root in _tempRoots)

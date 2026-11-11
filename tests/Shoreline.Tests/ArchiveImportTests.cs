@@ -479,6 +479,70 @@ public sealed class ArchiveImportTests(LocalServices services)
     }
 
     [Fact]
+    public async Task RunReplayAfterSuccess_DoesNotReupload()
+    {
+        await using var harness = await Harness.CreateAsync(services);
+        harness.Transport.Zip = Zip(("images/a.jpg", A), ("images/b.jpg", B));
+        await harness.CreateTaskAsync();
+
+        await harness.RunAsync();
+        Assert.Equal(["a.jpg", "b.jpg"], harness.Uploader.Names);
+
+        // Redelivery of the same job after terminal success is a no-op:
+        // no second upload per entry, status stays terminal.
+        await harness.RunAsync();
+
+        Assert.Equal(["a.jpg", "b.jpg"], harness.Uploader.Names);
+        var task = await harness.LatestAsync();
+        Assert.Equal(5, (int)task.Integer("s"));
+        Assert.Equal(2, (int)task.Integer("c"));
+    }
+
+    [Fact]
+    public async Task RunConcurrentDuplicates_LoserGetsRetryableErrorAndRetryConverges()
+    {
+        await using var harness = await Harness.CreateAsync(services);
+        harness.Transport.Zip = Zip(("images/a.jpg", A), ("images/b.jpg", B), ("images/c.jpg", C));
+        await harness.CreateTaskAsync();
+
+        // Pin the winner inside its first upload so the loser deterministically
+        // races it while the task claim is held.
+        var winnerEnteredUpload = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseWinner = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.Uploader.Error = (index, _) =>
+        {
+            if (index == 0)
+            {
+                winnerEnteredUpload.SetResult();
+                releaseWinner.Task.GetAwaiter().GetResult();
+            }
+            return null;
+        };
+
+        var winner = harness.RunAsync();
+        await winnerEnteredUpload.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The loser observes the busy claim as a retryable error — never a
+        // duplicate upload — so the queue can redeliver it later.
+        var loser = await Attempt(harness.RunAsync);
+        Assert.False(loser.Success);
+        Assert.IsType<ArchiveRetryException>(loser.Error);
+
+        releaseWinner.SetResult();
+        await winner;
+
+        // The retry converges: completed entries are resumed past, the rest
+        // upload, terminal state is reached exactly once.
+        harness.Uploader.Error = null;
+        await harness.RunAsync();
+
+        var task = await harness.LatestAsync();
+        Assert.Equal(5, (int)task.Integer("s"));
+        Assert.Equal(3, (int)task.Integer("c"));
+        Assert.Equal(["a.jpg", "b.jpg", "c.jpg"], harness.Uploader.Names);
+    }
+
+    [Fact]
     public async Task DismissOnlyTouchesNonRunningRows()
     {
         await using var harness = await Harness.CreateAsync(services);
