@@ -222,7 +222,18 @@ public sealed class StoragePoolSourceService
     {
         var row = await Sources.Find(new BsonDocument("_id", BsonFields.Id(id))).FirstOrDefaultAsync(ct)
             .ConfigureAwait(false) ?? throw Missing();
-        await ProbeAsync(row, ct).ConfigureAwait(false);
+        try
+        {
+            await ProbeAsync(row, ct).ConfigureAwait(false);
+        }
+        catch (ApiError error)
+        {
+            // Legacy contract (storage_pool api.SourceTestAPI): a failed probe is
+            // reported in-band as HTTP 200 {"ok": false, "message": ...} so the
+            // admin console can show the probe message verbatim. Only the probe
+            // result is swallowed here; a missing source still 404s.
+            return new BsonDocument { ["ok"] = false, ["message"] = error.Message };
+        }
         return new BsonDocument { ["ok"] = true, ["message"] = "存储来源连接正常" };
     }
 

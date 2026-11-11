@@ -33,7 +33,15 @@ internal static class StoragePoolTransferView
             ["id"] = StoragePoolBson.ObjectId(transfer, "_id")?.ToString() ?? "",
             ["project"] = RefView(project),
             ["source"] = RefView(source),
-            ["target_source"] = direction == StoragePoolConstants.DirectionMove ? RefView(target) : BsonNull.Value,
+            // Legacy models.StorageTransfer.to_api(): MOVE uses the stored target,
+            // IN falls back to the source (the destination of a migration), OUT
+            // has no target. The admin console renders this ref verbatim.
+            ["target_source"] = direction switch
+            {
+                StoragePoolConstants.DirectionMove => RefView(target),
+                StoragePoolConstants.DirectionIn => RefView(source),
+                _ => BsonNull.Value,
+            },
             ["status"] = StoragePoolBson.Int(transfer, "st"),
             ["status_name"] = StoragePoolConstants.StatusName(StoragePoolBson.Int(transfer, "st")),
             ["direction"] = direction,

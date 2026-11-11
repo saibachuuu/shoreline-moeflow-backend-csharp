@@ -48,25 +48,29 @@ public static class StoragePoolConstants
     public static bool IsActive(int status) => status is Pending or Copying or Verified or Switched;
     public static bool IsRetryable(int status) => status is Failed or Aborted;
 
+    // Legacy TransferStatus.details / TransferDirection.details names. The admin
+    // console renders status_name and direction_name verbatim (no i18n mapping),
+    // so these stay the Chinese display strings the Python module returned, and
+    // an unknown value falls back to "" exactly like get_detail_by_value does.
     public static string StatusName(int status) => status switch
     {
-        Pending => "pending",
-        Copying => "copying",
-        Verified => "verified",
-        Switched => "switched",
-        Done => "done",
-        Failed => "failed",
-        Aborted => "aborted",
-        Cancelled => "cancelled",
-        _ => "unknown",
+        Pending => "待执行",
+        Copying => "搬运中",
+        Verified => "已校验",
+        Switched => "已切换",
+        Done => "已完成",
+        Failed => "失败",
+        Aborted => "已中止",
+        Cancelled => "已取消",
+        _ => "",
     };
 
     public static string DirectionName(int direction) => direction switch
     {
-        DirectionIn => "in",
-        DirectionOut => "out",
-        DirectionMove => "move",
-        _ => "unknown",
+        DirectionIn => "迁入存储池",
+        DirectionOut => "回迁到默认存储",
+        DirectionMove => "转到其他来源",
+        _ => "",
     };
 
     internal static string KindForKey(string key, StoragePoolPrefixes prefixes)

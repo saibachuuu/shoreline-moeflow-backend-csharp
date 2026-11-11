@@ -48,7 +48,9 @@ public static class StoragePoolEndpoints
         {
             await current.RequireAdminAsync(context, ct);
             await sources.DeleteAsync(sourceId, ct);
-            return new { deleted = true };
+            // Legacy contract returns {"message": "已删除"}; the deleted flag is
+            // kept as an additive field for callers written against this port.
+            return new { message = "已删除", deleted = true };
         });
 
         group.MapPost("/sources/{sourceId}/test", async (string sourceId, HttpContext context, CurrentUser current,
@@ -174,7 +176,7 @@ public static class StoragePoolEndpoints
 
     private static async Task<JsonElement> OptionalBodyAsync(HttpRequest request, CancellationToken ct)
     {
-        if (request.ContentLength == 0) return default;
+        if (request.ContentLength is null or 0) return default;
         try
         {
             using var document = await JsonDocument.ParseAsync(request.Body, cancellationToken: ct);
@@ -182,7 +184,10 @@ public static class StoragePoolEndpoints
         }
         catch (JsonException)
         {
-            return default;
+            // Legacy get_json(silent=False) rejects an unparsable body with HTTP
+            // 400 instead of silently running the action with its defaults (the
+            // lock/scan endpoints are the only ones that tolerate an absent body).
+            throw ApiError.Invalid("请求体不能为空");
         }
     }
 }
