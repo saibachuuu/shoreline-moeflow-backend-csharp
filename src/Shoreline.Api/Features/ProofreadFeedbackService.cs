@@ -88,7 +88,7 @@ public sealed partial class ProofreadFeedbackService(
 
         var snapshot = await permissions.ProjectSnapshotAsync(actor, project, ct);
         if (!snapshot.Has("project:PROOFREAD_TRA"))
-            throw new ApiError("NoPermissionError", 103, "您没有校对权限，无法寄送校对稿", 403);
+            throw new ApiError("NoPermissionError", 103, "您没有校对权限，无法寄送校对稿");
 
         var (ccMyself, fileId) = ParseBody(data);
         ObjectId? targetFileId = null;
@@ -139,7 +139,7 @@ public sealed partial class ProofreadFeedbackService(
         }
         await ResolveOriginalUrlsAsync(pages, ct);
         if (pages.Count == 0)
-            throw new ApiError("ProofreadDraftNoChangesError", 4025, "当前目标语言没有可寄送的校对修改");
+            throw new ApiError("ProofreadDraftNoChangesError", 4030, "当前目标语言没有可寄送的校对修改");
 
         var currentEmail = actor.Text("e").Trim().ToLowerInvariant();
         var toEmails = await TranslatorEmailsAsync(projectKey, ct);
@@ -171,7 +171,7 @@ public sealed partial class ProofreadFeedbackService(
                     toEmails.Add(currentEmail);
                     ccEmails.Clear();
                 }
-                else throw new ApiError("NoTranslatorMemberError", 4026, "项目没有可接收校对稿的翻译成员");
+                else throw new ApiError("NoTranslatorMemberError", 4031, "项目没有可接收校对稿的翻译成员");
             }
             foreach (var page in pages)
                 page.MarkedImageUrl = await RenderPageAsync(project, page, markerEnabled, opacity, ct);
@@ -202,7 +202,7 @@ public sealed partial class ProofreadFeedbackService(
         }
 
         if (toEmails.Count == 0)
-            throw new ApiError("NoTranslatorMemberError", 4026, "项目没有可接收校对稿的翻译成员");
+            throw new ApiError("NoTranslatorMemberError", 4031, "项目没有可接收校对稿的翻译成员");
 
         var pending = PendingPayload(siteName, project, targetLanguageName, actor.Text("n"), currentEmail,
             SendTime(), totalChanged, totalTips, pages, projectUrl, currentEmail, markerEnabled, opacity);
@@ -243,7 +243,7 @@ public sealed partial class ProofreadFeedbackService(
         catch (ApiError error) when (error.Error == NotificationErrors.ErrorName &&
                                      error.Message == "没有符合条件的接收人")
         {
-            throw new ApiError("NoTranslatorMemberError", 4026, "项目没有可接收校对稿的翻译成员");
+            throw new ApiError("NoTranslatorMemberError", 4031, "项目没有可接收校对稿的翻译成员");
         }
 
         await ReceiptRows.UpdateOneAsync(

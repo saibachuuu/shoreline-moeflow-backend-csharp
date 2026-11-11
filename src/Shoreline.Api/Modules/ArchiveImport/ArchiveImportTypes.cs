@@ -1,5 +1,6 @@
 using System.Globalization;
 using MongoDB.Bson;
+using Shoreline.Api.Security;
 
 namespace Shoreline.Api.Modules.ArchiveImport;
 
@@ -67,7 +68,7 @@ public sealed class ArchiveImportOptions
         return new ArchiveImportOptions
         {
             ProviderApiUrl = archive["ProviderApiUrl"] ?? configuration["ARCHIVE_PROVIDER_API_URL"] ?? "",
-            AllowedHosts = archive.GetSection("AllowedHosts").Get<string[]>() ?? Array.Empty<string>(),
+            AllowedHosts = ExternalApiUrl.ReadArchiveAllowedHosts(configuration),
             MaxZipBytes = ReadLong(configuration, "Archive:MaxZipBytes", "ARCHIVE_MAX_ZIP_BYTES", DefaultMaxZipBytes, legacyInMegabytes: true),
             MaxUncompressedBytes = ReadUncompressedBytes(configuration),
             MaxEntries = (int)Math.Min(int.MaxValue,

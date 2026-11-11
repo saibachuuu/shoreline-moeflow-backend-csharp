@@ -50,16 +50,15 @@ public static class ZitengPartnerEndpoints
     }
 
     /// <summary>
-    /// Every module route maps a missing project permission to 403 (the Python
-    /// message is kept). The shared <c>ApiError.Forbidden()</c> carries the same
-    /// code but its legacy default status is 400, so state the status here.
+    /// Missing project permission maps to the legacy default status 400 (Python
+    /// <c>APIException</c> has no per-error status), like the rest of the API.
     /// </summary>
     private static async Task RequireProjectAccessAsync(BsonDocument actor, BsonDocument project,
         IdentityPermissions permissions, CancellationToken ct)
     {
         if (!IdentityPermissions.CanProject(await permissions.ProjectSnapshotAsync(actor, project, ct), project,
                 "project:ACCESS"))
-            throw new ApiError("NoPermissionError", 103, "您没有此项目的访问权限", 403);
+            throw new ApiError("NoPermissionError", 103, "您没有此项目的访问权限");
     }
 
     private static async Task<object> GetConfigAsync(HttpContext context, CurrentUser current,

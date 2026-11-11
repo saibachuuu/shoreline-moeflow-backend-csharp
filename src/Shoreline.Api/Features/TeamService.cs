@@ -175,7 +175,7 @@ public sealed class TeamService(MongoStore store, TeamMemberService members, Ide
         if (data.TryGetProperty("archive_api_url", out var url))
         {
             var value = url.ValueKind == JsonValueKind.Null ? "" : data.RequiredText("archive_api_url", 512).Trim();
-            try { changes["aau"] = value.Length == 0 ? "" : ExternalApiUrl.Normalize(value, configuration.GetSection("Archive:AllowedHosts").Get<string[]>() ?? []); }
+            try { changes["aau"] = value.Length == 0 ? "" : ExternalApiUrl.Normalize(value, ExternalApiUrl.ReadArchiveAllowedHosts(configuration)); }
             catch (ArgumentException error) { throw new ApiError("ValidateError", 2, error.Message); }
         }
         if (changes.ElementCount == 0) throw new ApiError("RequestDataEmptyError", 110, "请求数据为空");

@@ -50,6 +50,35 @@ public sealed class ArchiveImportOptionsLegacyEnvironmentTests
         Assert.Equal(3L * 1024 * 1024, options.MaxUncompressedBytes);
     }
 
+    [Fact]
+    public void LegacyAllowedHostsEnvIsHonored()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ARCHIVE_PROVIDER_API_ALLOWED_HOSTS"] = "Example.COM., sub.example.org ,",
+        });
+
+        var options = ArchiveImportOptions.From(configuration);
+
+        Assert.Equal(new[] { "example.com", "sub.example.org" }, options.AllowedHosts);
+    }
+
+    [Fact]
+    public void ModernAllowedHostsWinOverLegacyEnv()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ARCHIVE_PROVIDER_API_ALLOWED_HOSTS"] = "legacy.example.com",
+                ["Archive:AllowedHosts:0"] = "modern.example.com",
+            })
+            .Build();
+
+        var options = ArchiveImportOptions.From(configuration);
+
+        Assert.Equal(new[] { "modern.example.com" }, options.AllowedHosts);
+    }
+
     private static IConfiguration Build(Dictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 }
