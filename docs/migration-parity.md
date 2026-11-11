@@ -60,11 +60,14 @@ Conventions: "Python file:line" uses `app/migrations/...` paths;
 - **F4** `M0004IdentityMembers.cs`：`NormalizedLegacyTags`/alias 收集只保留字符串并 trim，与 Python `m0004:153`（非字符串丢弃）对齐；`legacy_tags` 报告保留原始 BSON 值（原实现转字符串），与 Python `m0004:175` 对齐；`invalid_worker_name` detail 对齐 Python `repr`（字符串加引号、其余原文）。
 - **F5** `M0004IdentityMembers.cs` `MigrateWorkers`：`raw_workers_length` 按 code-point 计数（`EnumerateRunes`），与 Python `len()` 对齐（含 emoji 输入）。
 - **F6** `LegacyMigrationRunner.cs` `ApplyAsync`：租约使用超 60% 时记 warning，与 Python `runner.py:321` 对齐（原只续租不告警）。
+- **F7（真 bug，测试发现）** `M0004IdentityMembers.cs` `MergeExistingDocumentsAsync`：合并预存 `project_member`/`team_member` 时传 `null` projection，被 `ListAsync` 默认收敛为仅 `_id`，导致所有现存成员文档 key 为空、全部误标 `invalid_identity_member`，重复文档永不合并，且后续 `project_member_project_user_v1` 等唯一索引在有重复时直接建索引失败。改为 `Exclude("_cls")` 全文档读取（与 relation 扫描一致）。生产影响：0004 首次 apply 若集合非空（崩溃重试/脏库）必现；纯空库首次跑不受影响。回归测试 `M0004_MergeDuplicates_ReportedWithIssue_AndInvalidCounted` 锁定。
+
+接受的微小差异（不修）：非 string 的项目 `w` 字段，Python 取 `repr(raw)` 仍记录报告并继续（`workers_projects+1`），C# 记 `workers_parse_error` 后直接返回（不计该项目）。`w` 按 schema恒为 string，且 Python 的 `repr` 语义无法从 BSON 精确复刻，故接受现状。
 
 ## 5. 测试
 
-`tests/Shoreline.Tests/MigrationsParityTests.cs`（相对 `MigrationsTests.cs` 的 happy-path 的补充，均为 focused `Migrations` filter 可跑）：覆盖空集合、目标已存在、重复运行、缺字段老文档、Python 风格 ledger 行（无 `runner`）、>100（650）文档分批、锁争用、`verify` 失败路径、0004 脏数据分支（dangling/duplicate/missing-role/unmapped-role/owner 修复/join 流程/重跑收敛）。
-结果：见本分支 commit message（`docs/tests` 阶段提交）。
+`tests/Shoreline.Tests/MigrationsParityTests.cs`（相对 `MigrationsTests.cs` 的 happy-path 的补充，均为 focused `Migrations` filter 可跑）：覆盖空集合、目标已存在、重复运行、缺字段老文档、Python 风格 ledger 行（无 `runner`）、>100（650）文档分批、锁争用、`verify` 失败路径、0004 脏数据分支（dangling/duplicate/missing-role/unmapped-role/owner 修复/join 流程/重跑收敛），以及 F1–F5 回归（per-relation `mapped_tags`、falsy `m_t`、merge dup issue+invalid 计数、非字符串 tag 过滤与 raw 保留、emoji code-point 长度与 `repr` detail）。
+结果：`--filter Migrations` 37/37 通过（既有 7 + 本文件 30）。
 
 ## 6. 未能验证项
 

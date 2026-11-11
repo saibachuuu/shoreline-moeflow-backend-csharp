@@ -139,7 +139,7 @@ public sealed class M0004IdentityMembers : LegacyMigration
         {
             state.Summary["project_relation_count"]++;
             RecordLegacyRelation(state, "project", relation, projectRoles);
-            if (relation.TryGetValue("m_t", out _)) state.Summary["legacy_relation_tag_count"]++;
+            if (relation.TryGetValue("m_t", out var tagMarker) && IsTruthy(tagMarker)) state.Summary["legacy_relation_tag_count"]++;
             var projectId = NormKey(relation.TryGetValue("g", out var g) ? g : null);
             var userId = NormKey(relation.TryGetValue("u", out var u) ? u : null);
             var roleCode = RoleCode(relation.TryGetValue("r", out var r) ? r : null, projectRoles);
@@ -188,7 +188,9 @@ public sealed class M0004IdentityMembers : LegacyMigration
             if (mappedTag is not null) member.Tags.Add(mappedTag);
             var relationReport = Report(state, $"project_relation:{Key(relation["_id"])}");
             relationReport["project_member_key"] = $"{projectId}:u:{userId}";
-            relationReport["mapped_tags"] = new BsonArray(member.Tags.OrderBy(t => t, StringComparer.Ordinal).Select(t => (BsonValue)t));
+            relationReport["mapped_tags"] = mappedTag is not null
+                ? new BsonArray([(BsonValue)new BsonString(mappedTag)])
+                : new BsonArray();
             if (roleCode == "creator")
             {
                 if (!ownerCandidates.TryGetValue(projectId, out var set))
@@ -277,7 +279,7 @@ public sealed class M0004IdentityMembers : LegacyMigration
         {
             state.Summary["team_relation_count"]++;
             RecordLegacyRelation(state, "team", relation, teamRoles);
-            if (relation.TryGetValue("m_t", out _)) state.Summary["legacy_relation_tag_count"]++;
+            if (relation.TryGetValue("m_t", out var tagMarker) && IsTruthy(tagMarker)) state.Summary["legacy_relation_tag_count"]++;
             var teamId = NormKey(relation.TryGetValue("g", out var g) ? g : null);
             var userId = NormKey(relation.TryGetValue("u", out var u) ? u : null);
             var roleCode = RoleCode(relation.TryGetValue("r", out var r) ? r : null, teamRoles);
@@ -461,7 +463,7 @@ public sealed class M0004IdentityMembers : LegacyMigration
             if (!member.TryGetValue("ik", out var ik) || !ik.IsString || ik.AsString != expectedKey)
                 return false;
             if (!member.TryGetValue("display_name", out var name) || !name.IsString ||
-                string.IsNullOrWhiteSpace(name.AsString) || name.AsString.Length > 140)
+                string.IsNullOrWhiteSpace(name.AsString) || name.AsString.EnumerateRunes().Count() > 140)
                 return false;
             if (!member.TryGetValue("status", out var status) || !status.IsString ||
                 !MemberStatusValues.Contains(status.AsString))
@@ -711,24 +713,66 @@ public sealed class M0004IdentityMembers : LegacyMigration
         return snapshot;
     }
 
-    private static List<string> RawTagValues(BsonValue? value) => value switch
+    // Python truthiness for the legacy `m_t` annotation: missing/None/""/[]/{}/0
+    // do not count toward legacy_relation_tag_count.
+    private static bool IsTruthy(BsonValue? value) => value switch
     {
-        BsonArray array => array.Select(v => v.IsString ? v.AsString : v.ToString()!).ToList(),
-        null or BsonNull => [],
-        BsonString s => [s.AsString],
-        _ => [value.ToString()!],
+        null or BsonNull => false,
+        BsonBoolean b => b.Value,
+        BsonString s => s.Value.Length > 0,
+        BsonArray a => a.Count > 0,
+        BsonDocument d => d.ElementCount > 0,
+        BsonInt32 i => i.Value != 0,
+        BsonInt64 l => l.Value != 0,
+        BsonDouble dbl => dbl.Value != 0,
+        _ => true,
     };
 
+    // Only string annotations survive normalization (Python _normalized_legacy_tags).
     private static SortedSet<string> NormalizedLegacyTags(BsonValue? value)
     {
         var result = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var item in RawTagValues(value))
+        switch (value)
         {
-            var stripped = item.Trim();
-            if (stripped.Length > 0) result.Add(stripped);
+            case BsonArray array:
+                foreach (var item in array)
+                    if (item.IsString)
+                    {
+                        var stripped = item.AsString.Trim();
+                        if (stripped.Length > 0) result.Add(stripped);
+                    }
+                break;
+            case BsonString s:
+                var single = s.Value.Trim();
+                if (single.Length > 0) result.Add(single);
+                break;
         }
         return result;
     }
+
+    // String-only scalar/array reader for `aliases` (Python _raw_tag_values + str filter).
+    private static IEnumerable<string> AliasStrings(BsonValue? value)
+    {
+        if (value is BsonArray array)
+            foreach (var item in array)
+            {
+                if (item.IsString) yield return item.AsString;
+            }
+        else if (value is BsonString s) yield return s.Value;
+    }
+
+    // Python repr() of a JSON-decoded worker name for the invalid_worker_name issue.
+    private static string WorkerNameDetail(JsonElement item) => item.ValueKind switch
+    {
+        JsonValueKind.String => QuoteRepr(item.GetString()!),
+        JsonValueKind.Null or JsonValueKind.Undefined => "None",
+        JsonValueKind.True => "True",
+        JsonValueKind.False => "False",
+        _ => item.GetRawText(),
+    };
+
+    private static string QuoteRepr(string value) =>
+        value.Contains('\'') && !value.Contains('"') ? $"\"{value}\"" : $"'{value}'";
 
     private static BsonDocument Report(RunState state, string key)
     {
@@ -792,16 +836,23 @@ public sealed class M0004IdentityMembers : LegacyMigration
         report["mapping_version"] = MappingVersion;
         report["role"] = RoleSnapshot(
             relation.TryGetValue("r", out var role) ? role : null, roles);
-        var rawTags = RawTagValues(relation.TryGetValue("m_t", out var tags) ? tags : null);
+        // Preserve the raw annotation values (Python keeps them as-is); only
+        // strings survive the tag normalization elsewhere.
+        var rawTags = new List<BsonValue>();
+        if (relation.TryGetValue("m_t", out var tagValue))
+        {
+            if (tagValue is BsonArray tagArray) rawTags.AddRange(tagArray);
+            else if (tagValue is not BsonNull) rawTags.Add(tagValue);
+        }
         if (rawTags.Count > 0)
         {
-            report["legacy_tags"] = new BsonArray(rawTags.Select(t => (BsonValue)new BsonString(t)));
+            report["legacy_tags"] = new BsonArray(rawTags);
             var issues = report.TryGetValue("issues", out var existing) && existing.IsBsonArray
                 ? existing.AsBsonArray : new BsonArray();
             issues.Add(new BsonDocument
             {
                 ["code"] = "legacy_relation_tags",
-                ["detail"] = new BsonArray(rawTags.Select(t => (BsonValue)new BsonString(t))),
+                ["detail"] = new BsonArray(rawTags),
             });
             report["issues"] = issues;
         }
@@ -871,7 +922,11 @@ public sealed class M0004IdentityMembers : LegacyMigration
         var collection = MigrationBson.Collection(database, collectionName);
         var groups = new Dictionary<string, List<BsonDocument>>(StringComparer.Ordinal);
         var invalid = 0;
-        await foreach (var document in ListAsync(database, collectionName, null, ct))
+        // Full documents: grouping, tag normalization and the canonical update
+        // all read fields beyond _id (a null projection would reduce every
+        // row to its _id and mark the whole collection invalid).
+        await foreach (var document in ListAsync(database, collectionName,
+            Builders<BsonDocument>.Projection.Exclude("_cls"), ct))
         {
             string? key = null;
             if (team)
@@ -941,7 +996,7 @@ public sealed class M0004IdentityMembers : LegacyMigration
                     foreach (var q in NormalizedLegacyTags(
                         item.TryGetValue("worker_qualifications", out var wq) ? wq : null))
                         qualifications.Add(q);
-                    foreach (var alias in RawTagValues(
+                    foreach (var alias in AliasStrings(
                         item.TryGetValue("aliases", out var al) ? al : null))
                     {
                         var stripped = alias.Trim();
@@ -1013,6 +1068,8 @@ public sealed class M0004IdentityMembers : LegacyMigration
                     await collection.DeleteOneAsync(
                         Builders<BsonDocument>.Filter.Eq("_id", duplicate["_id"]), ct);
                 Bump(state, "identity_member_duplicate_count", documents.Count - 1);
+                AddIssue(state, collectionName, canonical["_id"], "duplicate_identity_member",
+                    new BsonDocument { ["count"] = documents.Count });
             }
         }
     }
@@ -1286,7 +1343,7 @@ public sealed class M0004IdentityMembers : LegacyMigration
                 ["worker_qualifications"] = new BsonArray(NormalizedLegacyTags(
                     values.TryGetValue("worker_qualifications", out var wq) ? wq : null)
                     .Select(q => (BsonValue)new BsonString(q))),
-                ["aliases"] = new BsonArray(RawTagValues(
+                ["aliases"] = new BsonArray(AliasStrings(
                     values.TryGetValue("aliases", out var al) ? al : null)
                     .Select(a => a.Trim()).Where(a => a.Length > 0)
                     .Select(a => (BsonValue)new BsonString(a))),
@@ -1330,7 +1387,7 @@ public sealed class M0004IdentityMembers : LegacyMigration
             existingQualifications is not null ? existingQualifications
             : values.TryGetValue("worker_qualifications", out var vq) ? vq : null);
         var existingAliases = existing.TryGetValue("aliases", out var ea) ? ea : null;
-        var aliases = RawTagValues(existingAliases is not null ? existingAliases
+        var aliases = AliasStrings(existingAliases is not null ? existingAliases
                 : values.TryGetValue("aliases", out var va) ? va : null)
             .Select(a => a.Trim()).Where(a => a.Length > 0)
             .Select(a => (BsonValue)new BsonString(a)).ToArray();
@@ -1555,7 +1612,7 @@ public sealed class M0004IdentityMembers : LegacyMigration
         report["mapping_version"] = MappingVersion;
         report["raw_workers_sha256"] = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(rawText))).ToLowerInvariant();
-        report["raw_workers_length"] = rawText.Length;
+        report["raw_workers_length"] = rawText.EnumerateRunes().Count();
         Bump(state, "workers_projects");
         JsonDocument parsed;
         try
@@ -1606,7 +1663,7 @@ public sealed class M0004IdentityMembers : LegacyMigration
                         string.IsNullOrWhiteSpace(item.GetString()))
                     {
                         AddIssue(state, "project", projectId, "invalid_worker_name",
-                            new BsonString($"'{item}'"));
+                            new BsonString(WorkerNameDetail(item)));
                         Bump(state, "workers_issue_count");
                         continue;
                     }

@@ -497,4 +497,156 @@ public sealed class MigrationsParityTests : IAsyncLifetime
             .Find(FilterDefinition<BsonDocument>.Empty).SingleAsync();
         Assert.False(file.Contains("th"));
     }
+
+    // ---- F1–F5 regression (oracle parity fixes) ----
+
+    private async Task<BsonDocument> MigrationSummaryAsync()
+    {
+        var doc = await _db.GetCollection<BsonDocument>(M0004IdentityMembers.ReportCollection)
+            .Find(Builders<BsonDocument>.Filter.Eq("_id", M0004IdentityMembers.ReportSummaryId))
+            .SingleAsync();
+        return doc["summary"].AsBsonDocument;
+    }
+
+    private async Task<BsonDocument> MigrationReportAsync(string id)
+    {
+        return await _db.GetCollection<BsonDocument>(M0004IdentityMembers.ReportCollection)
+            .Find(Builders<BsonDocument>.Filter.Eq("_id", id)).SingleAsync();
+    }
+
+    [Fact]
+    public async Task M0004_RelationReport_MappedTagsArePerRelation()
+    {
+        // Same user, two relations (creator + translator): each report carries
+        // only its own mapped tag, matching Python `sorted(tags)` per relation.
+        var userId = ObjectId.GenerateNewId();
+        var projectId = ObjectId.GenerateNewId();
+        var creatorRole = ObjectId.GenerateNewId();
+        var translatorRole = ObjectId.GenerateNewId();
+        await _db.GetCollection<BsonDocument>("user").InsertOneAsync(
+            new BsonDocument { ["_id"] = userId, ["n"] = "Alice" });
+        await _db.GetCollection<BsonDocument>("project_role").InsertManyAsync([
+            new BsonDocument { ["_id"] = creatorRole, ["m_o"] = "creator" },
+            new BsonDocument { ["_id"] = translatorRole, ["m_o"] = "translator" },
+        ]);
+        await _db.GetCollection<BsonDocument>("project").InsertOneAsync(
+            new BsonDocument { ["_id"] = projectId, ["st"] = 0, ["stv"] = 0, ["ouv"] = 0 });
+        var relCreator = ObjectId.GenerateNewId();
+        var relTranslator = ObjectId.GenerateNewId();
+        await _db.GetCollection<BsonDocument>("project_user_relation").InsertManyAsync([
+            new BsonDocument { ["_id"] = relCreator, ["g"] = projectId, ["u"] = userId, ["r"] = creatorRole },
+            new BsonDocument { ["_id"] = relTranslator, ["g"] = projectId, ["u"] = userId, ["r"] = translatorRole },
+        ]);
+        await Runner([new M0004IdentityMembers()]).ApplyAsync();
+
+        var creatorReport = await MigrationReportAsync($"project_relation:{relCreator}");
+        var translatorReport = await MigrationReportAsync($"project_relation:{relTranslator}");
+        Assert.Equal(["creator"], creatorReport["mapped_tags"].AsBsonArray.Select(v => v.AsString));
+        Assert.Equal(["translator"], translatorReport["mapped_tags"].AsBsonArray.Select(v => v.AsString));
+    }
+
+    [Fact]
+    public async Task M0004_FalsyLegacyAnnotations_NotCounted()
+    {
+        // Python counts `m_t` only when truthy: "" and [] must not count.
+        var (userId, projectId, roleId) = await SeedIdentityBasicsAsync();
+        await _db.GetCollection<BsonDocument>("project_user_relation").InsertManyAsync([
+            new BsonDocument { ["g"] = projectId, ["u"] = userId, ["r"] = roleId, ["m_t"] = "" },
+            new BsonDocument { ["g"] = projectId, ["u"] = userId, ["r"] = roleId, ["m_t"] = new BsonArray() },
+            new BsonDocument { ["g"] = projectId, ["u"] = userId, ["r"] = roleId, ["m_t"] = new BsonArray(["x"]) },
+        ]);
+        await Runner([new M0004IdentityMembers()]).ApplyAsync();
+
+        var summary = await MigrationSummaryAsync();
+        Assert.Equal(3, summary["project_relation_count"].ToInt64());
+        Assert.Equal(1, summary["legacy_relation_tag_count"].ToInt64());
+    }
+
+    [Fact]
+    public async Task M0004_MergeDuplicates_ReportedWithIssue_AndInvalidCounted()
+    {
+        // Duplicate pre-existing members merge with a duplicate_identity_member
+        // report issue {count}; keyless documents count as invalid (Up only,
+        // no verify: the orphan row stays behind, like the Python runner).
+        var (userA, projectId, roleId) = await SeedIdentityBasicsAsync();
+        await _db.GetCollection<BsonDocument>("project_user_relation").InsertOneAsync(
+            new BsonDocument { ["g"] = projectId, ["u"] = userA, ["r"] = roleId });
+        var userB = ObjectId.GenerateNewId();
+        await _db.GetCollection<BsonDocument>("user").InsertOneAsync(
+            new BsonDocument { ["_id"] = userB, ["n"] = "Bob" });
+        var firstId = ObjectId.GenerateNewId();
+        await _db.GetCollection<BsonDocument>("project_member").InsertManyAsync([
+            new BsonDocument { ["_id"] = firstId, ["project"] = projectId, ["user"] = userB, ["display_name"] = "Bob", ["status"] = "active" },
+            new BsonDocument { ["project"] = projectId, ["user"] = userB, ["display_name"] = "Bob", ["status"] = "active" },
+            new BsonDocument { ["note"] = "orphan" },
+        ]);
+        await new M0004IdentityMembers().UpAsync(_db, CancellationToken.None);
+
+        var summary = await MigrationSummaryAsync();
+        Assert.Equal(1, summary["identity_member_duplicate_count"].ToInt64());
+        Assert.Equal(1, summary["identity_member_reported_invalid_count"].ToInt64());
+        var dupReport = await MigrationReportAsync($"project_member:{firstId}");
+        var dupIssue = dupReport["issues"].AsBsonArray
+            .Select(i => i.AsBsonDocument)
+            .Single(i => i["code"].AsString == "duplicate_identity_member");
+        Assert.Equal(2, dupIssue["detail"].AsBsonDocument["count"].ToInt64());
+    }
+
+    [Fact]
+    public async Task M0004_NonStringAnnotations_Filtered_AliasesKept_RawTagsPreserved()
+    {
+        // Non-string m_t values never enter normalized tags/aliases, but the
+        // per-relation report keeps the raw BSON values (Python keeps them).
+        var (userId, projectId, roleId) = await SeedIdentityBasicsAsync();
+        var teamId = ObjectId.GenerateNewId();
+        var teamRoleId = ObjectId.GenerateNewId();
+        await _db.GetCollection<BsonDocument>("team_role").InsertOneAsync(
+            new BsonDocument { ["_id"] = teamRoleId, ["m_o"] = "creator" });
+        await _db.GetCollection<BsonDocument>("team_user_relation").InsertOneAsync(
+            new BsonDocument { ["g"] = teamId, ["u"] = userId, ["r"] = teamRoleId, ["m_t"] = new BsonArray([5, " a "]) });
+        await _db.GetCollection<BsonDocument>("team").InsertOneAsync(
+            new BsonDocument { ["_id"] = teamId, ["m_uc"] = 0 });
+        await _db.GetCollection<BsonDocument>("team_member").InsertOneAsync(
+            new BsonDocument { ["team"] = teamId, ["user"] = userId, ["aliases"] = new BsonArray([5, " x ", ""]) });
+        var relId = ObjectId.GenerateNewId();
+        await _db.GetCollection<BsonDocument>("project_user_relation").InsertOneAsync(
+            new BsonDocument { ["_id"] = relId, ["g"] = projectId, ["u"] = userId, ["r"] = roleId, ["m_t"] = new BsonArray([5, " a "]) });
+        await Runner([new M0004IdentityMembers()]).ApplyAsync();
+
+        var summary = await MigrationSummaryAsync();
+        Assert.Equal(2, summary["legacy_relation_tag_count"].ToInt64());
+        var relReport = await MigrationReportAsync($"project_relation:{relId}");
+        var legacyTags = relReport["legacy_tags"].AsBsonArray;
+        Assert.Equal(2, legacyTags.Count);
+        Assert.Equal(BsonType.Int32, legacyTags[0].BsonType);
+        Assert.Equal(" a ", legacyTags[1].AsString);
+        var member = await _db.GetCollection<BsonDocument>("team_member")
+            .Find(Builders<BsonDocument>.Filter.Eq("user", userId)).SingleAsync();
+        Assert.Equal(["x"], member["aliases"].AsBsonArray.Select(v => v.AsString));
+    }
+
+    [Fact]
+    public async Task M0004_WorkersLength_CountsCodePoints_AndReprDetails()
+    {
+        // raw_workers_length counts Unicode code points (one emoji survives as
+        // length-1 vs UTF-16 Length); invalid names carry Python repr() details.
+        var (_, projectId, _) = await SeedIdentityBasicsAsync();
+        var rawText = """{"translator":["A😀",5,"  "]}""";
+        await _db.GetCollection<BsonDocument>("project").UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", projectId),
+            Builders<BsonDocument>.Update.Set("w", rawText));
+        await Runner([new M0004IdentityMembers()]).ApplyAsync();
+
+        var report = await MigrationReportAsync($"project:{projectId}");
+        Assert.Equal(rawText.Length - 1, report["raw_workers_length"].ToInt64());
+        var details = report["issues"].AsBsonArray
+            .Select(i => i.AsBsonDocument)
+            .Where(i => i["code"].AsString == "invalid_worker_name")
+            .Select(i => i["detail"].AsString)
+            .OrderBy(d => d, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(["'  '", "5"], details);
+        var summary = await MigrationSummaryAsync();
+        Assert.Equal(2, summary["workers_issue_count"].ToInt64());
+    }
 }
