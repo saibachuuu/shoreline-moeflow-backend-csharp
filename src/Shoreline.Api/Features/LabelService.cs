@@ -247,7 +247,7 @@ public sealed partial class LabelService(
         session.AssertReferenceEpoch(file);
 
         await MoveAheadAsync(source, file, nextId, session, ct);
-        return new Dictionary<string, object?> { ["message"] = "修改成功" };
+        return new Dictionary<string, object?> { ["message"] = LegacySuccessMessages.Get(context, "修改成功") };
     }
 
     // ------------------------------------------------------------------

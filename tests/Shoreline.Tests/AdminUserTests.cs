@@ -121,7 +121,7 @@ public sealed class AdminUserTests(LocalServices services)
 
             using var created = await adminClient.PostAsJsonAsync("/v1/admin/users", payload);
             created.EnsureSuccessStatusCode();
-            Assert.Equal("注册成功", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
+            Assert.Equal("Registration successful.", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
             var row = await services.Store.Collection("user")
                 .Find(new BsonDocument("e", payload.email)).FirstAsync();
             Assert.Equal(payload.name, row.Text("n"));

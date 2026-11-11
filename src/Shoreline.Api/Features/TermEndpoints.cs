@@ -24,7 +24,7 @@ public static class TermEndpoints
         {
             var actor = await current.RequireAsync(context, ct);
             await terms.CreateBankAsync(actor, teamId, data, ct);
-            return new { message = "创建成功" };
+            return new { message = LegacySuccessMessages.Get(context, "创建成功") };
         });
 
         // term_bank Blueprint /v1/term-banks/<term_bank_id> and /terms.
@@ -33,14 +33,14 @@ public static class TermEndpoints
         {
             var actor = await current.RequireAsync(context, ct);
             await terms.EditBankAsync(actor, termBankId, data, ct);
-            return new { message = "修改成功" };
+            return new { message = LegacySuccessMessages.Get(context, "修改成功") };
         });
         app.MapDelete("/v1/term-banks/{termBankId}", async (string termBankId, HttpContext context,
             CurrentUser current, TermService terms, CancellationToken ct) =>
         {
             var actor = await current.RequireAsync(context, ct);
             await terms.DeleteBankAsync(actor, termBankId, ct);
-            return new { message = "删除成功" };
+            return new { message = LegacySuccessMessages.Get(context, "删除成功") };
         });
         app.MapGet("/v1/term-banks/{termBankId}/terms", async (string termBankId, HttpContext context,
             CurrentUser current, TermService terms, CancellationToken ct) =>
@@ -57,7 +57,7 @@ public static class TermEndpoints
         {
             var actor = await current.RequireAsync(context, ct);
             await terms.CreateTermAsync(actor, termBankId, data, ct);
-            return new { message = "创建成功" };
+            return new { message = LegacySuccessMessages.Get(context, "创建成功") };
         });
 
         // term Blueprint /v1/terms/<term_id>; there is intentionally no GET here.
@@ -66,14 +66,14 @@ public static class TermEndpoints
         {
             var actor = await current.RequireAsync(context, ct);
             await terms.EditTermAsync(actor, termId, data, ct);
-            return new { message = "修改成功" };
+            return new { message = LegacySuccessMessages.Get(context, "修改成功") };
         });
         app.MapDelete("/v1/terms/{termId}", async (string termId, HttpContext context,
             CurrentUser current, TermService terms, CancellationToken ct) =>
         {
             var actor = await current.RequireAsync(context, ct);
             await terms.DeleteTermAsync(actor, termId, ct);
-            return new { message = "删除成功" };
+            return new { message = LegacySuccessMessages.Get(context, "删除成功") };
         });
     }
 

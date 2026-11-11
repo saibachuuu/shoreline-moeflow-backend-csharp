@@ -119,7 +119,7 @@ public sealed class AuthzMemberFileGateTests(LocalServices services)
         var renamed = await AuthzAssert.OkAsync(
             await world.Client("translator").PutAsJsonAsync($"/v1/files/{fileId}",
                 new { name = "renamed.png" }));
-        Assert.Equal("改名成功", renamed.GetProperty("message").GetString());
+        Assert.Equal("Renamed", renamed.GetProperty("message").GetString());
     }
 
     [Fact]

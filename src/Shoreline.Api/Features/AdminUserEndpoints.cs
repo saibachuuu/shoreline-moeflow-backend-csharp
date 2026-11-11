@@ -42,7 +42,7 @@ public static class AdminUserEndpoints
             var requestId = ctx.Request.Headers["X-Request-ID"].FirstOrDefault()
                 ?? ctx.Request.Headers["Idempotency-Key"].FirstOrDefault() ?? "";
             await users.AdminCreateAsync(data, requestId, ct);
-            return new { message = "注册成功" };
+            return new { message = LegacySuccessMessages.Get(ctx, "注册成功") };
         });
         app.MapPut("/v1/admin/users/{id}", async (string id, JsonElement data, HttpContext ctx, CurrentUser current,
             MongoStore store, PasswordService passwords, CancellationToken ct) =>
@@ -54,7 +54,7 @@ public static class AdminUserEndpoints
             var result = await store.Collection("user").UpdateOneAsync(filter,
                 Builders<BsonDocument>.Update.Set("p", hash), cancellationToken: ct);
             if (result.MatchedCount == 0) throw MissingUser();
-            return new { message = "修改成功" };
+            return new { message = LegacySuccessMessages.Get(ctx, "修改成功") };
         }).RequireRateLimiting("auth");
         app.MapPut("/v1/admin/admin-status", async (JsonElement data, HttpContext ctx, CurrentUser current,
             MongoStore store, IConfiguration configuration, CancellationToken ct) =>
@@ -67,7 +67,7 @@ public static class AdminUserEndpoints
             var result = await store.Collection("user").UpdateOneAsync(new BsonDocument("_id", id),
                 Builders<BsonDocument>.Update.Set("admin", status), cancellationToken: ct);
             if (result.MatchedCount == 0) throw MissingUser();
-            return new { message = "修改成功" };
+            return new { message = LegacySuccessMessages.Get(ctx, "修改成功") };
         });
     }
 

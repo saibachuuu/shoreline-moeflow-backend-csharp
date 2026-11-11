@@ -30,7 +30,7 @@ public static class UserEndpoints
         app.MapPost("/v1/users", async (JsonElement data, HttpContext ctx, UserRegistrationService registrations, CancellationToken ct) =>
         {
             var (_, token) = await registrations.RegisterAsync(data, RequestId(ctx), ct);
-            return new { message = "注册成功", token };
+            return new { message = LegacySuccessMessages.Get(ctx, "注册成功"), token };
         });
 
         app.MapGet("/v1/user/info", async (HttpContext ctx, CurrentUser current, UserView view, CancellationToken ct) =>
@@ -69,14 +69,14 @@ public static class UserEndpoints
             var result = await store.Collection("user").UpdateOneAsync(new BsonDocument { ["_id"] = user["_id"], ["p"] = user["p"] },
                 Builders<BsonDocument>.Update.Set("p", hash), cancellationToken: ct);
             if (result.MatchedCount != 1) throw ApiError.BadToken();
-            return new { message = "修改成功，请重新登陆" };
+            return new { message = LegacySuccessMessages.Get(ctx, "修改成功，请重新登陆") };
         }).RequireRateLimiting("auth");
 
         app.MapPut("/v1/user/info", async (JsonElement data, HttpContext ctx, CurrentUser current, UserProfileService profiles, UserView view, CancellationToken ct) =>
         {
             var actor = await current.RequireAsync(ctx, ct);
             var (user, _) = await profiles.UpdateAsync(actor, actor, data, false, RequestId(ctx), ct);
-            return new { message = "修改成功", user = await view.ToApiAsync(user, ctx) };
+            return new { message = LegacySuccessMessages.Get(ctx, "修改成功"), user = await view.ToApiAsync(user, ctx) };
         });
         app.MapPatch("/v1/me/aliases", async (JsonElement data, HttpContext ctx, CurrentUser current, UserProfileService profiles, UserView view, CancellationToken ct) =>
         {

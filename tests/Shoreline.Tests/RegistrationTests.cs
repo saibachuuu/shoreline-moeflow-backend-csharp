@@ -62,7 +62,7 @@ public sealed class RegistrationTests(LocalServices services)
             using var response = await RegisterAsync(email.ToUpperInvariant(), name, "initial-password", code);
             response.EnsureSuccessStatusCode();
             var data = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("注册成功", data.GetProperty("message").GetString());
+            Assert.Equal("Registration successful.", data.GetProperty("message").GetString());
             var token = data.GetProperty("token").GetString();
             Assert.False(string.IsNullOrEmpty(token));
             var user = await services.Store.Collection("user").Find(new BsonDocument("e", email)).SingleAsync();

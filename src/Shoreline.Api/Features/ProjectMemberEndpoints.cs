@@ -109,10 +109,12 @@ public static class ProjectMemberEndpoints
             var body = await BodyAsync(context.Request);
             var (updated, member, changed) = await lifecycle.TransferOwnerAsync(actor, project, Lite(body), RequestId(context), ct);
             var summary = await projects.MemberSummariesAsync(updated, compact: false, ct);
+            var view = await projects.ViewAsync(updated, actor, Chinese(context), ct);
+            // app/apis/identity.py:43-51 nests member_summary inside project.
+            view["member_summary"] = summary;
             return new
             {
-                project = await projects.ViewAsync(updated, actor, Chinese(context), ct),
-                member_summary = summary,
+                project = view,
                 member = await memberService.MemberToApiAsync(member, updated, ct),
                 changed
             };
@@ -127,10 +129,12 @@ public static class ProjectMemberEndpoints
             var body = await BodyAsync(context.Request);
             var (updated, changed) = await lifecycle.CompleteAsync(actor, project, Lite(body), RequestId(context), ct);
             var summary = await projects.MemberSummariesAsync(updated, compact: false, ct);
+            var view = await projects.ViewAsync(updated, actor, Chinese(context), ct);
+            // app/apis/identity.py:43-51 nests member_summary inside project.
+            view["member_summary"] = summary;
             return new
             {
-                project = await projects.ViewAsync(updated, actor, Chinese(context), ct),
-                member_summary = summary,
+                project = view,
                 status = ProjectLifecycleService.StatusName((int)updated.Integer("st")),
                 status_version = (int)updated.Integer("stv"),
                 changed
@@ -145,10 +149,12 @@ public static class ProjectMemberEndpoints
             var body = await BodyAsync(context.Request);
             var (updated, changed) = await lifecycle.ClearAsync(actor, project, Lite(body), RequestId(context), ct);
             var summary = await projects.MemberSummariesAsync(updated, compact: false, ct);
+            var view = await projects.ViewAsync(updated, actor, Chinese(context), ct);
+            // app/apis/identity.py:43-51 nests member_summary inside project.
+            view["member_summary"] = summary;
             return new
             {
-                project = await projects.ViewAsync(updated, actor, Chinese(context), ct),
-                member_summary = summary,
+                project = view,
                 status = ProjectLifecycleService.StatusName((int)updated.Integer("st")),
                 status_version = (int)updated.Integer("stv"),
                 changed
@@ -163,10 +169,12 @@ public static class ProjectMemberEndpoints
             var body = await BodyAsync(context.Request);
             var (updated, changed) = await lifecycle.ReopenAsync(actor, project, Lite(body), RequestId(context), ct);
             var summary = await projects.MemberSummariesAsync(updated, compact: false, ct);
+            var view = await projects.ViewAsync(updated, actor, Chinese(context), ct);
+            // app/apis/identity.py:43-51 nests member_summary inside project.
+            view["member_summary"] = summary;
             return new
             {
-                project = await projects.ViewAsync(updated, actor, Chinese(context), ct),
-                member_summary = summary,
+                project = view,
                 status = ProjectLifecycleService.StatusName((int)updated.Integer("st")),
                 status_version = (int)updated.Integer("stv"),
                 changed

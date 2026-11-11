@@ -38,7 +38,9 @@ public static class ProjectEndpoints
             var updated = await projects.UpdateProjectAsync(actor, document, data, ct);
             var view = await projects.ViewAsync(updated, actor, Chinese(context), ct);
             var summary = await projects.MemberSummariesAsync(updated, compact: false, ct);
-            return new { message = "修改成功", project = view, member_summary = summary };
+            // app/apis/project.py:122-127 nests member_summary inside project.
+            view["member_summary"] = summary;
+            return new { message = LegacySuccessMessages.Get(context, "修改成功"), project = view };
         });
         project.MapGet("/targets", async (string projectId, HttpContext context, CurrentUser current, ProjectService projects,
             MongoStore store, IdentityPermissions permissions, CancellationToken ct) =>
@@ -63,7 +65,7 @@ public static class ProjectEndpoints
             var document = await projects.GetProjectAsync(projectId, ct);
             var code = data.OptionalText("language", 32);
             var target = await projects.CreateTargetAsync(actor, document, code, ct);
-            return new { message = "添加目标语言成功", target = await projects.TargetViewAsync(target, Chinese(context), ct) };
+            return new { message = LegacySuccessMessages.Get(context, "添加目标语言成功"), target = await projects.TargetViewAsync(target, Chinese(context), ct) };
         });
 
         var teamProjects = app.MapGroup("/v1/teams/{teamId}/projects");
@@ -89,7 +91,9 @@ public static class ProjectEndpoints
             var document = await projects.CreateProjectAsync(actor, team, data, ct);
             var view = await projects.ViewAsync(document, actor, Chinese(context), ct);
             var summary = await projects.MemberSummariesAsync(document, compact: false, ct);
-            return new { message = "创建成功", project = view, member_summary = summary };
+            // app/apis/team.py:47-58 / :494 nests member_summary inside project.
+            view["member_summary"] = summary;
+            return new { message = LegacySuccessMessages.Get(context, "创建成功"), project = view };
         });
 
         var teamSets = app.MapGroup("/v1/teams/{teamId}/project-sets");
@@ -116,7 +120,7 @@ public static class ProjectEndpoints
             var actor = await current.RequireAsync(context, ct);
             var team = await projects.GetTeamAsync(teamId, ct);
             var set = await projects.CreateProjectSetAsync(actor, team, data.RequiredText("name", 40), ct);
-            return new { message = "创建成功", project_set = ProjectService.ProjectSetView(set) };
+            return new { message = LegacySuccessMessages.Get(context, "创建成功"), project_set = ProjectService.ProjectSetView(set) };
         });
 
         var projectSet = app.MapGroup("/v1/project-sets/{projectSetId}");
@@ -134,14 +138,14 @@ public static class ProjectEndpoints
             var actor = await current.RequireAsync(context, ct);
             var set = await projects.GetProjectSetAsync(projectSetId, ct);
             var updated = await projects.UpdateProjectSetAsync(actor, set, data.RequiredText("name", 40), ct);
-            return new { message = "修改成功", project_set = ProjectService.ProjectSetView(updated) };
+            return new { message = LegacySuccessMessages.Get(context, "修改成功"), project_set = ProjectService.ProjectSetView(updated) };
         });
         projectSet.MapDelete("", async (string projectSetId, HttpContext context, CurrentUser current, ProjectService projects, CancellationToken ct) =>
         {
             var actor = await current.RequireAsync(context, ct);
             var set = await projects.GetProjectSetAsync(projectSetId, ct);
             await projects.DeleteProjectSetAsync(actor, set, ct);
-            return new { message = "删除成功" };
+            return new { message = LegacySuccessMessages.Get(context, "删除成功") };
         });
 
         var target = app.MapGroup("/v1/targets/{targetId}");
@@ -150,7 +154,7 @@ public static class ProjectEndpoints
             var actor = await current.RequireAsync(context, ct);
             var row = await projects.GetTargetAsync(targetId, ct);
             await projects.DeleteTargetAsync(actor, row, ct);
-            return new { message = "删除成功" };
+            return new { message = LegacySuccessMessages.Get(context, "删除成功") };
         });
     }
 

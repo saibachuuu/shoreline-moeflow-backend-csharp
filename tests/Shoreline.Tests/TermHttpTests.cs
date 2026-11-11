@@ -42,7 +42,7 @@ public sealed class TermHttpTests(LocalServices services)
         {
             using var created = await client.PostAsJsonAsync($"/v1/teams/{teamId}/term-banks",
                 BankBody(source, target, name));
-            Assert.Equal("创建成功", (await BodyAsync(created)).GetProperty("message").GetString());
+            Assert.Equal("Created successfully.", (await BodyAsync(created)).GetProperty("message").GetString());
         }
 
         using var pageTwoResponse = await client.GetAsync(
@@ -61,7 +61,7 @@ public sealed class TermHttpTests(LocalServices services)
 
         using var createdTerm = await client.PostAsJsonAsync($"/v1/term-banks/{bankId}/terms",
             new { source = "hello", target = "你好", tip = "" });
-        Assert.Equal("创建成功", (await BodyAsync(createdTerm)).GetProperty("message").GetString());
+        Assert.Equal("Created successfully.", (await BodyAsync(createdTerm)).GetProperty("message").GetString());
 
         var terms = await BodyAsync(await client.GetAsync(
             $"/v1/term-banks/{bankId}/terms?word=hello"));
@@ -70,11 +70,11 @@ public sealed class TermHttpTests(LocalServices services)
 
         using var editedBank = await client.PutAsJsonAsync($"/v1/term-banks/{bankId}",
             BankBody(source, target, editedName));
-        Assert.Equal("修改成功", (await BodyAsync(editedBank)).GetProperty("message").GetString());
+        Assert.Equal("Updated", (await BodyAsync(editedBank)).GetProperty("message").GetString());
 
         using var editedTerm = await client.PutAsJsonAsync($"/v1/terms/{termId}",
             new { source = "hello2", target = "你好2", tip = "tip2" });
-        Assert.Equal("修改成功", (await BodyAsync(editedTerm)).GetProperty("message").GetString());
+        Assert.Equal("Updated", (await BodyAsync(editedTerm)).GetProperty("message").GetString());
 
         var editedTerms = await BodyAsync(await client.GetAsync(
             $"/v1/term-banks/{bankId}/terms?word=hello2"));
@@ -83,9 +83,9 @@ public sealed class TermHttpTests(LocalServices services)
         Assert.Equal("tip2", editedTerms[0].GetProperty("tip").GetString());
 
         using var deletedTerm = await client.DeleteAsync($"/v1/terms/{termId}");
-        Assert.Equal("删除成功", (await BodyAsync(deletedTerm)).GetProperty("message").GetString());
+        Assert.Equal("Removed", (await BodyAsync(deletedTerm)).GetProperty("message").GetString());
         using var deletedBank = await client.DeleteAsync($"/v1/term-banks/{bankId}");
-        Assert.Equal("删除成功", (await BodyAsync(deletedBank)).GetProperty("message").GetString());
+        Assert.Equal("Removed", (await BodyAsync(deletedBank)).GetProperty("message").GetString());
 
         using var after = await client.GetAsync($"/v1/teams/{teamId}/term-banks?limit=100");
         Assert.Equal("2", after.Headers.GetValues("X-Pagination-Count").Single());
@@ -141,7 +141,7 @@ public sealed class TermHttpTests(LocalServices services)
         using var outsiderClient = Client(outsider);
         using var ownerEditByOutsider = await outsiderClient.PutAsJsonAsync(
             $"/v1/term-banks/{ownerOnly["_id"]}", BankBody(source, target, "Owner Edited"));
-        Assert.Equal("修改成功", (await BodyAsync(ownerEditByOutsider)).GetProperty("message").GetString());
+        Assert.Equal("Updated", (await BodyAsync(ownerEditByOutsider)).GetProperty("message").GetString());
 
         using var nonOwnerEdit = await clientB.PutAsJsonAsync($"/v1/term-banks/{localAlpha["_id"]}",
             BankBody(source, target, "Not Allowed"));

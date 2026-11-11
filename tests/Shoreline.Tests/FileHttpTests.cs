@@ -118,7 +118,7 @@ public sealed class FileHttpTests(LocalServices services)
 
         using var delete = await client.DeleteAsync($"/v1/files/{id}");
         delete.EnsureSuccessStatusCode();
-        Assert.Equal("删除成功", (await BodyAsync(delete)).GetProperty("message").GetString());
+        Assert.Equal("Removed", (await BodyAsync(delete)).GetProperty("message").GetString());
         using var gone = await client.GetAsync($"/v1/files/{id}");
         Assert.Equal(8001, await ErrorCodeAsync(gone));
     }

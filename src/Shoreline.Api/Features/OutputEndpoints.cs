@@ -95,7 +95,7 @@ public static class OutputEndpoints
             var snapshot = await permissions.TeamSnapshotAsync(actor, team, ct);
             if (!snapshot.Has("team:AUTO_BECOME_PROJECT_ADMIN")) throw ApiError.Forbidden();
             await outputs.CreateTeamAsync(team, actor, ct);
-            return new { message = "创建导出任务成功" };
+            return new { message = LegacySuccessMessages.Get(context, "创建导出任务成功") };
         });
     }
 

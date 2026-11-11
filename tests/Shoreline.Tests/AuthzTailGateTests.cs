@@ -53,7 +53,7 @@ public sealed class AuthzTailGateTests(LocalServices services)
         var kept = await AuthzAssert.OkAsync(
             await world.Client("teamAdmin").PutAsJsonAsync($"/v1/invitations/{peerId}",
                 new { role_id = memberRole }));
-        Assert.Equal("修改成功", kept.GetProperty("message").GetString());
+        Assert.Equal("Updated", kept.GetProperty("message").GetString());
 
         // ...but cannot mint a peer admin (Python :234-236, new role level check).
         await AuthzAssert.ErrorAsync(
@@ -65,7 +65,7 @@ public sealed class AuthzTailGateTests(LocalServices services)
         var raised = await AuthzAssert.OkAsync(
             await world.Client("owner").PutAsJsonAsync($"/v1/invitations/{firstId}",
                 new { role_id = adminRole }));
-        Assert.Equal("修改成功", raised.GetProperty("message").GetString());
+        Assert.Equal("Updated", raised.GetProperty("message").GetString());
 
         // The invitation is now admin-level: the team admin can no longer edit it
         // (Python :228, current-role level check: 400 <= 400).
@@ -100,7 +100,7 @@ public sealed class AuthzTailGateTests(LocalServices services)
         var updated = await AuthzAssert.OkAsync(
             await world.Client("owner").PutAsJsonAsync(invitationPath,
                 new { tags = new[] { "admin" } }));
-        Assert.Equal("修改成功", updated.GetProperty("message").GetString());
+        Assert.Equal("Updated", updated.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public sealed class AuthzTailGateTests(LocalServices services)
         var promoted = await AuthzAssert.OkAsync(
             await world.Client("siteAdmin").PutAsJsonAsync(path,
                 new { user_id = world.Stranger["_id"].AsObjectId.ToString(), status = true }));
-        Assert.Equal("修改成功", promoted.GetProperty("message").GetString());
+        Assert.Equal("Updated", promoted.GetProperty("message").GetString());
         Assert.True((await services.Store.Collection("user")
             .Find(new BsonDocument("_id", world.Stranger["_id"])).FirstAsync()).Flag("admin"));
 

@@ -55,6 +55,7 @@ public static class InvitationEndpoints
             var actor = await current.RequireAsync(context, ct);
             var body = await BodyAsync(context.Request);
             var result = await invitations.PostInviteAsync(actor, groupType, groupId, body, context, RequestId(context), ct);
+            if (result.Contains("message")) result["message"] = LegacySuccessMessages.Get(context, result["message"].AsString);
             return Results.Content(result.ToJson(), "application/json");
         });
 
@@ -75,6 +76,7 @@ public static class InvitationEndpoints
             var actor = await current.RequireAsync(context, ct);
             var body = await BodyAsync(context.Request);
             var result = await invitations.PutInvitationAsync(actor, invitationId, body, context, RequestId(context), ct);
+            if (result.Contains("message")) result["message"] = LegacySuccessMessages.Get(context, result["message"].AsString);
             return Results.Content(result.ToJson(), "application/json");
         });
 
@@ -89,6 +91,7 @@ public static class InvitationEndpoints
             if (!allow) throw ApiError.Field("allow", "allow is required");
             var result = await invitations.PatchInvitationAsync(actor, invitationId,
                 body.GetProperty("allow").GetBoolean(), context, RequestId(context), ct);
+            if (result.Contains("message")) result["message"] = LegacySuccessMessages.Get(context, result["message"].AsString);
             return Results.Content(result.ToJson(), "application/json");
         });
 
@@ -97,6 +100,7 @@ public static class InvitationEndpoints
         {
             var actor = await current.RequireAsync(context, ct);
             var result = await invitations.DeleteInvitationAsync(actor, invitationId, RequestId(context), ct);
+            if (result.Contains("message")) result["message"] = LegacySuccessMessages.Get(context, result["message"].AsString);
             return Results.Content(result.ToJson(), "application/json");
         });
     }

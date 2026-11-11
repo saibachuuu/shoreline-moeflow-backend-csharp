@@ -26,7 +26,7 @@ public sealed class ApplicationTests(LocalServices services)
 
         var body = await BodyAsync(await applicant.PostAsJsonAsync(ApplicationPath("project", project),
             new { message = "请让我加入" }));
-        Assert.Equal("申请成功，请等待管理员审核", body.GetProperty("message").GetString());
+        Assert.Equal("Application Sent. Please wait for administrator to review.", body.GetProperty("message").GetString());
         Assert.False(body.TryGetProperty("group", out _));
 
         var application = await ApplicationAsync(project, target);
@@ -106,7 +106,7 @@ public sealed class ApplicationTests(LocalServices services)
         var plainApplication = await ApplicationAsync(project, plain);
         var plainResponse = await BodyAsync(await owner.PatchAsJsonAsync(
             ApplicationEndpoint(plainApplication["_id"].AsObjectId), new { allow = true }));
-        Assert.Equal("已接受", plainResponse.GetProperty("message").GetString());
+        Assert.Equal("Approved", plainResponse.GetProperty("message").GetString());
         Assert.Equal(2, (await ApplicationAsync(project, plain)).Integer("s"));
         var plainMember = await ProjectMemberAsync(project, plain);
         Assert.Equal("active", plainMember.Text("status"));
@@ -139,7 +139,7 @@ public sealed class ApplicationTests(LocalServices services)
         {
             user_id = target["_id"].ToString(), role_id = role.ToString(), message = "邀请"
         }));
-        Assert.Equal("此用户已有申请，已直接加入", invited.GetProperty("message").GetString());
+        Assert.Equal("This user already has an application and has been directly added.", invited.GetProperty("message").GetString());
         Assert.False(invited.TryGetProperty("invitation", out _));
 
         var application = await ApplicationAsync(project, target);
@@ -187,7 +187,7 @@ public sealed class ApplicationTests(LocalServices services)
         var application = await ApplicationAsync(team, target, "team");
         var result = await BodyAsync(await owner.PatchAsJsonAsync(ApplicationEndpoint(application["_id"].AsObjectId),
             new { allow = true }));
-        Assert.Equal("已接受", result.GetProperty("message").GetString());
+        Assert.Equal("Approved", result.GetProperty("message").GetString());
         var view = result.GetProperty("application");
         Assert.Equal(2, view.GetProperty("status").GetInt32());
         Assert.Equal(creator["_id"].ToString(), view.GetProperty("operator").GetProperty("id").GetString());
@@ -228,7 +228,7 @@ public sealed class ApplicationTests(LocalServices services)
         await ErrorAsync(await owner.DeleteAsync(ApplicationEndpoint(deletedApplication["_id"].AsObjectId)), 103);
         var deletedBody = await BodyAsync(await deletedClient.DeleteAsync(
             ApplicationEndpoint(deletedApplication["_id"].AsObjectId)));
-        Assert.Equal("删除成功", deletedBody.GetProperty("message").GetString());
+        Assert.Equal("Removed", deletedBody.GetProperty("message").GetString());
         Assert.Equal(0, await services.Store.Collection("application")
             .CountDocumentsAsync(new BsonDocument("_id", deletedApplication["_id"])));
         Assert.Equal("removed", (await ProjectMemberAsync(project, deleted)).Text("status"));
@@ -281,7 +281,7 @@ public sealed class ApplicationTests(LocalServices services)
 
         var memberApplication = await BodyAsync(await memberClient.PostAsJsonAsync(
             ApplicationPath("project", project), new { message = "团队成员申请" }));
-        Assert.Equal("申请成功，请等待管理员审核", memberApplication.GetProperty("message").GetString());
+        Assert.Equal("Application Sent. Please wait for administrator to review.", memberApplication.GetProperty("message").GetString());
         var pending = await ApplicationAsync(project, teamMember);
         await BodyAsync(await owner.PatchAsJsonAsync(ApplicationEndpoint(pending["_id"].AsObjectId),
             new { allow = true }));
@@ -351,7 +351,7 @@ public sealed class ApplicationTests(LocalServices services)
 
         var projectBody = await BodyAsync(await projectClient.PostAsJsonAsync(ApplicationPath("project", project),
             new { message = "免审项目" }));
-        Assert.Equal("加入成功", projectBody.GetProperty("message").GetString());
+        Assert.Equal("Successfully joined.", projectBody.GetProperty("message").GetString());
         Assert.Equal(project.ToString(), projectBody.GetProperty("group").GetProperty("id").GetString());
         var projectApplication = await ApplicationAsync(project, projectApplicant);
         Assert.Equal(2, projectApplication.Integer("s"));
@@ -360,7 +360,7 @@ public sealed class ApplicationTests(LocalServices services)
 
         var teamBody = await BodyAsync(await teamClient.PostAsJsonAsync(ApplicationPath("team", team),
             new { message = "免审团队" }));
-        Assert.Equal("加入成功", teamBody.GetProperty("message").GetString());
+        Assert.Equal("Successfully joined.", teamBody.GetProperty("message").GetString());
         var teamApplication = await ApplicationAsync(team, teamApplicant, "team");
         Assert.Equal(2, teamApplication.Integer("s"));
         Assert.Equal(teamApplicant["_id"].AsObjectId, teamApplication["o"].AsObjectId);
@@ -386,7 +386,7 @@ public sealed class ApplicationTests(LocalServices services)
 
         var body = await BodyAsync(await applicant.PostAsJsonAsync(ApplicationPath("project", project),
             new { message = "后申请" }));
-        Assert.Equal("管理员先前邀请了您，已直接加入", body.GetProperty("message").GetString());
+        Assert.Equal("The administrator previously invited you, so you have been directly added.", body.GetProperty("message").GetString());
         Assert.Equal(2, (await services.Store.Collection("invitation").Find(
             new BsonDocument("u", target["_id"])).FirstAsync()).Integer("s"));
         Assert.Equal("active", (await ProjectMemberAsync(project, target)).Text("status"));

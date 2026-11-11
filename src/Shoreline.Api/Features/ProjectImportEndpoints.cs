@@ -98,9 +98,10 @@ public static class ProjectImportEndpoints
             await imports.InitializeAfterCreateAsync(project, actor, labelPlusText, requestId, ct);
 
             var view = await projects.ViewAsync(project, actor, Chinese(context), ct);
+            view["member_summary"] = await projects.MemberSummariesAsync(project, compact: false, ct);
             var response = new BsonDocument
             {
-                ["message"] = "创建成功",
+                ["message"] = LegacySuccessMessages.Get(context, "创建成功"),
                 ["project"] = BsonDocument.Parse(JsonSerializer.Serialize(view))
             };
             return Results.Content(response.ToJson(), "application/json");

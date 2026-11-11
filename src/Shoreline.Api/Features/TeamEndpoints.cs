@@ -12,7 +12,7 @@ public static class TeamEndpoints
         {
             var actor = await current.RequireAsync(context, ct);
             var created = await teams.CreateAsync(actor, data, RequestId(context), ct);
-            return new { message = "创建成功", team = await teams.ViewAsync(created, actor, Chinese(context), ct) };
+            return new { message = LegacySuccessMessages.Get(context, "创建成功"), team = await teams.ViewAsync(created, actor, Chinese(context), ct) };
         });
         app.MapGet("/v1/teams/{teamId}", async (string teamId, HttpContext context, CurrentUser current,
             TeamMemberService members, TeamService teams, IdentityPermissions permissions, CancellationToken ct) =>
@@ -28,7 +28,7 @@ public static class TeamEndpoints
         {
             var actor = await current.RequireAsync(context, ct);
             var updated = await teams.UpdateAsync(await members.GetTeamAsync(teamId, ct), actor, data, ct);
-            return new { message = "修改成功", team = await teams.ViewAsync(updated, actor, Chinese(context), ct) };
+            return new { message = LegacySuccessMessages.Get(context, "修改成功"), team = await teams.ViewAsync(updated, actor, Chinese(context), ct) };
         });
         app.MapGet("/v1/user/teams", async (HttpContext context, CurrentUser current, TeamService teams,
             IdentityPermissions permissions, CancellationToken ct) =>

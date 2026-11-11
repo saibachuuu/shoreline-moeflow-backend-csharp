@@ -59,7 +59,7 @@ public static class EmailEndpoints
                 new BsonDocument { ["_id"] = user["_id"], ["e"] = user["e"] }, Builders<BsonDocument>.Update.Set("e", email),
                 new() { ReturnDocument = ReturnDocument.After }, ct);
             if (updated is null) throw ApiError.Invalid("用户信息已变化，请重试");
-            return new { message = "修改成功", user = await view.ToApiAsync(updated, ctx) };
+            return new { message = LegacySuccessMessages.Get(ctx, "修改成功"), user = await view.ToApiAsync(updated, ctx) };
         }).RequireRateLimiting("auth");
     }
 

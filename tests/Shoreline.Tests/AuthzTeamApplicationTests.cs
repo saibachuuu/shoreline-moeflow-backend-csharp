@@ -24,7 +24,7 @@ public sealed class AuthzTeamApplicationTests(LocalServices services)
 
         var applied = await AuthzAssert.OkAsync(
             await world.Client("stranger").PostAsJsonAsync(path, new { message = "求加入团队" }));
-        Assert.Equal("申请成功，请等待管理员审核", applied.GetProperty("message").GetString());
+        Assert.Equal("Application Sent. Please wait for administrator to review.", applied.GetProperty("message").GetString());
 
         var applicationId = (await ApplicationAsync(world.TeamId, world.Stranger))["_id"]
             .AsObjectId.ToString();
@@ -38,7 +38,7 @@ public sealed class AuthzTeamApplicationTests(LocalServices services)
         // The team owner approves.
         var approved = await AuthzAssert.OkAsync(
             await world.Client("owner").PatchAsJsonAsync(applicationPath, new { allow = true }));
-        Assert.Equal("已接受", approved.GetProperty("message").GetString());
+        Assert.Equal("Approved", approved.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public sealed class AuthzTeamApplicationTests(LocalServices services)
 
         var deleted = await AuthzAssert.OkAsync(
             await world.Client("stranger").DeleteAsync(applicationPath));
-        Assert.Equal("删除成功", deleted.GetProperty("message").GetString());
+        Assert.Equal("Removed", deleted.GetProperty("message").GetString());
     }
 
     [Fact]

@@ -51,6 +51,6 @@ public static class AvatarEndpoints
             form?["id"].ToString(),
             ct);
 
-        return Results.Json(new { message = result.Message, avatar = result.Avatar });
+        return Results.Json(new { message = LegacySuccessMessages.Get(context, result.Message), avatar = result.Avatar });
     }
 }

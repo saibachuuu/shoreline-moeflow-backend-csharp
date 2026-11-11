@@ -78,7 +78,7 @@ public sealed class OutputHttpTests
 
         var created = await world.SendAsync(HttpMethod.Post, $"/v1/teams/{world.TeamId}/outputs");
         Assert.True(created.StatusCode == HttpStatusCode.OK, await created.Content.ReadAsStringAsync());
-        Assert.Equal("创建导出任务成功", (await JsonAsync(created)).GetProperty("message").GetString());
+        Assert.Equal("Export task created successfully.", (await JsonAsync(created)).GetProperty("message").GetString());
         Assert.Equal(2, await world.Store.Collection("output")
             .CountDocumentsAsync(new BsonDocument("p", world.ProjectId)));
         Assert.Equal(2, await world.Store.Collection("csharp_job")

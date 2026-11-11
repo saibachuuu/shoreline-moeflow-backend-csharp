@@ -530,7 +530,7 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
 
     // ---- views ----
 
-    public async Task<object> ViewAsync(BsonDocument project, BsonDocument? actor, bool chinese, CancellationToken ct,
+    public async Task<Dictionary<string, object?>> ViewAsync(BsonDocument project, BsonDocument? actor, bool chinese, CancellationToken ct,
         PermissionSnapshot? snapshot = null)
     {
         snapshot ??= await permissions.ProjectSnapshotAsync(actor!, project, ct);

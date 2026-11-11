@@ -285,6 +285,9 @@ public sealed class ProjectMemberTests(LocalServices services)
         var completed = await BodyAsync(await owner.PostAsJsonAsync($"/v1/projects/{projectId}/complete", new { }));
         Assert.Equal("COMPLETED", completed.GetProperty("status").GetString());
         Assert.True(completed.GetProperty("changed").GetBoolean());
+        // app/apis/identity.py:43-51 nests member_summary inside project.
+        Assert.Single(completed.GetProperty("project").GetProperty("member_summary").EnumerateArray());
+        Assert.False(completed.TryGetProperty("member_summary", out _));
         var again = await BodyAsync(await owner.PostAsJsonAsync($"/v1/projects/{projectId}/complete", new { }));
         Assert.False(again.GetProperty("changed").GetBoolean());
 

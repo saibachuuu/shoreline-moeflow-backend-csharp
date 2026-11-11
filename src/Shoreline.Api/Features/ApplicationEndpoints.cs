@@ -74,6 +74,7 @@ public static class ApplicationEndpoints
                 throw ApiError.Field("message", "required");
             var result = await applications.ApplyAsync(actor, groupType, groupId,
                 message.GetString() ?? "", context, ct);
+            if (result.Contains("message")) result["message"] = LegacySuccessMessages.Get(context, result["message"].AsString);
             return Results.Content(result.ToJson(), "application/json");
         });
 
@@ -88,6 +89,7 @@ public static class ApplicationEndpoints
                 throw ApiError.Field("allow", "allow is required");
             var result = await applications.PatchAsync(actor, applicationId, allow.GetBoolean(), context,
                 RequestId(context), ct);
+            if (result.Contains("message")) result["message"] = LegacySuccessMessages.Get(context, result["message"].AsString);
             return Results.Content(result.ToJson(), "application/json");
         });
 
@@ -96,6 +98,7 @@ public static class ApplicationEndpoints
         {
             var actor = await current.RequireAsync(context, ct);
             var result = await applications.DeleteAsync(actor, applicationId, RequestId(context), ct);
+            if (result.Contains("message")) result["message"] = LegacySuccessMessages.Get(context, result["message"].AsString);
             return Results.Content(result.ToJson(), "application/json");
         });
 
@@ -125,6 +128,7 @@ public static class ApplicationEndpoints
                 var chinese = LanguageCatalog.ChinesePreferred(context.Request.GetTypedHeaders().AcceptLanguage);
                 throw new ApiError(error.Error, error.Code, chinese ? "团队不存在" : "Team does not exist.");
             }
+            if (result.Contains("message")) result["message"] = LegacySuccessMessages.Get(context, result["message"].AsString);
             return Results.Content(result.ToJson(), "application/json");
         });
     }

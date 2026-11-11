@@ -42,7 +42,7 @@ public static class ArchiveImportEndpoints
             galleryUrl, ct);
         return Results.Json(new Dictionary<string, object?>
         {
-            ["message"] = "归档导入任务已加入队列",
+            ["message"] = LegacySuccessMessages.Get(context, "归档导入任务已加入队列"),
             ["task"] = ArchiveImportView.ToApi(task),
         });
     }
@@ -67,7 +67,7 @@ public static class ArchiveImportEndpoints
         await imports.DismissAsync(project["_id"].AsObjectId, ct);
         return Results.Json(new Dictionary<string, object?>
         {
-            ["message"] = "归档导入提示已关闭",
+            ["message"] = LegacySuccessMessages.Get(context, "归档导入提示已关闭"),
             ["dismissed"] = true,
         });
     }

@@ -162,7 +162,7 @@ public static class FileEndpoints
             }
 
             await files.MoveAsync(file, project, parent == "root" ? null : parent, ct);
-            return Results.Json(new { message = "移动成功" });
+            return Results.Json(new { message = LegacySuccessMessages.Get(context, "移动成功") });
         }
 
         if (!string.IsNullOrEmpty(name))
@@ -173,7 +173,7 @@ public static class FileEndpoints
             }
 
             await files.RenameAsync(file, project, name, ct);
-            return Results.Json(new { message = "改名成功" });
+            return Results.Json(new { message = LegacySuccessMessages.Get(context, "改名成功") });
         }
 
         throw ApiError.Invalid("需要提供parent_id或name参数");
@@ -199,7 +199,7 @@ public static class FileEndpoints
         }
 
         await files.DeleteAsync(file, project, ct);
-        return Results.Json(new { message = "删除成功" });
+        return Results.Json(new { message = LegacySuccessMessages.Get(context, "删除成功") });
     }
 
     private static async Task<IResult> GetOrder(
@@ -258,7 +258,7 @@ public static class FileEndpoints
         var reset = data.TryGetProperty("reset_to_default", out var resetElement)
                     && resetElement.ValueKind == JsonValueKind.True;
         await files.SaveOrderAsync(actor, project, ids, version, reset, ct);
-        return Results.Json(new { message = "文件顺序已保存" });
+        return Results.Json(new { message = LegacySuccessMessages.Get(context, "文件顺序已保存") });
     }
 
     private static async Task<IResult> AdminListFiles(

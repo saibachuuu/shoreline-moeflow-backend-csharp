@@ -367,7 +367,7 @@ public sealed class AvatarStorageOverviewTests(LocalServices services)
         using var client = Client(factory, user);
         using var response = await client.PutAsync("/v1/avatar", Multipart("avatar", "user"));
         var body = await BodyAsync(response);
-        Assert.Equal("修改成功", body.GetProperty("message").GetString());
+        Assert.Equal("Updated", body.GetProperty("message").GetString());
         var key = (await FindAsync("user", user["_id"])).Text("a");
         Assert.True(File.Exists(Path.Combine(root, "user-avatars", key)));
         Assert.EndsWith("/user-avatars/" + key, body.GetProperty("avatar").GetString());

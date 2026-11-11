@@ -32,6 +32,7 @@ public sealed class ProjectTests(LocalServices services)
         Assert.Equal("NORMAL", project.GetProperty("status_name").GetString());
         Assert.Contains("project:ACCESS", project.GetProperty("effective_permissions").EnumerateArray().Select(v => v.GetString()));
         Assert.True(project.GetProperty("can_order_files").GetBoolean());
+        Assert.Single(project.GetProperty("member_summary").EnumerateArray());
         var stored = await ProjectAsync(ObjectId.Parse(project.GetProperty("id").GetString()));
         Assert.Equal(creator["_id"], stored.GetValue("ou"));
         Assert.Equal(0, stored.Integer("st"));
@@ -78,6 +79,8 @@ public sealed class ProjectTests(LocalServices services)
         var renamed = Name("project");
         var body = await BodyAsync(await owner.PutAsJsonAsync("/v1/projects/" + projectId, new { name = renamed, intro = "hello" }));
         Assert.Equal(renamed, body.GetProperty("project").GetProperty("name").GetString());
+        Assert.Single(body.GetProperty("project").GetProperty("member_summary").EnumerateArray());
+        Assert.False(body.TryGetProperty("member_summary", out _));
         Assert.Equal("hello", body.GetProperty("project").GetProperty("intro").GetString());
         var member = await UserAsync();
         await MemberAsync(teamId, member);
@@ -116,7 +119,7 @@ public sealed class ProjectTests(LocalServices services)
         var project = await CreateProjectAsync(owner, teamId, Name("project"), setId);
         Assert.Equal(setId, project.GetProperty("project_set").GetProperty("id").GetString());
         var deleted = await BodyAsync(await owner.DeleteAsync("/v1/project-sets/" + setId));
-        Assert.Equal("删除成功", deleted.GetProperty("message").GetString());
+        Assert.Equal("Removed", deleted.GetProperty("message").GetString());
         var stored = await ProjectAsync(ObjectId.Parse(project.GetProperty("id").GetString()));
         var defaultSet = await services.Store.Collection("project_set").Find(new BsonDocument { ["t"] = teamId, ["d"] = true }).FirstAsync();
         Assert.Equal(defaultSet["_id"], stored["ps"]);
@@ -134,7 +137,7 @@ public sealed class ProjectTests(LocalServices services)
         var project = await CreateProjectAsync(owner, teamId, Name("project"));
         var projectId = project.GetProperty("id").GetString();
         var created = await BodyAsync(await owner.PostAsJsonAsync("/v1/projects/" + projectId + "/targets", new { language = "de" }));
-        Assert.Equal("添加目标语言成功", created.GetProperty("message").GetString());
+        Assert.Equal("Successfully added target language.", created.GetProperty("message").GetString());
         var targetId = created.GetProperty("target").GetProperty("id").GetString();
         Assert.Equal("de", created.GetProperty("target").GetProperty("language").GetProperty("code").GetString());
         // app/apis/project.py:150-156 returns a bare list; pagination lives in
@@ -153,7 +156,7 @@ public sealed class ProjectTests(LocalServices services)
         using var memberClient = Client(member);
         await ErrorAsync(await memberClient.PostAsJsonAsync("/v1/projects/" + projectId + "/targets", new { language = "fr" }), 103);
         var deleted = await BodyAsync(await owner.DeleteAsync("/v1/targets/" + targetId));
-        Assert.Equal("删除成功", deleted.GetProperty("message").GetString());
+        Assert.Equal("Removed", deleted.GetProperty("message").GetString());
         var afterDelete = await ProjectAsync(ObjectId.Parse(projectId));
         Assert.Equal(2, afterDelete.Integer("tc"));
     }

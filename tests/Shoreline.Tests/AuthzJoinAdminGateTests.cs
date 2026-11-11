@@ -50,7 +50,7 @@ public sealed class AuthzJoinAdminGateTests(LocalServices services)
         // The invitee accepts.
         var accepted = await AuthzAssert.OkAsync(
             await world.Client("stranger").PatchAsJsonAsync(invitationPath, new { allow = true }));
-        Assert.Equal("已接受", accepted.GetProperty("message").GetString());
+        Assert.Equal("Approved", accepted.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class AuthzJoinAdminGateTests(LocalServices services)
         var applied = await AuthzAssert.OkAsync(
             await world.Client("stranger").PostAsJsonAsync(path, new { message = "求加入" }));
         // Python user.py:701: needs-check groups answer with the pending copy.
-        Assert.Equal("申请成功，请等待管理员审核", applied.GetProperty("message").GetString());
+        Assert.Equal("Application Sent. Please wait for administrator to review.", applied.GetProperty("message").GetString());
         var applicationId = (await ApplicationAsync(world.ProjectId, world.Stranger))["_id"]
             .AsObjectId.ToString();
         var applicationPath = $"/v1/applications/{applicationId}";
@@ -100,7 +100,7 @@ public sealed class AuthzJoinAdminGateTests(LocalServices services)
             HttpStatusCode.BadRequest, 103);
         var approved = await AuthzAssert.OkAsync(
             await world.Client("owner").PatchAsJsonAsync(applicationPath, new { allow = true }));
-        Assert.Equal("已接受", approved.GetProperty("message").GetString());
+        Assert.Equal("Approved", approved.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class AuthzJoinAdminGateTests(LocalServices services)
             HttpStatusCode.BadRequest, 103);
         var deleted = await AuthzAssert.OkAsync(
             await world.Client("siteAdmin").DeleteAsync(applicationPath));
-        Assert.Equal("删除成功", deleted.GetProperty("message").GetString());
+        Assert.Equal("Removed", deleted.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class AuthzJoinAdminGateTests(LocalServices services)
         var edited = await AuthzAssert.OkAsync(
             await world.Client("owner").PutAsJsonAsync($"/v1/terms/{termId}",
                 new { source = "hello2", target = "你好2", tip = "tip2" }));
-        Assert.Equal("修改成功", edited.GetProperty("message").GetString());
+        Assert.Equal("Updated", edited.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public sealed class AuthzJoinAdminGateTests(LocalServices services)
                     source_language_id = source["_id"].ToString(),
                     target_language_id = target["_id"].ToString()
                 }));
-        Assert.Equal("创建成功", created.GetProperty("message").GetString());
+        Assert.Equal("Created successfully.", created.GetProperty("message").GetString());
         var banks = await AuthzAssert.OkAsync(
             await world.Client("owner").GetAsync(
                 $"/v1/teams/{world.TeamId}/term-banks?limit=100"));
@@ -243,7 +243,7 @@ public sealed class AuthzJoinAdminGateTests(LocalServices services)
         var created = await AuthzAssert.OkAsync(
             await world.Client("owner").PostAsJsonAsync($"/v1/term-banks/{bankId}/terms",
                 new { source = "hello", target = "你好", tip = "" }));
-        Assert.Equal("创建成功", created.GetProperty("message").GetString());
+        Assert.Equal("Created successfully.", created.GetProperty("message").GetString());
         var terms = await AuthzAssert.OkAsync(
             await world.Client("owner").GetAsync($"/v1/term-banks/{bankId}/terms?word=hello"));
         return terms.EnumerateArray().Last().GetProperty("id").GetString()!;

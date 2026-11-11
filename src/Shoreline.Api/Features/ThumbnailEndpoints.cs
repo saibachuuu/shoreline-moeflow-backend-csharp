@@ -42,11 +42,11 @@ public static class ThumbnailEndpoints
         if (file.Integer("t") != 2) throw ThumbnailService.FileTypeNotSupport();
         if (!thumbnails.LocalGenerationRequired)
         {
-            return Results.Json(new { message = "当前存储模式无需重建缩略图", count = 0 });
+            return Results.Json(new { message = LegacySuccessMessages.Get(context, "当前存储模式无需重建缩略图"), count = 0 });
         }
 
         await thumbnails.ScheduleAsync(file["_id"].AsObjectId, projectId, expectedLabelRevision: null, ct);
-        return Results.Json(new { message = "缩略图生成任务已触发" });
+        return Results.Json(new { message = LegacySuccessMessages.Get(context, "缩略图生成任务已触发") });
     }
 
     private static async Task<IResult> ProjectThumbnailsAsync(
@@ -69,7 +69,7 @@ public static class ThumbnailEndpoints
 
         if (!thumbnails.LocalGenerationRequired)
         {
-            return Results.Json(new { message = "当前存储模式无需重建缩略图", count = 0 });
+            return Results.Json(new { message = LegacySuccessMessages.Get(context, "当前存储模式无需重建缩略图"), count = 0 });
         }
 
         var count = await thumbnails.ScheduleProjectAsync(project["_id"].AsObjectId, ct);
