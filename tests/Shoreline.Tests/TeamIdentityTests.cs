@@ -323,7 +323,7 @@ public sealed class TeamIdentityTests(LocalServices services)
 
     private async Task<Team> TeamAsync(int maximum = 100)
     {
-        var document = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["u"] = maximum, ["m_uc"] = 3, ["wqm"] = "qualified" };
+        var document = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["n"] = "identity-" + Guid.NewGuid().ToString("N"), ["u"] = maximum, ["m_uc"] = 3, ["wqm"] = "qualified" };
         await services.Store.Collection("team").InsertOneAsync(document);
         var creator = await UserAsync();
         var admin = await UserAsync();

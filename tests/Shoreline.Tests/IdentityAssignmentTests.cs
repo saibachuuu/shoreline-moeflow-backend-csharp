@@ -116,7 +116,7 @@ public sealed class IdentityAssignmentTests(LocalServices services)
     private async Task<(BsonDocument Actor, BsonDocument Team, BsonDocument Project)> SetupAsync(string baseTag = "member", bool open = false)
     {
         var actor = new BsonDocument("_id", ObjectId.GenerateNewId());
-        var team = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["wqm"] = open ? "open" : "qualified" };
+        var team = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["n"] = "assign-" + Guid.NewGuid().ToString("N"), ["wqm"] = open ? "open" : "qualified" };
         var project = new BsonDocument { ["_id"] = ObjectId.GenerateNewId(), ["t"] = team["_id"], ["st"] = 0 };
         await services.Store.Collection("team").InsertOneAsync(team);
         await services.Store.Collection("team_member").InsertOneAsync(Relation(actor, team, baseTag));

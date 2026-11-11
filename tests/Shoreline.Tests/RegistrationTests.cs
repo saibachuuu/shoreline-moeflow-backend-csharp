@@ -166,8 +166,8 @@ public sealed class RegistrationTests(LocalServices services)
         var memberTeam = ObjectId.GenerateNewId();
         var adminTeam = ObjectId.GenerateNewId();
         var teams = services.Store.Collection("team");
-        await teams.InsertOneAsync(new BsonDocument { ["_id"] = memberTeam, ["dr"] = beginnerRole });
-        await teams.InsertOneAsync(new BsonDocument { ["_id"] = adminTeam, ["dr"] = adminRole });
+        await teams.InsertOneAsync(new BsonDocument { ["_id"] = memberTeam, ["n"] = "member-team", ["dr"] = beginnerRole });
+        await teams.InsertOneAsync(new BsonDocument { ["_id"] = adminTeam, ["n"] = "admin-team", ["dr"] = adminRole });
         var original = await SaveSiteSettingAsync(false, [], [memberTeam, adminTeam, ObjectId.GenerateNewId()]);
         try
         {
