@@ -267,12 +267,20 @@ internal sealed class S3StorageBackend : IStorageBackend
             return Task.FromResult(domain.TrimEnd('/') + "/" + StorageKey.EncodePath(key));
         }
 
+        // AWS4 presigning rejects anything above 604800 seconds, and the 7-day
+        // default sits exactly on that boundary. A few milliseconds pass between
+        // building the request and validating it, which pushes the remaining
+        // lifetime a fraction past the limit, so keep one second of headroom.
+        var bounded = validity > TimeSpan.FromSeconds(604799)
+            ? TimeSpan.FromSeconds(604799)
+            : validity;
+
         var request = new GetPreSignedUrlRequest
         {
             BucketName = bucket,
             Key = PhysicalKey(key),
             Verb = HttpVerb.GET,
-            Expires = DateTime.UtcNow.Add(validity),
+            Expires = DateTime.UtcNow.Add(bounded),
         };
 
         if (!string.IsNullOrEmpty(contentDisposition))

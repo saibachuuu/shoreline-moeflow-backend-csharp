@@ -205,6 +205,28 @@ public sealed class StorageContractUnitTests
     }
 
     [Fact]
+    public async Task SevenDaySigningStaysUnderTheAws4Limit()
+    {
+        // AWS4 presigning rejects lifetimes above 604800s and validates against
+        // DateTime.UtcNow at call time. The 7-day default sits exactly on that
+        // boundary, so the few milliseconds between building and validating the
+        // request used to throw ArgumentException and turn every avatar-bearing
+        // response into a 500 (caught by the term-bank replay).
+        using var storage = new ObjectStorage(S3OfflineConfig());
+
+        var url = await storage.SignGetAsync(
+            "user-avatars/a.jpg", ObjectStorage.DefaultSignedUrlValidity);
+
+        var marker = "X-Amz-Expires=";
+        var start = url.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(start >= 0, "signed URL should carry X-Amz-Expires");
+        start += marker.Length;
+        var end = url.IndexOf('&', start);
+        var expires = int.Parse(url[start..(end < 0 ? url.Length : end)]);
+        Assert.InRange(expires, 1, 604800);
+    }
+
+    [Fact]
     public async Task DefaultRegionIsUsEast1UnlikePythonAuto()
     {
         // DIVERGENCE (documented): Python defaults the SigV4 region to "auto"
