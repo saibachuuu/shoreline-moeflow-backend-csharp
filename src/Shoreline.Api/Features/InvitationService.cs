@@ -549,7 +549,9 @@ public sealed class InvitationService(
             ?? throw new ApiError("UserNotExistError", 1005, "用户不存在");
 
     private static bool Chinese(HttpContext context) =>
-        context is not null && context.Request.Headers.AcceptLanguage.ToString().StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        // Reuse the shared negotiation so a missing Accept-Language keeps the
+        // Flask-Babel default ("zh") instead of silently switching to English.
+        LanguageCatalog.ChinesePreferred(context?.Request.GetTypedHeaders().AcceptLanguage);
 
     private async Task<BsonValue> GroupViewAsync(string scope, BsonDocument group, BsonDocument actor,
         HttpContext ctx, CancellationToken ct)

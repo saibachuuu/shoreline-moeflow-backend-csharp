@@ -13,7 +13,7 @@ namespace Shoreline.Tests;
 public sealed class LanguageTests(LocalServices services)
 {
     [Theory]
-    [InlineData("", false)]
+    [InlineData("", true)]
     [InlineData("zh-CN", true)]
     [InlineData("zh-CN,en;q=0.5", false)]
     [InlineData("en-US,zh;q=0.9", true)]

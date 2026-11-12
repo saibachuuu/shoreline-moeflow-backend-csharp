@@ -91,7 +91,10 @@ public sealed class LanguageCatalog(MongoStore store)
 
     public static bool ChinesePreferred(IList<StringWithQualityHeaderValue>? accepted)
     {
-        if (accepted is null || accepted.Count == 0) return false;
+        // Flask-Babel falls back to BABEL_DEFAULT_LOCALE = "zh"
+        // (app/config.py:39), so a request that sends no Accept-Language must
+        // get Chinese, not English.
+        if (accepted is null || accepted.Count == 0) return true;
         // Werkzeug first tries exact available languages; only if none matches
         // does it retry primary language subtags (for example zh-CN -> zh).
         static double Score(IEnumerable<StringWithQualityHeaderValue> headers, string language, bool primary)

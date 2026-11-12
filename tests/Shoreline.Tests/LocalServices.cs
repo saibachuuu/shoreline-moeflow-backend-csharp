@@ -64,7 +64,7 @@ public class LocalServices : IAsyncLifetime
         Configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         Store = new MongoStore(Configuration);
         await Store.InitializeAsync(CancellationToken.None);
-        App = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        App = new TestApp().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings));
