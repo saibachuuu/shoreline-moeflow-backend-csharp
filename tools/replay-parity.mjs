@@ -142,6 +142,28 @@ const flows = {
     ['GET', '/v1/projects/' + cfg.project + '/targets/{{etarget}}/outputs', null],
   ],
 
+  teamMembers: [
+    ['POST', '/v1/teams', {
+      name: 'tm' + STAMP.slice(-6),
+      intro: '',
+      allow_apply_type: 2,
+      application_check_type: 2,
+      default_role: cfg.teamRole,
+    }, { tteam: 'team.id' }],
+    ['POST', '/v1/teams/{{tteam}}/members', {
+      user_id: cfg.stranger,
+      base_tag: 'member',
+    }, { tmember: 'member.id' }],
+    ['GET', '/v1/teams/{{tteam}}/members', null],
+    ['PATCH', '/v1/teams/{{tteam}}/members/{{tmember}}', { expected_version: 0, base_tag: 'admin' }],
+    ['GET', '/v1/teams/{{tteam}}/members', null],
+    ['PATCH', '/v1/teams/{{tteam}}/members/{{tmember}}/aliases', { expected_version: 1, aliases: ['pn'] }],
+    ['PATCH', '/v1/teams/{{tteam}}/members/{{tmember}}/default-display-name', { expected_version: 2, default_display_name: 'pn' }],
+    ['GET', '/v1/teams/{{tteam}}/members', null],
+    ['DELETE', '/v1/teams/{{tteam}}/members/{{tmember}}', null],
+    ['GET', '/v1/teams/{{tteam}}/members', null],
+  ],
+
   invitations: [
     ['POST', '/v1/projects/' + cfg.project + '/invitations', {
       user_id: cfg.stranger,
