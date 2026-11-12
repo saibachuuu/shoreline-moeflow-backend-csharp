@@ -37,6 +37,7 @@ const cfg = {
   jaLanguage: process.env.PARITY_JA_LANGUAGE ?? '67b231b35781d7125d41e2a5',
   project: process.env.PARITY_PROJECT_ID ?? '6ae3ae62f54dd6b6f8b26bfb',
   projectSet: process.env.PARITY_PROJECT_SET_ID ?? '67b231b45781d7125d41e312',
+  stranger: process.env.PARITY_STRANGER_ID ?? '6ae457e3f54dd6b6f8b26ea7',
   team: process.env.PARITY_TEAM_ID ?? '67b231b45781d7125d41e311',
 };
 
@@ -86,8 +87,65 @@ const flows = {
     ['GET', '/v1/projects/{{project}}/files', null],
   ],
 
-  members: [
-    ['GET', '/v1/projects/' + cfg.project + '/members', null],
+  files: [
+    ['POST', '/v1/projects/' + cfg.project + '/files', {
+      $form: {
+        name: 'parity_upload.png',
+        type: 'image/png',
+        content: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        fields: {},
+      },
+    }, { file: 'id' }],
+    ['GET', '/v1/files/{{file}}', null],
+    ['GET', '/v1/projects/' + cfg.project + '/files', null],
+    ['PUT', '/v1/files/{{file}}', { name: 'parity_renamed.png' }],
+    ['GET', '/v1/files/{{file}}', null],
+    ['DELETE', '/v1/files/{{file}}', null],
+    ['GET', '/v1/projects/' + cfg.project + '/files', null],
+  ],
+
+  labels: [
+    ['POST', '/v1/projects/' + cfg.project + '/files', {
+      $form: {
+        name: 'parity_label.png',
+        type: 'image/png',
+        content: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        fields: {},
+      },
+    }, { lfile: 'id' }],
+    ['GET', '/v1/projects/' + cfg.project + '/targets', null, { ltarget: '0.id' }],
+    ['POST', '/v1/files/{{lfile}}/sources', {
+      content: 'こんにちは', x: 0.1, y: 0.2, position_type: 1,
+    }, { lsource: 'id' }],
+    ['GET', '/v1/files/{{lfile}}/sources?target_id={{ltarget}}', null],
+    ['PUT', '/v1/sources/{{lsource}}', { content: 'こんばんは' }],
+    ['POST', '/v1/sources/{{lsource}}/translations', {
+      content: '你好', target_id: '{{ltarget}}',
+    }],
+    ['GET', '/v1/files/{{lfile}}/sources?target_id={{ltarget}}', null],
+    ['POST', '/v1/files/{{lfile}}/sources', {
+      content: 'さようなら', x: 0.3, y: 0.4, position_type: 1,
+    }, { lsource2: 'id' }],
+    ['PUT', '/v1/sources/{{lsource2}}/rank', { next_source_id: '{{lsource}}' }],
+    ['GET', '/v1/files/{{lfile}}/sources?target_id={{ltarget}}', null],
+    ['DELETE', '/v1/sources/{{lsource2}}', null],
+    ['DELETE', '/v1/sources/{{lsource}}', null],
+    ['GET', '/v1/files/{{lfile}}/sources?target_id={{ltarget}}', null],
+    ['DELETE', '/v1/files/{{lfile}}', null],
+  ],
+
+  invitations: [
+    ['POST', '/v1/project/' + cfg.project + '/invitations', {
+      user_id: cfg.stranger,
+      role: cfg.projectRole,
+      tags: ['translator'],
+    }, { invitation: 'invitation.id' }],
+    ['GET', '/v1/project/' + cfg.project + '/invitations', null],
+    ['DELETE', '/v1/invitations/{{invitation}}', null],
+    ['GET', '/v1/project/' + cfg.project + '/invitations', null],
+  ],
+
+  members: [    ['GET', '/v1/projects/' + cfg.project + '/members', null],
     ['POST', '/v1/projects/' + cfg.project + '/members/changes', {
       operations: [{
         operation_id: 'op-' + STAMP,
@@ -151,7 +209,13 @@ async function call(side, method, path, body) {
     headers: { Authorization: 'Bearer ' + TOKEN, Accept: 'application/json' },
     signal: AbortSignal.timeout(60000),
   };
-  if (body != null) {
+  if (body && body.$form) {
+    const spec = body.$form;
+    const form = new FormData();
+    form.append('file', new Blob([Buffer.from(spec.content, 'base64')], { type: spec.type }), spec.name);
+    for (const [k, v] of Object.entries(spec.fields ?? {})) form.append(k, String(v));
+    options.body = form;
+  } else if (body != null) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(resolveTemplate(body, side));
   }
