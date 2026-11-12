@@ -56,7 +56,7 @@ public sealed class AdditionalListHttpTests(LocalServices services)
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
             var error = await invalid.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(5100, error.GetProperty("code").GetInt32());
-            Assert.Equal("身份标签请求参数错误: invalid project status", error.GetProperty("message").GetString());
+            Assert.Equal("请求参数错误: invalid project status", error.GetProperty("message").GetString());
         }
     }
 
