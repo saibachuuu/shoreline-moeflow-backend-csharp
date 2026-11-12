@@ -771,7 +771,8 @@ public sealed partial class FileService
             ["pt"] = new BsonArray(),
             ["pti"] = "",
             ["pst"] = BsonNull.Value,
-            ["pe"] = 0,
+            // pe stays absent until a parse actually fails; Python never writes
+            // a default 0, and the frontend treats a present value as an error.
             ["op"] = 0,
             ["ft"] = 0,
             ["ftt"] = 0,

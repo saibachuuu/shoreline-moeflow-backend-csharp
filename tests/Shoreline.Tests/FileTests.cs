@@ -63,9 +63,11 @@ public sealed class FileTests(LocalServices services)
         Assert.Equal(2L, api["file_size"]);
         Assert.Equal(2048L, api["cover_bytes"]);
         Assert.Equal(1024L, api["resample_bytes"]);
-        Assert.Equal("Auto-tagging in progress.", api["parse_status_detail_name"]);
-        Assert.Equal("Unknown character set.", api["parse_error_type_detail_name"]);
-        Assert.Equal("Image recognition in progress.", api["image_ocr_percent_detail_name"]);
+        // No HttpContext means no Accept-Language, which is exactly the
+        // Flask-Babel default of "zh" (app/config.py:39).
+        Assert.Equal("自动标记中", api["parse_status_detail_name"]);
+        Assert.Equal("未知字符集", api["parse_error_type_detail_name"]);
+        Assert.Equal("图片识别中", api["image_ocr_percent_detail_name"]);
         Assert.StartsWith("https://127.0.0.1:" + TestEnvironment.S3Port + "/shoreline-test/files/cover-",
             Assert.IsType<string>(api["cover_url"]));
         Assert.NotNull(api["url"]);

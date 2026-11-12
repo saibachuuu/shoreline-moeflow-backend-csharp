@@ -454,7 +454,6 @@ public sealed partial class FileService
             ["pt"] = new BsonArray(),
             ["pti"] = "",
             ["pst"] = BsonNull.Value,
-            ["pe"] = 0,
             ["op"] = 0,
             ["ft"] = 0,
             ["ftt"] = 0,
