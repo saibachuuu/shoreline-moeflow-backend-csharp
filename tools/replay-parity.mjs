@@ -164,6 +164,32 @@ const flows = {
     ['GET', '/v1/teams/{{tteam}}/members', null],
   ],
 
+  terms: [
+    ['POST', '/v1/teams/' + cfg.team + '/term-banks', {
+      name: 'tb' + STAMP.slice(-6),
+      tip: '',
+      source_language_id: '67b231b35781d7125d41e2a5',
+      target_language_id: '67b231b35781d7125d41e2a8',
+    }],
+    ['GET', '/v1/teams/' + cfg.team + '/term-banks', null, { tbank: '0.id' }],
+    ['POST', '/v1/term-banks/{{tbank}}/terms', {
+      source: 'こんにちは', target: '你好', tip: '',
+    }],
+    ['GET', '/v1/term-banks/{{tbank}}/terms', null, { tterm: '0.id' }],
+    ['PUT', '/v1/terms/{{tterm}}', { source: 'こんにちは', target: '您好', tip: '' }],
+    ['GET', '/v1/term-banks/{{tbank}}/terms', null],
+    ['PUT', '/v1/term-banks/{{tbank}}', {
+      name: 'tb_r' + STAMP.slice(-6),
+      tip: 'renamed',
+      source_language_id: '67b231b35781d7125d41e2a5',
+      target_language_id: '67b231b35781d7125d41e2a8',
+    }],
+    ['GET', '/v1/teams/' + cfg.team + '/term-banks', null],
+    ['DELETE', '/v1/terms/{{tterm}}', null],
+    ['DELETE', '/v1/term-banks/{{tbank}}', null],
+    ['GET', '/v1/teams/' + cfg.team + '/term-banks', null],
+  ],
+
   invitations: [
     ['POST', '/v1/projects/' + cfg.project + '/invitations', {
       user_id: cfg.stranger,
