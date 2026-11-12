@@ -134,6 +134,14 @@ const flows = {
     ['DELETE', '/v1/files/{{lfile}}', null],
   ],
 
+  exports: [
+    ['GET', '/v1/projects/' + cfg.project + '/targets', null, { etarget: '0.id' }],
+    ['POST', '/v1/projects/' + cfg.project + '/targets/{{etarget}}/outputs', {
+      type: 1,
+    }],
+    ['GET', '/v1/projects/' + cfg.project + '/targets/{{etarget}}/outputs', null],
+  ],
+
   invitations: [
     ['POST', '/v1/project/' + cfg.project + '/invitations', {
       user_id: cfg.stranger,
