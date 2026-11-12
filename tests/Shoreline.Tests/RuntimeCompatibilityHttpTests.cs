@@ -54,7 +54,7 @@ public sealed class RuntimeCompatibilityHttpTests
             $$"""{"message":"Please add me to the team"}""");
         Assert.Equal(HttpStatusCode.OK, teamPost.StatusCode);
         using var teamPostJson = JsonDocument.Parse(await teamPost.Content.ReadAsStringAsync());
-        Assert.Equal("申请成功，请等待管理员审核",
+        Assert.Equal("Application Sent. Please wait for administrator to review.",
             teamPostJson.RootElement.GetProperty("message").GetString());
 
         using var projectGet = await harness.SendAsync(HttpMethod.Get,
@@ -68,7 +68,7 @@ public sealed class RuntimeCompatibilityHttpTests
             $$"""{"message":"Please add me to the project"}""");
         Assert.Equal(HttpStatusCode.OK, projectPost.StatusCode);
         using var projectPostJson = JsonDocument.Parse(await projectPost.Content.ReadAsStringAsync());
-        Assert.Equal("申请成功，请等待管理员审核",
+        Assert.Equal("Application Sent. Please wait for administrator to review.",
             projectPostJson.RootElement.GetProperty("message").GetString());
 
         using var teamInfo = await harness.SendAsync(HttpMethod.Get,
