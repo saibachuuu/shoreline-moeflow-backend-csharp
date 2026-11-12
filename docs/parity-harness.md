@@ -59,10 +59,12 @@ bash tools/diff-parity-docs.sh ids.json
 Flows: `teams` (create / rename / members / project-sets), `projects`
 (create with `allow_apply_type = 3` / rename / targets / files), `members`
 (batch add), `teamMembers` (add / patch / aliases / display-name / remove),
-`files` (upload / rename / delete), `labels` (source create / edit /
-translation create / rank move / deletes), `terms` (term bank create / rename /
-term create / edit / delete), `exports` (queue an export and list it),
-`invitations` (create / list / revoke), `reads` (twelve representative GETs).
+`files` (upload / rename / delete), `fileOrder` (upload two files into a fresh
+project and reorder them using the returned `version` hash), `labels` (source
+create / edit / translation create / rank move / deletes), `terms` (term bank
+create / rename / term create / edit / delete), `exports` (queue an export and
+list it), `invitations` (create / list / revoke), `reads` (twelve representative
+GETs).
 
 ## What the first runs found
 
@@ -104,6 +106,7 @@ Replay, 10 flows:
 | Avatar/file URLs differ (CDN prefix vs signed R2 URL) | Cosmetic in every probe; set `STORAGE_DOMAIN` + `STORAGE_VIA_CDN` to match the deployed stack | Configuration, not code |
 | `file.parse_error_type` was written as `0` on upload, Python leaves it absent until parsing fails | The frontend renders "其他错误" for every fresh upload | Fixed in `ac56bce` (three writers) |
 | `IdentityErrors` emitted the raw class message, but `app/translations/zh/LC_MESSAGES/messages.po` rewrites it (`身份标签请求参数错误` → `请求参数错误`, `项目成员不存在` → `项目不存在`, `团队成员不存在` → `团队不存在`) | Wrong toast text on three error paths | Fixed in `71587fe` and `129e7cb`; the catalogue scan below found exactly these three |
+| String-form `ValidateError` was missing the `Validate Error: ` prefix that `APIError.__init__` prepends | Reorder/duplicate-file toasts lacked the prefix the frontend's legacy copy expects | Fixed in `0f10562` via `ApiError.Validate`; field errors keep the bare dict because `verify_data` passes `replace=True` |
 
 ## Catalogue scan
 
