@@ -327,7 +327,7 @@ public sealed class ApplicationTests(LocalServices services)
 
         var body = await BodyAsync(await adminClient.PostAsJsonAsync(ApplicationPath("project", project),
             new { message = "管理员继承" }));
-        Assert.Equal("加入成功，管理员继承自团队", body.GetProperty("message").GetString());
+        Assert.Equal("Joined successfully as administrator due to team settings.", body.GetProperty("message").GetString());
         Assert.Equal(project.ToString(), body.GetProperty("group").GetProperty("id").GetString());
         var member = await ProjectMemberAsync(project, teamAdmin);
         Assert.Equal("active", member.Text("status"));

@@ -25,6 +25,7 @@ public static class LegacySuccessMessages
             "创建导出任务成功" => "Export task created successfully.",
             "修改成功，请重新登陆" => "Updated. Please log in again.",
             "加入成功" => "Successfully joined.",
+            "加入成功，管理员继承自团队" => "Joined successfully as administrator due to team settings.",
             "申请成功，请等待管理员审核" => "Application Sent. Please wait for administrator to review.",
             "邀请成功，请等待用户确认" => "Invited. Please wait for the user to confirm.",
             "此用户已有申请，已直接加入" => "This user already has an application and has been directly added.",

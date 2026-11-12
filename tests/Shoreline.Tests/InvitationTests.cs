@@ -63,7 +63,7 @@ public sealed class InvitationTests(LocalServices services)
         {
             user_id = target["_id"].ToString(), tags = new[] { "proofreader" }, message = "加入项目"
         }));
-        Assert.Contains("已直接加入", body.GetProperty("message").GetString());
+        Assert.Contains("directly added", body.GetProperty("message").GetString());
         Assert.False(body.TryGetProperty("invitation", out _));
         Assert.Equal(2, body.GetProperty("project").GetProperty("user_count").GetInt32());
         var member = await ProjectMemberAsync(project, target);
@@ -109,7 +109,7 @@ public sealed class InvitationTests(LocalServices services)
         var id = await InviteAsync(owner, "project", project, target, tags: ["admin"]);
         await ErrorAsync(await owner.PatchAsJsonAsync(InvitationPath(id), new { allow = true }), 103);
         var accepted = await BodyAsync(await recipient.PatchAsJsonAsync(InvitationPath(id), new { allow = true }));
-        Assert.Equal("已接受", accepted.GetProperty("message").GetString());
+        Assert.Equal("Approved", accepted.GetProperty("message").GetString());
         Assert.Equal(2, accepted.GetProperty("group").GetProperty("user_count").GetInt32());
         Assert.Equal(2, (await InvitationAsync(id)).Integer("s"));
         var member = await ProjectMemberAsync(project, target);
@@ -329,7 +329,7 @@ public sealed class InvitationTests(LocalServices services)
         var projectDoc = await ProjectAsync(project);
         if ((int)invitation.Integer("s") == 2)
         {
-            Assert.Equal("已接受", winner.GetProperty("message").GetString());
+            Assert.Equal("Approved", winner.GetProperty("message").GetString());
             Assert.Equal("active", member.Text("status"));
             Assert.Equal(2, (int)projectDoc.Integer("m_uc"));
         }
@@ -435,7 +435,7 @@ public sealed class InvitationTests(LocalServices services)
 
         var again = await InviteAsync(owner, "team", team, target, role: teamMember);
         var accepted = await BodyAsync(await recipient.PatchAsJsonAsync(InvitationPath(again), new { allow = true }));
-        Assert.Equal("已接受", accepted.GetProperty("message").GetString());
+        Assert.Equal("Approved", accepted.GetProperty("message").GetString());
         var restored = await services.Store.Collection("team_member").Find(
             new BsonDocument { ["team"] = team, ["user"] = target["_id"] }).FirstAsync();
         Assert.Equal("active", restored.Text("status"));
@@ -677,7 +677,7 @@ public sealed class InvitationTests(LocalServices services)
         {
             user_id = teammate["_id"].ToString(), role_id = projectTranslator.ToString(), message = "直接加入"
         }));
-        Assert.Contains("已直接加入", direct.GetProperty("message").GetString());
+        Assert.Contains("directly added", direct.GetProperty("message").GetString());
         var joined = await ProjectMemberAsync(project, teammate);
         Assert.Equal("active", joined.Text("status"));
         Assert.Equal(new[] { "translator" }, joined["tags"].AsBsonArray.Select(v => v.AsString));
