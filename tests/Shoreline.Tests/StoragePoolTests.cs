@@ -1033,7 +1033,8 @@ internal sealed class MemoryBackend : IStorageBackend
     public bool Contains(string key) => objects.ContainsKey(key);
     public byte[] Bytes(string key) => objects[key];
 
-    public async Task PutAsync(string key, Stream content, string contentType, CancellationToken ct)
+    public async Task PutAsync(string key, Stream content, string contentType, CancellationToken ct,
+        long? contentLength = null)
     {
         using var buffer = new MemoryStream();
         var wanted = ShortWrite ? 500 : long.MaxValue;

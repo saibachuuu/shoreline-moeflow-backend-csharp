@@ -193,8 +193,9 @@ internal sealed class ObjectStorageBackend : IStorageBackend
         this.ownsStorage = ownsStorage;
     }
 
-    public Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken) =>
-        storage.PutAsync(key, content, contentType, cancellationToken);
+    public Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken,
+        long? contentLength = null) =>
+        storage.PutAsync(key, content, contentType, cancellationToken, contentLength);
 
     public Task<ObjectDownload> GetAsync(string key, CancellationToken cancellationToken) =>
         storage.GetAsync(key, cancellationToken);

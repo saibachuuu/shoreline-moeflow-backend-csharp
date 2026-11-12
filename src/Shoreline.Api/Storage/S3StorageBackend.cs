@@ -42,12 +42,56 @@ internal sealed class S3StorageBackend : IStorageBackend
         string key,
         Stream content,
         string contentType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long? contentLength = null)
     {
         ArgumentNullException.ThrowIfNull(content);
         StorageKey.ValidateObjectKey(key);
 
-        var remaining = content.CanSeek ? content.Length - content.Position : -1;
+        // With chunked signing disabled (R2 rejects it) the SDK asks the stream
+        // for its size. A stream that cannot seek cannot answer, so it is spilled
+        // to a short-lived temp file first. This is the storage-pool fallback
+        // path: a download from a different provider than the destination.
+        if (!content.CanSeek)
+        {
+            await using var spill = await SpillToTempAsync(content, cancellationToken).ConfigureAwait(false);
+            await PutSeekableAsync(key, spill, contentType, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await PutSeekableAsync(key, content, contentType, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<FileStream> SpillToTempAsync(Stream content, CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "shoreline-put-" + Guid.NewGuid().ToString("N") + ".tmp");
+        var file = new FileStream(
+            path,
+            FileMode.CreateNew,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            64 * 1024,
+            FileOptions.DeleteOnClose | FileOptions.Asynchronous);
+        try
+        {
+            await content.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+            file.Position = 0;
+            return file;
+        }
+        catch
+        {
+            await file.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task PutSeekableAsync(
+        string key,
+        Stream content,
+        string contentType,
+        CancellationToken cancellationToken)
+    {
+        var remaining = content.Length - content.Position;
         if (remaining > MultipartThresholdBytes)
         {
             await PutMultipartAsync(key, content, contentType, cancellationToken).ConfigureAwait(false);

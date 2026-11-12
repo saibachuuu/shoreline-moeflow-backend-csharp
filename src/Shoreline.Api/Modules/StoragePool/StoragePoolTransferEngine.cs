@@ -1106,11 +1106,12 @@ public sealed class StoragePoolTransferEngine
     private sealed class CountingReadStream(Stream inner) : Stream
     {
         public long BytesRead { get; private set; }
-        public override bool CanRead => inner.CanRead;
+
+        public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
-        public override long Length => inner.Length;
-        public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => BytesRead; set => throw new NotSupportedException(); }
         public override int Read(byte[] buffer, int offset, int count)
         {
             var read = inner.Read(buffer, offset, count);

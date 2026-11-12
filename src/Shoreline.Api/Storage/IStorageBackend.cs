@@ -2,7 +2,14 @@ namespace Shoreline.Api.Storage;
 
 public interface IStorageBackend : IDisposable
 {
-    Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken);
+    /// <summary>
+    /// Stores <paramref name="content"/> under <paramref name="key"/>.
+    /// <paramref name="contentLength"/> is required when the stream cannot report
+    /// its own length: S3 refuses chunked signing (R2 rejects it outright), so
+    /// the SDK has to know the exact size up front.
+    /// </summary>
+    Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken,
+        long? contentLength = null);
 
     Task<ObjectDownload> GetAsync(string key, CancellationToken cancellationToken);
 

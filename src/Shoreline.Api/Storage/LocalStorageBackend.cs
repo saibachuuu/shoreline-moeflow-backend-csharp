@@ -37,7 +37,8 @@ internal sealed class LocalStorageBackend : IStorageBackend
         string key,
         Stream content,
         string contentType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long? contentLength = null)
     {
         ArgumentNullException.ThrowIfNull(content);
         StorageKey.ValidateLocalObjectKey(key);

@@ -125,8 +125,9 @@ public sealed class ObjectStorage : IStorageBackend
         string key,
         Stream content,
         string contentType,
-        CancellationToken cancellationToken) =>
-        backend.PutAsync(key, content, contentType, cancellationToken);
+        CancellationToken cancellationToken,
+        long? contentLength = null) =>
+        backend.PutAsync(key, content, contentType, cancellationToken, contentLength);
 
     public Task<ObjectDownload> GetAsync(string key, CancellationToken cancellationToken) =>
         backend.GetAsync(key, cancellationToken);
