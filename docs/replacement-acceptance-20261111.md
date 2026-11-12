@@ -71,6 +71,17 @@
 
 完成 D1/D2 后，以本表逐项打勾作为 GO 依据；任何一项回退即回到 NO-GO。
 
+## 8. 11-12 差分验收（新增证据）
+
+用两个工具把"形状与行为 parity"从人工比对变成可重跑的命令：
+
+- `tools/parity-probe.mjs`：自动发现 51 个 GET、对比 37 个，**0 结构差异**；`PARITY_LANG=en` 可对比英文文案。
+- `tools/replay-parity.mjs`：生产 dump 双库回放，10 条写链路（teams / projects / files / labels / terms / exports / invitations / members / teamMembers / reads），**0 结构差异**。
+
+这轮因此抓到并修复 4 个真实缺陷（`allow_apply_type=3`、默认语言、`parse_error_type`、三条被 zh 目录改写的错误文案），详见 `docs/parity-harness.md`。
+
+**结论不变**：预发 GO；生产切换仍需真实 R2/SMTP walkthrough + 显式接受 D 组风险。
+
 ## 7. 文档索引
 
 - `ARCHITECTURE-PY-BASELINE-VS-CSHARP.md`（架构对比与未重构项）
