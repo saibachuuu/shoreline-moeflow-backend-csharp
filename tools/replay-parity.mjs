@@ -143,14 +143,15 @@ const flows = {
   ],
 
   invitations: [
-    ['POST', '/v1/project/' + cfg.project + '/invitations', {
+    ['POST', '/v1/projects/' + cfg.project + '/invitations', {
       user_id: cfg.stranger,
       role: cfg.projectRole,
-      tags: ['translator'],
+      tags: ['admin'],
+      message: '欢迎加入',
     }, { invitation: 'invitation.id' }],
-    ['GET', '/v1/project/' + cfg.project + '/invitations', null],
+    ['GET', '/v1/projects/' + cfg.project + '/invitations', null],
     ['DELETE', '/v1/invitations/{{invitation}}', null],
-    ['GET', '/v1/project/' + cfg.project + '/invitations', null],
+    ['GET', '/v1/projects/' + cfg.project + '/invitations', null],
   ],
 
   members: [    ['GET', '/v1/projects/' + cfg.project + '/members', null],
