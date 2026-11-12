@@ -191,23 +191,35 @@ const flows = {
   ],
 
   fileOrder: [
-    ['POST', '/v1/projects/' + cfg.project + '/files', {
+    // A fresh project has exactly the two files this flow uploads, so the
+    // "must send the whole directory" rule can be satisfied.
+    ['POST', '/v1/teams/' + cfg.team + '/projects', {
+      name: 'po' + STAMP.slice(-6),
+      intro: '',
+      allow_apply_type: 3,
+      application_check_type: 2,
+      default_role: cfg.projectRole,
+      project_set: cfg.projectSet,
+      source_language: 'ja',
+      target_languages: ['zh-CN'],
+    }, { oproj: 'project.id' }],
+    ['POST', '/v1/projects/{{oproj}}/files', {
       $form: {
         name: 'order_a.png', type: 'image/png',
         content: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
         fields: {},
       },
     }, { of1: 'id' }],
-    ['POST', '/v1/projects/' + cfg.project + '/files', {
+    ['POST', '/v1/projects/{{oproj}}/files', {
       $form: {
         name: 'order_b.png', type: 'image/png',
         content: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
         fields: {},
       },
     }, { of2: 'id' }],
-    ['GET', '/v1/projects/' + cfg.project + '/files/order', null],
-    ['PUT', '/v1/projects/' + cfg.project + '/files/order', { file_ids: ['{{of2}}', '{{of1}}'], version: '0' }],
-    ['GET', '/v1/projects/' + cfg.project + '/files/order', null],
+    ['GET', '/v1/projects/{{oproj}}/files/order', null, { overt: 'version' }],
+    ['PUT', '/v1/projects/{{oproj}}/files/order', { file_ids: ['{{of2}}', '{{of1}}'], version: '{{overt}}' }],
+    ['GET', '/v1/projects/{{oproj}}/files/order', null],
     ['DELETE', '/v1/files/{{of1}}', null],
     ['DELETE', '/v1/files/{{of2}}', null],
   ],
