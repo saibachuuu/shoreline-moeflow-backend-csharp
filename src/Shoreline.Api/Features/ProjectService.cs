@@ -148,7 +148,9 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         // string. Keep the raw value so Project.create can parse it before the
         // first row is written, exactly like its pre-save load_from_labelplus.
         var labelplusText = data.OptionalLabelplusText("labelplus_txt");
-        var allowApply = AllowOrCheckType(data, "allow_apply_type", 1, 2);
+        // ProjectAllowApplyType extends the team enum with TEAM_USER = 3
+        // (app/models/project.py:74-85); teams themselves only accept 1 and 2.
+        var allowApply = AllowOrCheckType(data, "allow_apply_type", 1, 3);
         var checker = AllowOrCheckType(data, "application_check_type", 1, 2);
         // default_role: system role without creator (Python default: translator).
         ObjectId defaultRoleId;
@@ -433,7 +435,7 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
             changes["i"] = intro;
         }
         if (data.TryGetProperty("allow_apply_type", out var allowProperty))
-            changes["m_a"] = AllowOrCheckType(data, "allow_apply_type", 1, 2);
+            changes["m_a"] = AllowOrCheckType(data, "allow_apply_type", 1, 3);
         if (data.TryGetProperty("application_check_type", out var checkProperty))
             changes["m_t"] = AllowOrCheckType(data, "application_check_type", 1, 2);
         if (data.TryGetProperty("default_role", out var roleProperty) && roleProperty.ValueKind == System.Text.Json.JsonValueKind.String)
@@ -806,9 +808,9 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
 
     // ---- helpers ----
 
-    private static int AllowOrCheckType(System.Text.Json.JsonElement data, string field, int allowedA, int allowedB)
+    private static int AllowOrCheckType(System.Text.Json.JsonElement data, string field, int min, int max)
     {
-        if (!data.TryGetProperty(field, out var value) || value.ValueKind != System.Text.Json.JsonValueKind.Number || !value.TryGetInt32(out var number) || number is not (1 or 2))
+        if (!data.TryGetProperty(field, out var value) || value.ValueKind != System.Text.Json.JsonValueKind.Number || !value.TryGetInt32(out var number) || number < min || number > max)
             throw ApiError.Field(field, "Invalid value");
         return number;
     }

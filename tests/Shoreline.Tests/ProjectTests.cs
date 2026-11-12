@@ -50,6 +50,31 @@ public sealed class ProjectTests(LocalServices services)
     }
 
     [Fact]
+    public async Task CreateAcceptsTeamUserAllowApplyType()
+    {
+        // ProjectAllowApplyType adds TEAM_USER = 3 on top of the team enum
+        // (app/models/project.py:74-85). Rejecting it broke project creation
+        // from the frontend, which offers all three choices.
+        var creator = await UserAsync();
+        using var client = Client(creator);
+        var teamId = await CreateTeamAsync(client, Name("team"));
+        var form = new Dictionary<string, object?>
+        {
+            ["name"] = Name("project"),
+            ["intro"] = "",
+            ["allow_apply_type"] = 3,
+            ["application_check_type"] = 2,
+            ["source_language"] = "ja",
+            ["target_languages"] = new[] { "zh-CN" }
+        };
+        var body = await BodyAsync(await client.PostAsJsonAsync("/v1/teams/" + teamId + "/projects", form));
+        var project = body.GetProperty("project");
+        Assert.Equal(3, project.GetProperty("allow_apply_type").GetInt32());
+        var stored = await ProjectAsync(ObjectId.Parse(project.GetProperty("id").GetString()));
+        Assert.Equal(3, stored.Integer("m_a"));
+    }
+
+    [Fact]
     public async Task GetProjectReturnsMemberSummaryAndHidesOutsiders()
     {
         var creator = await UserAsync();

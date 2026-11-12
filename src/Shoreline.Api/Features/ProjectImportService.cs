@@ -42,6 +42,9 @@ public sealed partial class ProjectImportService(
 
     public const int ApplyNone = 1;
     public const int ApplyAll = 2;
+    // ProjectAllowApplyType.TEAM_USER (app/models/project.py:79) only exists at
+    // the project level; the team enum stops at ALL.
+    public const int ApplyTeamUser = 3;
 
     private IMongoCollection<BsonDocument> Projects => store.Collection("project");
     private IMongoCollection<BsonDocument> Targets => store.Collection("target");
@@ -570,7 +573,7 @@ public sealed partial class ProjectImportService(
         var intro = RequiredString(node, "intro");
         if (RuneLength(intro) > 140) throw ApiError.Field("intro", "长度为0到140个字符");
         var allowApply = RequiredInt(node, "allow_apply_type");
-        if (allowApply is not (ApplyNone or ApplyAll)) throw ApiError.Field("allow_apply_type", "值不在允许范围内");
+        if (allowApply is not (ApplyNone or ApplyAll or ApplyTeamUser)) throw ApiError.Field("allow_apply_type", "值不在允许范围内");
         var checker = RequiredInt(node, "application_check_type");
         if (checker is not (1 or 2)) throw ApiError.Field("application_check_type", "值不在允许范围内");
 
