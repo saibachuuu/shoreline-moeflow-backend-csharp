@@ -103,6 +103,28 @@ Replay, 8 flows (all of `teams`, `projects`, `files`, `labels`, `exports`,
 | Python renders `ValidationError` message values as a **character array** (`["O","n","l","y",...]`), C# as one string | Error toasts: Python shows one letter, C# shows the sentence | C# is correct; left as-is |
 | Avatar/file URLs differ (CDN prefix vs signed R2 URL) | Cosmetic in every probe; set `STORAGE_DOMAIN` + `STORAGE_VIA_CDN` to match the deployed stack | Configuration, not code |
 | `file.parse_error_type` was written as `0` on upload, Python leaves it absent until parsing fails | The frontend renders "其他错误" for every fresh upload | Fixed in `ac56bce` (three writers) |
+| `IdentityErrors` emitted the raw class message, but `app/translations/zh/LC_MESSAGES/messages.po` rewrites it (`身份标签请求参数错误` → `请求参数错误`, `项目成员不存在` → `项目不存在`, `团队成员不存在` → `团队不存在`) | Wrong toast text on three error paths | Fixed in `71587fe` and `129e7cb`; the catalogue scan below found exactly these three |
+
+## Catalogue scan
+
+`app/translations/zh/LC_MESSAGES/messages.po` has 545 entries, 218 of which
+differ from the `msgid` — but 215 of those map to an **empty** `msgstr`, which
+Flask falls back to the `msgid` (the Chinese source string). Only three carry a
+real rewrite, and all three are error-class messages that C# was emitting
+verbatim. Turning the `.po` into a checklist is cheap and reproducible:
+
+```bash
+python3 - <<'EOF'
+import re
+s=open('app/translations/zh/LC_MESSAGES/messages.po',encoding='utf-8').read()
+dec=lambda x:"".join(re.findall(r'"([^"]*)"',x))
+for a,b in re.findall(r'msgid ((?:"[^"]*"\n)+)msgstr ((?:"[^"]*"\n)+)',s):
+    if dec(a)!=dec(b) and dec(b): print(repr(dec(a)),'->',repr(dec(b)))
+EOF
+```
+
+Run the probe with `PARITY_LANG=en` to compare the English side; the only drift
+it reports is URLs and ids, so the `*En` tables match the catalogue.
 
 ## Caveats
 
