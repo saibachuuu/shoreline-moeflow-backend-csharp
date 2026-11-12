@@ -8,8 +8,10 @@ public static class IdentityErrors
     private static ApiError Error(string name, int code, string identity, string message, int status = 400) =>
         new(name, code, message, status) { IdentityCode = identity };
 
+    // Legacy zh translation maps "身份标签请求参数错误" to "请求参数错误"
+    // (app/translations/zh/LC_MESSAGES/messages.po); emit the translated form.
     public static ApiError InvalidRequest(string detail = "") => Error("InvalidIdentityRequestError", 5100,
-        "INVALID_REQUEST", "身份标签请求参数错误" + (detail.Length == 0 ? "" : ": " + detail));
+        "INVALID_REQUEST", "请求参数错误" + (detail.Length == 0 ? "" : ": " + detail));
     public static ApiError InvalidTag() => Error("InvalidIdentityTagError", 5101, "INVALID_IDENTITY_TAG", "项目身份标签无效或不可分配", 422);
     public static ApiError TeamMemberMissing() => Error("IdentityTeamMemberNotFoundError", 5104, "TEAM_MEMBER_NOT_FOUND", "团队成员不存在", 404);
     public static ApiError UserMissing() => Error("IdentityUserNotFoundError", 5105, "USER_NOT_FOUND", "用户不存在", 404);

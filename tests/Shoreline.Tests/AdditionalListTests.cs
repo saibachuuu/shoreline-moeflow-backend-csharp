@@ -62,7 +62,9 @@ public sealed class AdditionalListTests(LocalServices services)
         Assert.Equal(5100, error.Code);
         Assert.Equal(400, error.Status);
         Assert.Equal("INVALID_REQUEST", error.IdentityCode);
-        Assert.Equal("身份标签请求参数错误: invalid project status", error.Message);
+        // The zh catalogue translates the class message, so the wire text is
+        // "请求参数错误" even though the source string says "身份标签请求参数错误".
+        Assert.Equal("请求参数错误: invalid project status", error.Message);
     }
 
     [Fact]
