@@ -60,7 +60,8 @@ Flows: `teams` (create / rename / members / project-sets), `projects`
 (create with `allow_apply_type = 3` / rename / targets / files), `members`
 (batch add), `files` (upload / rename / delete), `labels` (source create / edit /
 translation create / rank move / deletes), `exports` (queue an export and list
-it), `reads` (twelve representative GETs).
+it), `invitations` (create / list / revoke), `reads` (twelve representative
+GETs).
 
 ## What the first runs found
 
@@ -71,7 +72,8 @@ Read probe, 51 discovered routes, 37 comparable:
 - Value-only drift came from two sources: signed R2 URLs vs the CDN prefix, and
   i18n (fixed — see below).
 
-Replay, 7 flows:
+Replay, 8 flows (all of `teams`, `projects`, `files`, `labels`, `exports`,
+`invitations`, `members`, `reads`):
 
 - 1 structural difference: `GET /v1/admin/users` returns **500 on Python** for
   this dump (`KeyError` inside the legacy serializer). C# returns 200. The legacy
@@ -83,6 +85,12 @@ Replay, 7 flows:
   ahead, not wrong.
 - The `files` run also surfaced `parse_error_type: 0` on newly uploaded files,
   which Python never writes. Fixed in `ac56bce`.
+- `exports` diverges on `link` only because the harness runs no Celery worker on
+  the Python side, so its export row never gets a download URL. That is the
+  environment, not the code.
+- `members` and `storage-pool/sources` report `both-error` on a second run: both
+  sides reject the duplicate member / the probe has no storage-pool credential
+  configured. Status codes agree.
 
 ## Differences found and their disposition
 
