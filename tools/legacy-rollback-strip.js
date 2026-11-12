@@ -50,7 +50,8 @@ for (const collection of Object.keys(specs).sort()) {
 // to create the same key under a second name, so drop the C# variants and
 // let the Python application recreate its own indexes at startup.
 const legacyIndexes = {
-  team: ["csharp_team_name_unique_v1"],
+  // lc_phase_1 comes from the C# team lifecycle guard (TeamLifecycleLock).
+  team: ["csharp_team_name_unique_v1", "lc_phase_1"],
   team_member: [
     "team_member_status_v1",
     "team_member_aliases_v1",
@@ -82,6 +83,21 @@ for (const collection of Object.keys(legacyIndexes).sort()) {
       // IndexNotFound / NamespaceNotFound: nothing to migrate.
       if (error.code !== 26 && error.code !== 27) throw error;
     }
+  }
+}
+
+// Collections that exist only because of the C# build. MongoEngine ignores
+// unknown collections, so leaving them behind is harmless but noisy; drop them
+// so a rollback returns the database to a shape Python alone would produce.
+const csharpOnlyCollections = ["team_lifecycle_lock"];
+
+for (const name of csharpOnlyCollections) {
+  try {
+    db.getCollection(name).drop();
+    print(name + ": dropped collection");
+  } catch (error) {
+    // NamespaceNotFound: the C# build never created it here.
+    if (error.code !== 26) throw error;
   }
 }
 
