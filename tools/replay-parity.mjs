@@ -249,6 +249,41 @@ const flows = {
     ['GET', '/v1/projects/' + cfg.project, null],
   ],
 
+  lifecycle: [
+    // A fresh project keeps the destructive operations away from the shared one.
+    ['POST', '/v1/teams/' + cfg.team + '/projects', {
+      name: 'pl_' + STAMP.slice(-6),
+      intro: '',
+      allow_apply_type: 3,
+      application_check_type: 2,
+      default_role: cfg.projectRole,
+      project_set: cfg.projectSet,
+      source_language: 'ja',
+      target_languages: ['zh-CN'],
+    }, { lproject: 'project.id' }],
+    ['POST', '/v1/projects/{{lproject}}/snapshots', {
+      name: 'ps_' + STAMP.slice(-6),
+    }, { lsnap: 'snapshot_id' }],
+    ['GET', '/v1/projects/{{lproject}}/snapshots', null],
+    ['POST', '/v1/projects/{{lproject}}/snapshots/{{lsnap}}/restore', {}],
+    ['POST', '/v1/projects/{{lproject}}/label-clear', {
+      field: 'source', delete_labels: false, clear_tips: false,
+    }, { lclear: 'snapshot_id' }],
+    ['POST', '/v1/projects/{{lproject}}/complete', {}],
+    ['GET', '/v1/projects/{{lproject}}', null],
+    ['POST', '/v1/projects/{{lproject}}/reopen', {}],
+    ['GET', '/v1/projects/{{lproject}}', null],
+  ],
+
+  snapshots: [
+    ['POST', '/v1/projects/' + cfg.project + '/snapshots', {
+      name: 'sn_' + STAMP.slice(-6),
+    }, { snap: 'snapshot_id' }],
+    ['GET', '/v1/projects/' + cfg.project + '/snapshots', null],
+    ['POST', '/v1/projects/' + cfg.project + '/snapshots/{{snap}}/restore', {}],
+    ['GET', '/v1/projects/' + cfg.project + '/snapshots', null],
+  ],
+
   reads: [
     ['GET', '/v1/site/homepage', null],
     ['GET', '/v1/languages', null],
