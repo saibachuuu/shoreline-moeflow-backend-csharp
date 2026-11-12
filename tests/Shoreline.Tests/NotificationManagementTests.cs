@@ -496,6 +496,26 @@ public sealed class NotificationManagementTests(LocalServices services)
     }
 
     [Fact]
+    public void CanonicalSupportsValueTypedDictionaries()
+    {
+        // Notification sync builds revision input from Dictionary<string, long>
+        // counters, which only implement the non-generic IDictionary while their
+        // enumerator still yields KeyValuePair<string, long>. Treating those
+        // entries as DictionaryEntry used to throw InvalidCastException and turn
+        // the whole /v1/me/notification-sync request into a 500.
+        var counts = new Dictionary<string, long> { ["project"] = 12, ["system"] = 0 };
+        var flags = new Dictionary<string, bool> { ["on"] = true, ["off"] = false };
+        var nested = new Dictionary<string, object?>
+        {
+            ["counts"] = counts,
+            ["flags"] = flags
+        };
+
+        Assert.Equal("{\"counts\": {\"project\": 12, \"system\": 0}, \"flags\": {\"off\": false, \"on\": true}}",
+            NotificationManagementService.CanonicalJson(nested));
+    }
+
+    [Fact]
     public async Task HttpSyncDisabledAlwaysSetsNoStore()
     {
         var user = await AddUserAsync(name: "http-disabled-user");

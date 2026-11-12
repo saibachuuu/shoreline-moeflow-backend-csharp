@@ -53,9 +53,10 @@ internal static class NotificationManagementJson
                 WritePairs(builder, dictionary);
                 return;
             case IDictionary dictionary:
-                WritePairs(builder, dictionary.Cast<DictionaryEntry>().Select(entry =>
-                    KeyValuePair.Create(Convert.ToString(entry.Key,
-                        CultureInfo.InvariantCulture) ?? "", entry.Value)));
+                WritePairs(builder, Entries(dictionary));
+                return;
+            case IEnumerable enumerable when IsPairSequence(enumerable):
+                WritePairs(builder, Entries(enumerable));
                 return;
             case IEnumerable enumerable:
                 WriteArray(builder, enumerable.Cast<object?>());
@@ -182,6 +183,61 @@ internal static class NotificationManagementJson
         var mantissa = digits[first].ToString();
         if (rest.Length > 0) mantissa += "." + rest;
         return (negative ? "-" + mantissa : mantissa, exponent);
+    }
+
+    // Dictionary<string, long> and friends only implement the non-generic
+    // IDictionary, but their IEnumerable.GetEnumerator() yields
+    // KeyValuePair<string, long>, not DictionaryEntry. Casting the entries to
+    // DictionaryEntry therefore throws InvalidCastException at runtime, so read
+    // Key/Value reflectively instead of assuming either shape.
+    private static bool IsPairSequence(IEnumerable source)
+    {
+        var type = source.GetType();
+        if (type.IsGenericType)
+        {
+            var definition = type.GetGenericTypeDefinition();
+            if (definition == typeof(Dictionary<,>) || definition == typeof(SortedDictionary<,>) ||
+                definition == typeof(SortedList<,>) ||
+                definition == typeof(System.Collections.ObjectModel.ReadOnlyDictionary<,>))
+                return true;
+        }
+
+        foreach (var contract in type.GetInterfaces())
+        {
+            if (!contract.IsGenericType ||
+                contract.GetGenericTypeDefinition() != typeof(IEnumerable<>))
+                continue;
+            var element = contract.GetGenericArguments()[0];
+            if (element.IsGenericType &&
+                element.GetGenericTypeDefinition() == typeof(KeyValuePair<,>))
+                return true;
+        }
+        return false;
+    }
+
+    private static IEnumerable<KeyValuePair<string, object?>> Entries(IEnumerable source)
+    {
+        var enumerator = source.GetEnumerator();
+        while (enumerator.MoveNext())
+        {
+            var item = enumerator.Current;
+            if (item is DictionaryEntry entry)
+            {
+                yield return KeyValuePair.Create(
+                    Convert.ToString(entry.Key, CultureInfo.InvariantCulture) ?? "", entry.Value);
+                continue;
+            }
+
+            var type = item?.GetType();
+            if (type is not { IsGenericType: true } ||
+                type.GetGenericTypeDefinition() != typeof(KeyValuePair<,>))
+                continue;
+
+            var key = type.GetProperty("Key")!.GetValue(item);
+            var value = type.GetProperty("Value")!.GetValue(item);
+            yield return KeyValuePair.Create(
+                Convert.ToString(key, CultureInfo.InvariantCulture) ?? "", value);
+        }
     }
 
     private static void WritePairs(
