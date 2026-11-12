@@ -58,10 +58,11 @@ bash tools/diff-parity-docs.sh ids.json
 
 Flows: `teams` (create / rename / members / project-sets), `projects`
 (create with `allow_apply_type = 3` / rename / targets / files), `members`
-(batch add), `files` (upload / rename / delete), `labels` (source create / edit /
-translation create / rank move / deletes), `exports` (queue an export and list
-it), `invitations` (create / list / revoke), `reads` (twelve representative
-GETs).
+(batch add), `teamMembers` (add / patch / aliases / display-name / remove),
+`files` (upload / rename / delete), `labels` (source create / edit /
+translation create / rank move / deletes), `terms` (term bank create / rename /
+term create / edit / delete), `exports` (queue an export and list it),
+`invitations` (create / list / revoke), `reads` (twelve representative GETs).
 
 ## What the first runs found
 
