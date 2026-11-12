@@ -190,6 +190,28 @@ const flows = {
     ['GET', '/v1/teams/' + cfg.team + '/term-banks', null],
   ],
 
+  fileOrder: [
+    ['POST', '/v1/projects/' + cfg.project + '/files', {
+      $form: {
+        name: 'order_a.png', type: 'image/png',
+        content: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        fields: {},
+      },
+    }, { of1: 'id' }],
+    ['POST', '/v1/projects/' + cfg.project + '/files', {
+      $form: {
+        name: 'order_b.png', type: 'image/png',
+        content: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        fields: {},
+      },
+    }, { of2: 'id' }],
+    ['GET', '/v1/projects/' + cfg.project + '/files/order', null],
+    ['PUT', '/v1/projects/' + cfg.project + '/files/order', { file_ids: ['{{of2}}', '{{of1}}'], version: '0' }],
+    ['GET', '/v1/projects/' + cfg.project + '/files/order', null],
+    ['DELETE', '/v1/files/{{of1}}', null],
+    ['DELETE', '/v1/files/{{of2}}', null],
+  ],
+
   invitations: [
     ['POST', '/v1/projects/' + cfg.project + '/invitations', {
       user_id: cfg.stranger,

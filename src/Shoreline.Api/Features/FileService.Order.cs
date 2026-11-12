@@ -91,7 +91,7 @@ public sealed partial class FileService
 
         if (leased is null)
         {
-            throw ApiError.Invalid("文件顺序正在保存，请稍后重试");
+            throw ApiError.Validate("文件顺序正在保存，请稍后重试");
         }
 
         try
@@ -100,7 +100,7 @@ public sealed partial class FileService
             var currentVersion = SnapshotVersion(files);
             if (!string.Equals(currentVersion, version, StringComparison.Ordinal))
             {
-                throw ApiError.Invalid("文件列表或顺序已变化，请取消编辑后重新加载");
+                throw ApiError.Validate("文件列表或顺序已变化，请取消编辑后重新加载");
             }
 
             var orderedIds = files.Select(file => file["_id"].AsObjectId.ToString()).ToList();
@@ -108,7 +108,7 @@ public sealed partial class FileService
                 || fileIds.Distinct(StringComparer.Ordinal).Count() != fileIds.Count
                 || !fileIds.ToHashSet(StringComparer.Ordinal).SetEquals(orderedIds))
             {
-                throw ApiError.Invalid("必须提供当前目录全部图片，且不可重复");
+                throw ApiError.Validate("必须提供当前目录全部图片，且不可重复");
             }
 
             var objectIds = fileIds

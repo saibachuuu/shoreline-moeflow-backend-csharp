@@ -155,7 +155,7 @@ public sealed class FileTests(LocalServices services)
             new Pagination(1, 20),
             CancellationToken.None));
         Assert.Equal(2, conflict.Code);
-        Assert.Equal("can not use `only_file` and `only_folder` at one time", conflict.Message);
+        Assert.Equal("Validate Error: can not use `only_file` and `only_folder` at one time", conflict.Message);
 
         var manual = await files.ListAsync(
             project,
@@ -552,12 +552,12 @@ public sealed class FileTests(LocalServices services)
 
         var stale = await Assert.ThrowsAsync<ApiError>(() => files.SaveOrderAsync(
             actor, project, reversed, view.Version, false, CancellationToken.None));
-        Assert.Equal("文件列表或顺序已变化，请取消编辑后重新加载", stale.Message);
+        Assert.Equal("Validate Error: 文件列表或顺序已变化，请取消编辑后重新加载", stale.Message);
 
         var current = await files.OrderAsync(actor, project, CancellationToken.None);
         var duplicate = await Assert.ThrowsAsync<ApiError>(() => files.SaveOrderAsync(
             actor, project, [reversed[0], reversed[0], reversed[2]], current.Version, false, CancellationToken.None));
-        Assert.Equal("必须提供当前目录全部图片，且不可重复", duplicate.Message);
+        Assert.Equal("Validate Error: 必须提供当前目录全部图片，且不可重复", duplicate.Message);
 
         await files.SaveOrderAsync(actor, project, current.Version == current.Version
             ? current.Files.Select(item => (string)item["id"]!).ToList()

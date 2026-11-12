@@ -336,7 +336,7 @@ public sealed partial class FileService
         EnsureWorking(project);
         if (query.OnlyFolder && query.OnlyFile)
         {
-            throw ApiError.Invalid("can not use `only_file` and `only_folder` at one time");
+            throw ApiError.Validate("can not use `only_file` and `only_folder` at one time");
         }
 
         var projectId = project["_id"].AsObjectId;

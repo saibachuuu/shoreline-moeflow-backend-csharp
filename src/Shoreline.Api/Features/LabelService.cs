@@ -54,7 +54,7 @@ public sealed partial class LabelService(
         await permissions.RequireProjectAsync(actor, session.Project, "project:ACCESS", ct);
 
         var target = await FindTargetAsync(projectId, targetId, ct)
-                     ?? throw ApiError.Invalid("need `target`");
+                     ?? throw ApiError.Validate("need `target`");
         RequireActivated(file);
         return await BuildTranslatorListAsync(context, actor, file, target, paging, ct);
     }
@@ -169,7 +169,7 @@ public sealed partial class LabelService(
         await permissions.RequireProjectAsync(actor, session.Project, "project:MOVE_LABEL", ct);
 
         // Match source.py: type/permission precede schema validation.
-        if (!edit.HasAny) throw ApiError.Invalid("没有有效参数");
+        if (!edit.HasAny) throw ApiError.Validate("没有有效参数");
         if (edit.X is not null) ValidateRange(edit.X.Value, "x");
         if (edit.Y is not null) ValidateRange(edit.Y.Value, "y");
         if (edit.PositionType is not null) ValidatePositionType(edit.PositionType.Value);
@@ -296,7 +296,7 @@ public sealed partial class LabelService(
         var source = await RequireSourceAsync(TranslationSourceId(translation), ct);
         var file = await RequireFileAsync(SourceFileId(source), ct);
 
-        if (!edit.HasAny) throw ApiError.Invalid("没有有效参数");
+        if (!edit.HasAny) throw ApiError.Validate("没有有效参数");
 
         var target = await RequireTargetAsync(projectId, TranslationTargetId(translation), ct);
 

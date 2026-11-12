@@ -34,7 +34,7 @@ public sealed class FileHttpTests(LocalServices services)
         using var conflict = await client.GetAsync($"/v1/projects/{project}/files?only_folder=1&only_file=1");
         var conflictBody = await BodyAsync(conflict);
         Assert.Equal(2, conflictBody.GetProperty("code").GetInt32());
-        Assert.Equal("can not use `only_file` and `only_folder` at one time",
+        Assert.Equal("Validate Error: can not use `only_file` and `only_folder` at one time",
             conflictBody.GetProperty("message").GetString());
 
         using var sort = await client.GetAsync($"/v1/projects/{project}/files?order_by=bogus");

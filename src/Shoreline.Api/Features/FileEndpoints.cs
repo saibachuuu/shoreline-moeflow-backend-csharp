@@ -176,7 +176,7 @@ public static class FileEndpoints
             return Results.Json(new { message = LegacySuccessMessages.Get(context, "改名成功") });
         }
 
-        throw ApiError.Invalid("需要提供parent_id或name参数");
+        throw ApiError.Validate("需要提供parent_id或name参数");
     }
 
     private static async Task<IResult> DeleteFile(
