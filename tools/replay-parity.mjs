@@ -276,12 +276,24 @@ const flows = {
   ],
 
   snapshots: [
-    ['POST', '/v1/projects/' + cfg.project + '/snapshots', {
+    // Restoring a snapshot parks the project's label lock, so this flow works on
+    // its own project instead of the shared one.
+    ['POST', '/v1/teams/' + cfg.team + '/projects', {
+      name: 'psn_' + STAMP.slice(-6),
+      intro: '',
+      allow_apply_type: 3,
+      application_check_type: 2,
+      default_role: cfg.projectRole,
+      project_set: cfg.projectSet,
+      source_language: 'ja',
+      target_languages: ['zh-CN'],
+    }, { sproject: 'project.id' }],
+    ['POST', '/v1/projects/{{sproject}}/snapshots', {
       name: 'sn_' + STAMP.slice(-6),
     }, { snap: 'snapshot_id' }],
-    ['GET', '/v1/projects/' + cfg.project + '/snapshots', null],
-    ['POST', '/v1/projects/' + cfg.project + '/snapshots/{{snap}}/restore', {}],
-    ['GET', '/v1/projects/' + cfg.project + '/snapshots', null],
+    ['GET', '/v1/projects/{{sproject}}/snapshots', null],
+    ['POST', '/v1/projects/{{sproject}}/snapshots/{{snap}}/restore', {}],
+    ['GET', '/v1/projects/{{sproject}}/snapshots', null],
   ],
 
   reads: [
