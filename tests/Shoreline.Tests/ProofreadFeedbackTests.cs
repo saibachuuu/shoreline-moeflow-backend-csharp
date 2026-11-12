@@ -280,6 +280,12 @@ public sealed class ProofreadFeedbackTests : IDisposable
         return document;
     }
 
+    private static ProjectStorageRouter Router(IConfiguration configuration)
+    {
+        var storage = new ObjectStorage(configuration);
+        return new ProjectStorageRouter(storage, new StorageBackendFactory(), new ProjectStorageResolverRegistry());
+    }
+
     private ProofreadFeedbackService Service(IConfiguration configuration,
         IProofreadImageRenderer? renderer = null, FakeMailTransport? mail = null)
     {
@@ -295,7 +301,7 @@ public sealed class ProofreadFeedbackTests : IDisposable
             new ProjectLabelLock(_services.Store, _clock),
             new LabelRequestContext(),
             new JobQueue(_jobs, _clock),
-            new ObjectStorage(configuration),
+            Router(configuration),
             configuration,
             new TestEnvironment(),
             _clock,

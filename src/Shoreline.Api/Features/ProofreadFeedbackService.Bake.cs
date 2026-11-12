@@ -6,6 +6,7 @@ using System.Text.Json;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Shoreline.Api.Infrastructure;
+using Shoreline.Api.Storage;
 
 namespace Shoreline.Api.Features;
 
@@ -51,6 +52,7 @@ public sealed partial class ProofreadFeedbackService
         try
         {
             var pages = PagesFromBson(pending);
+            await ResolveOriginalUrlsAsync(project, pages, ct);
             var markerEnabled = MarkerEnabled(pending);
             var opacityValue = pending.GetValue("marker_opacity", pending.GetValue("pmo", new BsonInt32(92)));
             var opacity = opacityValue.IsNumeric ? Math.Clamp(opacityValue.ToInt32(), 0, 100) : 92;
@@ -266,15 +268,21 @@ public sealed partial class ProofreadFeedbackService
         return pages;
     }
 
-    private async Task ResolveOriginalUrlsAsync(IReadOnlyList<ProofreadPage> pages, CancellationToken ct)
+    private async Task ResolveOriginalUrlsAsync(BsonDocument project, IReadOnlyList<ProofreadPage> pages,
+        CancellationToken ct)
     {
+        // Sign against the project's own backend: after a storage-pool migration
+        // the original object lives in the pool bucket, so the default bucket
+        // would answer NoSuchKey and mail the reader a dead link.
+        await using var lease = await storageRouter.ForProjectAsync(project, ct);
+        var backend = lease.Backend;
         foreach (var page in pages)
         {
             if (string.IsNullOrWhiteSpace(page.SourceKey) || !page.SourceKey.StartsWith("files/", StringComparison.Ordinal))
                 continue;
             try
             {
-                page.ImageUrl = await storage.SignGetAsync(page.SourceKey, UrlValidity);
+                page.ImageUrl = await backend.SignGetAsync(page.SourceKey, UrlValidity);
             }
             catch (Exception error) when (error is not OperationCanceledException)
             {
@@ -293,8 +301,10 @@ public sealed partial class ProofreadFeedbackService
         if (saveName.Length == 0 || saveName.Contains('/') || saveName.Contains('\\')) return page.ImageUrl;
         try
         {
-            var baseKey = await BaseImageKeyAsync(project, saveName, ct);
-            using var download = await storage.GetAsync(baseKey, ct);
+            await using var lease = await storageRouter.ForProjectAsync(project, ct);
+            var backend = lease.Backend;
+            var baseKey = await BaseImageKeyAsync(project, saveName, backend, ct);
+            using var download = await backend.GetAsync(baseKey, ct);
             if (download.Length > 64L * 1024 * 1024) return page.ImageUrl;
             using var buffer = new MemoryStream();
             await download.Content.CopyToAsync(buffer, ct);
@@ -302,14 +312,14 @@ public sealed partial class ProofreadFeedbackService
                 label.X, label.Y, label.PositionType, label.LabelNum)).ToList();
             var fingerprint = renderer.Fingerprint(markers, opacity);
             var key = $"files/proofread-{fingerprint}-{Stem(saveName)}.webp";
-            if (await storage.HeadAsync(key, ct) is null)
+            if (await backend.HeadAsync(key, ct) is null)
             {
                 var rendered = renderer.Render(buffer.ToArray(), markers, opacity);
-                if (rendered is null) return await FallbackUrlAsync(page, ct);
+                if (rendered is null) return await FallbackUrlAsync(project, page, ct);
                 using var output = new MemoryStream(rendered, writable: false);
-                await storage.PutAsync(key, output, "image/webp", ct);
+                await backend.PutAsync(key, output, "image/webp", ct);
             }
-            return await storage.SignGetAsync(key, UrlValidity);
+            return await backend.SignGetAsync(key, UrlValidity);
         }
         catch (OperationCanceledException)
         {
@@ -318,18 +328,18 @@ public sealed partial class ProofreadFeedbackService
         catch (Exception error)
         {
             logger.LogWarning("Proofread marker render failed ({ErrorType})", error.GetType().Name);
-            return await FallbackUrlAsync(page, ct);
+            return await FallbackUrlAsync(project, page, ct);
         }
     }
 
-    private async Task<string> FallbackUrlAsync(ProofreadPage page, CancellationToken ct)
+    private async Task<string> FallbackUrlAsync(BsonDocument project, ProofreadPage page, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(page.ImageUrl)) return page.ImageUrl;
         try
         {
-            return string.IsNullOrWhiteSpace(page.SourceKey)
-                ? ""
-                : await storage.SignGetAsync(page.SourceKey, UrlValidity);
+            if (string.IsNullOrWhiteSpace(page.SourceKey)) return "";
+            await using var lease = await storageRouter.ForProjectAsync(project, ct);
+            return await lease.Backend.SignGetAsync(page.SourceKey, UrlValidity);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -337,13 +347,14 @@ public sealed partial class ProofreadFeedbackService
         }
     }
 
-    private async Task<string> BaseImageKeyAsync(BsonDocument project, string saveName, CancellationToken ct)
+    private async Task<string> BaseImageKeyAsync(BsonDocument project, string saveName,
+        IStorageBackend backend, CancellationToken ct)
     {
         var original = FileKeyPrefix + saveName;
         if (!project.TryGetValue("csid", out var csid) || csid.IsBsonNull)
         {
             var resample = FileKeyPrefix + "resample-" + Stem(saveName) + ".webp";
-            if (await storage.HeadAsync(resample, ct) is not null) return resample;
+            if (await backend.HeadAsync(resample, ct) is not null) return resample;
         }
         return original;
     }

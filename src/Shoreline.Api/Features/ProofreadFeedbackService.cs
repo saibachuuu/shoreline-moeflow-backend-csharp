@@ -29,7 +29,7 @@ public sealed partial class ProofreadFeedbackService(
     ProjectLabelLock labels,
     LabelRequestContext requestContext,
     JobQueue jobs,
-    ObjectStorage storage,
+    ProjectStorageRouter storageRouter,
     IConfiguration configuration,
     IHostEnvironment environment,
     TimeProvider clock,
@@ -137,7 +137,7 @@ public sealed partial class ProofreadFeedbackService(
             revision = session.Project.Integer("label_revision");
             pages = await BuildPagesAsync(session.Project, targetKey, targetFileId, ct);
         }
-        await ResolveOriginalUrlsAsync(pages, ct);
+        await ResolveOriginalUrlsAsync(project, pages, ct);
         if (pages.Count == 0)
             throw new ApiError("ProofreadDraftNoChangesError", 4030, "当前目标语言没有可寄送的校对修改");
 
