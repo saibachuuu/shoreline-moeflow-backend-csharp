@@ -451,6 +451,64 @@ public sealed class StorageContractS3Tests(LocalServices services)
             await storage.DeleteAsync(key, CancellationToken.None);
         }
     }
+
+    // Storage-pool transfers between two different providers fall back to
+    // download-then-upload. The download stream is forward-only, and with
+    // chunked signing disabled (R2 rejects it) the SDK cannot work out the
+    // payload size, so PutAsync spills it to a temp file first. Without that
+    // spill every object failed with "Could not determine content length".
+    [Fact]
+    public async Task NonSeekableUploadIsSpilledAndStored()
+    {
+        var payload = new byte[96 * 1024];
+        Random.Shared.NextBytes(payload);
+        using var storage = new ObjectStorage(services.Configuration);
+        var key = "contract/non-seekable-" + Guid.NewGuid().ToString("N") + ".bin";
+
+        using var inner = new MemoryStream(payload, writable: false);
+        using var source = new ForwardOnlyStream(inner);
+        Assert.False(source.CanSeek);
+
+        try
+        {
+            await storage.PutAsync(key, source, "application/octet-stream", CancellationToken.None);
+
+            var head = await storage.HeadAsync(key);
+            Assert.NotNull(head);
+            Assert.Equal(payload.Length, head!.Size);
+
+            using var download = await storage.GetAsync(key, CancellationToken.None);
+            using var buffer = new MemoryStream();
+            await download.Content.CopyToAsync(buffer);
+            Assert.Equal(payload, buffer.ToArray());
+        }
+        finally
+        {
+            await storage.DeleteAsync(key, CancellationToken.None);
+        }
+    }
+
+    /// <summary>A stream shaped like an HTTP download: readable, not seekable.</summary>
+    private sealed class ForwardOnlyStream(Stream inner) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            inner.ReadAsync(buffer, cancellationToken);
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) inner.Dispose();
+            base.Dispose(disposing);
+        }
+    }
 }
 
 // Python signs every storage URL with 604800 seconds (app/services/oss.py:464,480),
