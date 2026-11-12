@@ -16,6 +16,12 @@ using Shoreline.Api.Storage;
 var builder = WebApplication.CreateBuilder(args);
 LegacyEnvironmentConfiguration.Apply(builder.Configuration);
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
+// Without this, a handler that binds a body parameter to an empty or malformed
+// payload is rejected by the framework BEFORE the handler runs, and the default
+// response is a bare 400 with Content-Length: 0. Clients then get an "empty
+// response" they cannot explain. Throwing instead routes the failure through the
+// ApiError middleware below, which answers with {error, code, message}.
+builder.Services.Configure<RouteHandlerOptions>(o => o.ThrowOnBadRequest = true);
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton(TimeProvider.System);
