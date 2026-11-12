@@ -66,7 +66,8 @@ public sealed class FileTests(LocalServices services)
         Assert.Equal("Auto-tagging in progress.", api["parse_status_detail_name"]);
         Assert.Equal("Unknown character set.", api["parse_error_type_detail_name"]);
         Assert.Equal("Image recognition in progress.", api["image_ocr_percent_detail_name"]);
-        Assert.StartsWith("https://127.0.0.1:29128/shoreline-test/files/cover-", Assert.IsType<string>(api["cover_url"]));
+        Assert.StartsWith("https://127.0.0.1:" + TestEnvironment.S3Port + "/shoreline-test/files/cover-",
+            Assert.IsType<string>(api["cover_url"]));
         Assert.NotNull(api["url"]);
         Assert.True(file.Contains("cover_bytes"));
         Assert.False(file.Contains("cb"));
