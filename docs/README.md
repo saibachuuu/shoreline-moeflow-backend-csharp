@@ -32,15 +32,26 @@ the first kind is authoritative.
 ## Module compatibility notes
 
 One file per domain, written while the domain was ported. They record the exact
-legacy behaviour that was reproduced, including error codes and edge cases:
+legacy behaviour that was reproduced, including error codes and edge cases.
+Almost all of them end in `-compatibility.md`:
 
 `additional-lists`, `admin-users`, `application`, `archive-import`,
-`avatar-storage-overview`, `cleanup`, `files`, `imports`, `label-idempotent-writes`,
-`label-snapshots`, `labels`, `notifications`, `notification-management`,
-`notification-publishing`, `outputs`, `partner-search`, `presence`,
+`avatar-storage-overview`, `cleanup`, `files`, `imports`, `labels`,
+`label-snapshots`, `notifications`, `outputs`, `partner-search`,
 `proofread-feedback`, `storage`, `storage-pool`, `team-dissolution`,
-`team-insight`, `terms`, `thumbnails`, `ziteng-partner` — all suffixed with
-`-compatibility.md` (or their own name where noted).
+`team-insight`, `terms`, `thumbnails`, `ziteng-partner`.
+
+The rest cover a narrower slice:
+
+- [presence-notes.md](presence-notes.md) — heartbeat and online list
+- [notification-management.md](notification-management.md) · [notification-publishing.md](notification-publishing.md) — admin and publish paths
+- [label-idempotent-writes.md](label-idempotent-writes.md) — repeated writes and revision guards
+- [job-enqueue-idempotency.md](job-enqueue-idempotency.md) — `EnqueueOnceAsync` semantics
+- [module-parity.md](module-parity.md) — per-module parity summary
+- [mongodb-compatibility.md](mongodb-compatibility.md) — BSON shapes and driver behaviour
+- [reference-validation.md](reference-validation.md) — the offline Python AST reference
+- [migrations.md](migrations.md) — runner internals
+- [test-isolation.md](test-isolation.md) — how tests pick ports and databases
 
 ## Dated records
 
