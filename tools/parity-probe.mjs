@@ -124,7 +124,11 @@ const selected = only ? targets.filter((p) => p.includes(only)) : targets;
 
 async function get(base, urlPath) {
   const res = await fetch(base + urlPath, {
-    headers: { Authorization: 'Bearer ' + TOKEN, Accept: 'application/json' },
+    headers: {
+      Authorization: 'Bearer ' + TOKEN,
+      Accept: 'application/json',
+      ...(process.env.PARITY_LANG ? { 'Accept-Language': process.env.PARITY_LANG } : {}),
+    },
     signal: AbortSignal.timeout(30000),
   });
   const text = await res.text();
