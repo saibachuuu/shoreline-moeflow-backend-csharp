@@ -47,3 +47,24 @@ Python oracle：`shoreline-moeflow-backend`；C# 实现：本 worktree。
 - Mailpit 真实投递：未做（见待确认 G1）。一次性栈自带 Mailpit 容器（33053/33054），
   但生产 MailKit 传输强制 STARTTLS/SMTPS + 系统信任链，Mailpit 明文监听无法完成
   accepted 路径；投递决策与精确计数已由 fake transport 锁定。
+
+## 真实 SMTP 端到端（2026-11-12，生产 dump 副本）
+
+在 `moeflow_prod`（生产 dump 还原库）上跑通一次完整投递，链路是
+`publish → notification_delivery(pending) → scanner lease → MailKit → SMTPS 465`：
+
+| 阶段 | 观察 |
+|---|---|
+| 首次投递 | `state=skipped`, `reason=unverified_email` —— `Notifications:TrustExistingEmails=false` 时要求收件地址出现在已登记验证表里，迁移过来的老账号没有这条记录 |
+| 开关调整 | `NOTIFICATION_TRUST_EXISTING_EMAILS=True`（legacy 同名键，`x-csharp-env` 已映射） |
+| 重试后 | `pending → leased → accepted`，`attempts=1`，`accepted_at` 落库，日志 `notification mail result accepted/` |
+
+三个开关的职责边界（缺一个都不会发信）：
+
+- `Notifications:Enabled`：只控制读写 API，与发信无关。
+- `Notifications:UserEmailEnabled` / `LogEmailEnabled`（`ENABLE_USER_EMAIL` / `ENABLE_LOG_EMAIL`）：为 false 时 delivery 直接 `skipped/channel_disabled`。
+- `Notifications:EmailUnrestricted`（`NOTIFICATION_EMAIL_UNRESTRICTED`）：为 false 时收件人必须在 `EmailAllowlist` 里，否则 `skipped/recipient_not_allowed`。
+- `Notifications:TrustExistingEmails`（`NOTIFICATION_TRUST_EXISTING_EMAILS`）：为 false 时收件地址必须已在本系统验证过，否则 `skipped/unverified_email`。**生产 dump 切换后必须置 true**，否则只有本系统发过验证码的地址能收信。
+
+TLS：生产 SMTP 是 465 隐式 TLS，`Mail:UseSsl=true` + `Mail:SecureSocketOptions=SslOnConnect`。
+通知邮件在 Python 侧强制 `starttls()`，那种配置下本就发不出去；C# 用 `SslOnConnect` 才真正跑通。
