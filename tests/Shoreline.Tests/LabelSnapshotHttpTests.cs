@@ -30,12 +30,12 @@ public sealed class LabelSnapshotHttpTests(LocalServices services)
         using var denied = await outsiderClient.GetAsync(
             $"/v1/projects/{world.ProjectId}/label-merge");
         await AssertErrorAsync(denied, HttpStatusCode.BadRequest,
-            "NoPermissionError", 103, "没有权限");
+            "NoPermissionError", 103, "No permission.");
 
         using var wrongQuery = await world.Client.GetAsync(
             $"/v1/projects/{world.ProjectId}/label-merge?targetId={world.TargetId}");
         await AssertErrorAsync(wrongQuery, HttpStatusCode.BadRequest,
-            "TargetNotExistError", 4024, "项目目标语言不存在");
+            "TargetNotExistError", 4024, "The target language for the project does not exist.");
 
         using var previewResponse = await world.Client.GetAsync(
             $"/v1/projects/{world.ProjectId}/label-merge?target_id={world.TargetId}");

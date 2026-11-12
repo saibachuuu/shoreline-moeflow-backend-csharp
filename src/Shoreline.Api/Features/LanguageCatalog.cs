@@ -86,7 +86,7 @@ public sealed class LanguageCatalog(MongoStore store)
     public static string DisplayName(BsonDocument row, bool chinese)
     {
         var name = row.Text("c");
-        return chinese ? name : English.GetValueOrDefault(row.Text("co"), row.Text("e", name));
+        return chinese ? name : English.GetValueOrDefault(row.Text("co"), name);
     }
 
     public static bool ChinesePreferred(IList<StringWithQualityHeaderValue>? accepted)

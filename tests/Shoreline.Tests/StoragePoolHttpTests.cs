@@ -44,16 +44,16 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
         {
             var noToken = await SendAsync(anonymous, method, path, HasBody(method) ? "{}" : null);
             Assert.Equal(HttpStatusCode.Unauthorized, noToken.StatusCode);
-            AssertError(await BodyAsync(noToken), "NeedTokenError", 1003, "需要令牌");
+            AssertError(await BodyAsync(noToken), "NeedTokenError", 1003, "Token required.");
 
             var denied = await SendAsync(userClient, method, path, HasBody(method) ? "{}" : null);
             Assert.Equal(HttpStatusCode.BadRequest, denied.StatusCode);
-            AssertError(await BodyAsync(denied), "NoPermissionError", 103, "没有权限");
+            AssertError(await BodyAsync(denied), "NoPermissionError", 103, "No permission.");
         }
 
         var invalid = await badToken.GetAsync(Base + "/sources", Ct);
         Assert.Equal(HttpStatusCode.Unauthorized, invalid.StatusCode);
-        AssertError(await BodyAsync(invalid), "BadTokenError", 1004, "无效的令牌");
+        AssertError(await BodyAsync(invalid), "BadTokenError", 1004, "Invalid token.");
     }
 
     // ------------------------------------------------------ source create/update
@@ -413,7 +413,7 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
         var missingProject = await admin.PostAsJsonAsync($"{Base}/projects/{ObjectId.GenerateNewId()}/migrate",
             new { source_id = sourceId.ToString() });
         Assert.Equal(HttpStatusCode.NotFound, missingProject.StatusCode);
-        AssertError(await BodyAsync(missingProject), "ProjectNotExistError", 1001, "项目不存在");
+        AssertError(await BodyAsync(missingProject), "ProjectNotExistError", 1001, "Project does not exist.");
 
         var projectId = await InsertProjectAsync();
 
@@ -482,7 +482,7 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
 
         var unknownLock = await admin.PostAsync($"{Base}/projects/{ObjectId.GenerateNewId()}/lock", null, Ct);
         Assert.Equal(HttpStatusCode.NotFound, unknownLock.StatusCode);
-        AssertError(await BodyAsync(unknownLock), "ProjectNotExistError", 1001, "项目不存在");
+        AssertError(await BodyAsync(unknownLock), "ProjectNotExistError", 1001, "Project does not exist.");
 
         // The API dispatches newly created migrations asynchronously. Use a
         // separate project and a seeded durable active row so the lock assertion

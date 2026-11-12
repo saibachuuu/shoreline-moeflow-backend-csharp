@@ -130,7 +130,7 @@ public sealed class InvitationTests(LocalServices services)
         using var recipient = Client(target);
         var id = await InviteAsync(owner, "project", project, target, tags: ["admin"]);
         var denied = await BodyAsync(await recipient.PatchAsJsonAsync(InvitationPath(id), new { allow = false }));
-        Assert.Equal("已拒绝", denied.GetProperty("message").GetString());
+        Assert.Equal("Rejected", denied.GetProperty("message").GetString());
         Assert.False(denied.TryGetProperty("group", out _));
         Assert.Equal(3, (await InvitationAsync(id)).Integer("s"));
         var member = await ProjectMemberAsync(project, target);
@@ -336,7 +336,7 @@ public sealed class InvitationTests(LocalServices services)
         else
         {
             Assert.Equal(3, (int)invitation.Integer("s"));
-            Assert.Equal("已拒绝", winner.GetProperty("message").GetString());
+            Assert.Equal("Rejected", winner.GetProperty("message").GetString());
             Assert.Equal("removed", member.Text("status"));
             Assert.Equal(1, (int)projectDoc.Integer("m_uc"));
             Assert.IsType<BsonDateTime>(member["removed_time"]);
@@ -582,7 +582,7 @@ public sealed class InvitationTests(LocalServices services)
             })));
 
         var denied = await BodyAsync(await recipient.PatchAsJsonAsync(InvitationPath(id), new { allow = false }));
-        Assert.Equal("已拒绝", denied.GetProperty("message").GetString());
+        Assert.Equal("Rejected", denied.GetProperty("message").GetString());
         Assert.False(denied.TryGetProperty("group", out _));
         Assert.Equal(3, (await InvitationAsync(id)).Integer("s"));
         var member = await ProjectMemberAsync(project, target);

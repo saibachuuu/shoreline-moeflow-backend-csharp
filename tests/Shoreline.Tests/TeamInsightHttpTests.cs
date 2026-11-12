@@ -37,7 +37,7 @@ public sealed class TeamInsightHttpTests
         var deniedBody = JsonDocument.Parse(await denied.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal("NoPermissionError", deniedBody.GetProperty("error").GetString());
         Assert.Equal(103, deniedBody.GetProperty("code").GetInt32());
-        Assert.Equal("您没有权限查看本团队项目统计", deniedBody.GetProperty("message").GetString());
+        Assert.Equal("You do not have permission to view the statistics of this team project.", deniedBody.GetProperty("message").GetString());
     }
 
     [Fact]

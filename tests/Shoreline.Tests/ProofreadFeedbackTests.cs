@@ -1085,7 +1085,7 @@ public sealed class ProofreadFeedbackTests : IDisposable
         var response = await Post(client, SendPath(page), new { cc_myself = true }, "http-0005");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("校对稿已成功发送至翻译邮箱", body.GetProperty("message").GetString());
+        Assert.Equal("The proofread draft has been sent to the translators' mailboxes", body.GetProperty("message").GetString());
         Assert.True(body.GetProperty("changed_pages_count").GetInt32() >= 1);
         // cc_myself defaults to true, so the translator plus the actor receive mail.
         Assert.Equal(2, _mail.Messages.Count);

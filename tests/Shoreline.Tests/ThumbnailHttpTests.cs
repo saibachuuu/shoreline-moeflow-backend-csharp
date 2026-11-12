@@ -48,7 +48,7 @@ public sealed class ThumbnailHttpTests(LocalServices services)
         Assert.Equal(HttpStatusCode.BadRequest, denied.StatusCode);
         var deniedBody = await denied.Content.ReadFromJsonAsync<JsonElement>(ct);
         Assert.Equal(103, deniedBody.GetProperty("code").GetInt32());
-        Assert.Equal("您没有此项目的访问权限", deniedBody.GetProperty("message").GetString());
+        Assert.Equal("Access permission not granted", deniedBody.GetProperty("message").GetString());
 
         var wrongType = await memberClient.PostAsync($"/v1/files/{text}/thumbnail", null, ct);
         Assert.Equal(HttpStatusCode.BadRequest, wrongType.StatusCode);
@@ -142,7 +142,7 @@ public sealed class ThumbnailHttpTests(LocalServices services)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
         Assert.Equal(8001, body.GetProperty("code").GetInt32());
-        Assert.Equal("文件/文件夹不存在，可能已被删除", body.GetProperty("message").GetString());
+        Assert.Equal("File/folder does not exist, it may have been deleted.", body.GetProperty("message").GetString());
     }
 
     // ---------------------------------------------------------------- fixtures

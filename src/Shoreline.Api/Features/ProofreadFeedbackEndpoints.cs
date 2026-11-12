@@ -19,6 +19,9 @@ public static class ProofreadFeedbackEndpoints
                 var actor = await current.RequireAsync(context, ct);
                 var key = context.Request.Headers["Idempotency-Key"].FirstOrDefault();
                 var result = await feedback.SendAsync(actor, projectId, targetId, data, key, ct);
+                if (result.Body is Dictionary<string, object?> body &&
+                    body.TryGetValue("message", out var message) && message is string text)
+                    body["message"] = LegacySuccessMessages.Get(context, text);
                 return Results.Json(result.Body, statusCode: result.StatusCode);
             });
     }

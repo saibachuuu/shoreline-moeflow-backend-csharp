@@ -20,7 +20,7 @@ public static class TeamDissolutionEndpoints
         {
             var actor = await current.RequireAsync(http, ct);
             var result = await service.DeleteAsync(actor, teamId, ct);
-            return Results.Json(new { message = result.Message });
+            return Results.Json(new { message = LegacySuccessMessages.Get(http, result.Message) });
         });
 
         return app;

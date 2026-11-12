@@ -765,7 +765,7 @@ public sealed class TeamDissolutionTests(LocalServices services)
         var response = await client.DeleteAsync("/v1/teams/" + team["_id"].AsObjectId);
         var body = await BodyAsync(response);
 
-        Assert.Equal("解散成功", body.GetProperty("message").GetString());
+        Assert.Equal("Disbanded successfully.", body.GetProperty("message").GetString());
         Assert.Equal(0L, await CountAsync("team", new BsonDocument("_id", team["_id"])));
     }
 
@@ -796,7 +796,7 @@ public sealed class TeamDissolutionTests(LocalServices services)
         var response = await client.DeleteAsync("/v1/teams/" + team["_id"].AsObjectId);
 
         var error = await AssertErrorAsync(response, 103);
-        Assert.Equal("此团队含有未完结的项目，不能解散（请先完结或者转移项目）", error.GetProperty("message").GetString());
+        Assert.Equal("This team has unfinished projects and cannot be disbanded (please complete or transfer the projects first).", error.GetProperty("message").GetString());
     }
 
     private async Task InsertProjectRowsAsync(BsonDocument project, BsonDocument? target)

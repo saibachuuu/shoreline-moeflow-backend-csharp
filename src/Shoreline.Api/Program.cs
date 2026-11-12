@@ -132,7 +132,11 @@ app.Use(async (context, next) =>
     catch (ApiError error)
     {
         context.Response.StatusCode = error.Status;
-        var body = new Dictionary<string, object?> { ["error"] = error.Error, ["code"] = error.Code, ["message"] = error.ResponseMessage };
+        var chinese = LegacyMessages.Chinese(context);
+        var message = error.ResponseMessage is string text
+            ? LegacyMessages.Translate(text, chinese)
+            : error.ResponseMessage;
+        var body = new Dictionary<string, object?> { ["error"] = error.Error, ["code"] = error.Code, ["message"] = message };
         if (error.IdentityCode is not null) body["identity_code"] = error.IdentityCode;
         await context.Response.WriteAsJsonAsync(body);
     }

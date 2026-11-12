@@ -32,9 +32,13 @@ public static class LegacySuccessMessages
             "此用户是项目所在团队成员，已直接加入" => "This user is already a member of the project's team and has been directly added.",
             "管理员先前邀请了您，已直接加入" => "The administrator previously invited you, so you have been directly added.",
             "已接受" => "Approved",
+            "已拒绝" => "Rejected",
+            "解散成功" => "Disbanded successfully.",
+            "校对稿已成功发送至翻译邮箱" => "The proofread draft has been sent to the translators' mailboxes",
+            "已开始自动标记" => "Auto-tagging started.",
             "归档导入任务已加入队列" => "Queued",
             // msgstr is empty in the legacy catalogue, so gettext falls back
             // to the Chinese source string.
-            _ => chineseText
+            _ => LegacyMessages.Translate(chineseText, false)
         };
 }
