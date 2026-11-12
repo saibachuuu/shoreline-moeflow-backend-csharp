@@ -247,7 +247,7 @@ public sealed class OutputHttpTests
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var store = new MongoStore(configuration);
             await store.InitializeAsync(CancellationToken.None);
-            var app = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            var app = new TestApp().WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Testing");
                 builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
