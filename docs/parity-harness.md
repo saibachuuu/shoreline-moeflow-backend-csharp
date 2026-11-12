@@ -73,8 +73,7 @@ Read probe, 51 discovered routes, 37 comparable:
 - Value-only drift came from two sources: signed R2 URLs vs the CDN prefix, and
   i18n (fixed — see below).
 
-Replay, 8 flows (all of `teams`, `projects`, `files`, `labels`, `exports`,
-`invitations`, `members`, `reads`):
+Replay, 10 flows:
 
 - 1 structural difference: `GET /v1/admin/users` returns **500 on Python** for
   this dump (`KeyError` inside the legacy serializer). C# returns 200. The legacy
