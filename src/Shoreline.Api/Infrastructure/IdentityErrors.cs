@@ -13,9 +13,11 @@ public static class IdentityErrors
     public static ApiError InvalidRequest(string detail = "") => Error("InvalidIdentityRequestError", 5100,
         "INVALID_REQUEST", "请求参数错误" + (detail.Length == 0 ? "" : ": " + detail));
     public static ApiError InvalidTag() => Error("InvalidIdentityTagError", 5101, "INVALID_IDENTITY_TAG", "项目身份标签无效或不可分配", 422);
-    public static ApiError TeamMemberMissing() => Error("IdentityTeamMemberNotFoundError", 5104, "TEAM_MEMBER_NOT_FOUND", "团队成员不存在", 404);
+    // app/translations/zh/LC_MESSAGES/messages.po rewrites these two class
+    // messages; emit the translated text so toasts match the legacy app.
+    public static ApiError TeamMemberMissing() => Error("IdentityTeamMemberNotFoundError", 5104, "TEAM_MEMBER_NOT_FOUND", "团队不存在", 404);
     public static ApiError UserMissing() => Error("IdentityUserNotFoundError", 5105, "USER_NOT_FOUND", "用户不存在", 404);
-    public static ApiError MemberMissing() => Error("IdentityMemberNotFoundError", 5103, "MEMBER_NOT_FOUND", "项目成员不存在", 404);
+    public static ApiError MemberMissing() => Error("IdentityMemberNotFoundError", 5103, "MEMBER_NOT_FOUND", "项目不存在", 404);
     public static ApiError AlreadyExists() => Error("MemberAlreadyExistsError", 5106, "MEMBERS_ALREADY_EXISTS", "成员已存在", 409);
     public static ApiError MemberVersionConflict() => Error("ProjectMemberVersionConflictError", 5108, "PROJECT_MEMBER_VERSION_CONFLICT", "项目成员版本已变化，请刷新后重试", 409);
     public static ApiError MergeRequired() => Error("MemberMergeRequiredError", 5109, "MEMBER_MERGE_REQUIRED", "项目中已存在该用户成员，需要显式合并", 409);
