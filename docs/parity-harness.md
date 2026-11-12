@@ -58,7 +58,9 @@ bash tools/diff-parity-docs.sh ids.json
 
 Flows: `teams` (create / rename / members / project-sets), `projects`
 (create with `allow_apply_type = 3` / rename / targets / files), `members`
-(batch add), `reads` (twelve representative GETs).
+(batch add), `files` (upload / rename / delete), `labels` (source create / edit /
+translation create / rank move / deletes), `exports` (queue an export and list
+it), `reads` (twelve representative GETs).
 
 ## What the first runs found
 
@@ -69,12 +71,18 @@ Read probe, 51 discovered routes, 37 comparable:
 - Value-only drift came from two sources: signed R2 URLs vs the CDN prefix, and
   i18n (fixed — see below).
 
-Replay, 4 flows:
+Replay, 7 flows:
 
 - 1 structural difference: `GET /v1/admin/users` returns **500 on Python** for
   this dump (`KeyError` inside the legacy serializer). C# returns 200. The legacy
   side is the broken one here.
-- Everything else matched after normalising generated ids and avatars.
+- Everything else matched after normalising generated ids and avatars. `labels`
+  and `exports` both report `structural = 0` on their first run.
+- `files` shows value drift on `cover_url`/`resample_url`/`thumbnail_status`
+  because C# renders thumbnails inline while Python defers them to Celery; C# is
+  ahead, not wrong.
+- The `files` run also surfaced `parse_error_type: 0` on newly uploaded files,
+  which Python never writes. Fixed in `ac56bce`.
 
 ## Differences found and their disposition
 
@@ -86,6 +94,7 @@ Replay, 4 flows:
 | C# omits `csid`, `csw`, `fol`, `label_recovery`, `slp`, `tb` when creating a project | The API response is identical because C# substitutes the same defaults, and mongoengine fills them on read after a rollback | Recorded; harmless today |
 | Python renders `ValidationError` message values as a **character array** (`["O","n","l","y",...]`), C# as one string | Error toasts: Python shows one letter, C# shows the sentence | C# is correct; left as-is |
 | Avatar/file URLs differ (CDN prefix vs signed R2 URL) | Cosmetic in every probe; set `STORAGE_DOMAIN` + `STORAGE_VIA_CDN` to match the deployed stack | Configuration, not code |
+| `file.parse_error_type` was written as `0` on upload, Python leaves it absent until parsing fails | The frontend renders "其他错误" for every fresh upload | Fixed in `ac56bce` (three writers) |
 
 ## Caveats
 
