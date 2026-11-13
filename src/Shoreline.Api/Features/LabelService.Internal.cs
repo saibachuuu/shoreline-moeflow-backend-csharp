@@ -1001,6 +1001,69 @@ public sealed partial class LabelService
             }, cancellationToken: ct);
     }
 
+    /// <summary>
+    /// Recomputes the translated/checked counters of a single (file, target)
+    /// pair from the translation collection and applies the difference through
+    /// AdjustCountAsync, so ancestors and the project/target totals follow the
+    /// same path as a normal write.
+    ///
+    /// The counters are maintained by incremental +1/-1 updates; one skipped
+    /// update leaves a permanent drift that nothing else repairs. This runs
+    /// after a write and reads only the sources of one file, which is a few
+    /// hundred rows at most. A missing cache row is skipped: there is nothing
+    /// to correct in place, and AdjustCountAsync only ever $inc's.
+    /// </summary>
+    private async Task ReconcileFileTargetAsync(
+        BsonDocument file,
+        ObjectId targetId,
+        LabelSession session,
+        CancellationToken ct)
+    {
+        var fileId = file["_id"].AsObjectId;
+
+        var cache = await FileTargetCaches
+            .Find(new BsonDocument { ["f"] = fileId, ["t"] = targetId })
+            .FirstOrDefaultAsync(ct);
+        if (cache is null) return;
+
+        var sourceIds = await Sources
+            .Find(new BsonDocument { ["f"] = fileId, ["b"] = new BsonDocument("$ne", true) })
+            .Project(new BsonDocument("_id", 1))
+            .ToListAsync(ct);
+
+        var translated = 0;
+        var check = 0;
+        if (sourceIds.Count > 0)
+        {
+            var ids = new BsonArray(sourceIds.Select(row => row["_id"]));
+            var rows = await Translations
+                .Aggregate(new EmptyPipelineDefinition<BsonDocument>()
+                    .Match(new BsonDocument
+                    {
+                        ["t"] = targetId,
+                        ["o"] = new BsonDocument("$in", ids)
+                    })
+                    .Group(new BsonDocument
+                    {
+                        ["_id"] = "$o",
+                        ["checked"] = new BsonDocument("$max",
+                            new BsonDocument("$cond", new BsonArray { "$s", 1, 0 }))
+                    }))
+                .ToListAsync(ct);
+            translated = rows.Count;
+            check = rows.Count(row => row.Integer("checked") > 0);
+        }
+
+        var translatedDelta = (int)(translated - cache.Integer("ts"));
+        var checkedDelta = (int)(check - cache.Integer("cs"));
+        if (translatedDelta == 0 && checkedDelta == 0) return;
+
+        if (translatedDelta != 0)
+            await AdjustCountAsync(file, session, "translated_source_count", translatedDelta, targetId, ct);
+        if (checkedDelta != 0)
+            await AdjustCountAsync(file, session, "checked_source_count", checkedDelta, targetId, ct);
+    }
+
     private static List<ObjectId> FileIds(BsonDocument file)
     {
         var ids = new List<ObjectId>();

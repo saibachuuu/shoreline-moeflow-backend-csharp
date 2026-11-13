@@ -271,6 +271,45 @@ public sealed class LabelHttpTests
             .CountDocumentsAsync(new BsonDocument("_id", world.ProjectId)));
     }
 
+    [Fact]
+    public async Task Http_repairs_a_drifted_counter_for_the_written_file()
+    {
+        await using var world = await HttpWorld.CreateAsync();
+
+        var firstSource = await world.CreateSourceAsync("drift-one");
+        var created = await world.SendAsync(HttpMethod.Post,
+            $"/v1/sources/{firstSource}/translations",
+            new { content = "one", target_id = world.TargetId.ToString() });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+
+        // Pretend an earlier write skipped its counter update: bump the cache
+        // row and the file total by four, leaving both too high.
+        var caches = world.Store.Collection("file_target_cache");
+        var cacheFilter = new BsonDocument { ["f"] = world.FileId, ["t"] = world.TargetId };
+        await caches.UpdateOneAsync(cacheFilter,
+            new BsonDocument { ["$inc"] = new BsonDocument("ts", 4) });
+        await world.Store.Collection("file").UpdateOneAsync(
+            new BsonDocument("_id", world.FileId),
+            new BsonDocument { ["$inc"] = new BsonDocument("tsc", 4) });
+
+        var drifted = await caches.Find(cacheFilter).FirstAsync();
+        Assert.Equal(5, drifted["ts"].ToInt32());
+
+        // Any later write in this file repairs the pair from the translations.
+        var secondSource = await world.CreateSourceAsync("drift-two");
+        var repaired = await world.SendAsync(HttpMethod.Post,
+            $"/v1/sources/{secondSource}/translations",
+            new { content = "two", target_id = world.TargetId.ToString() });
+        Assert.Equal(HttpStatusCode.OK, repaired.StatusCode);
+
+        var after = await caches.Find(cacheFilter).FirstAsync();
+        Assert.Equal(2, after["ts"].ToInt32());
+
+        var file = await world.Store.Collection("file")
+            .Find(new BsonDocument("_id", world.FileId)).FirstAsync();
+        Assert.Equal(2, file["tsc"].ToInt32());
+    }
+
     private static async Task<int> ErrorCodeAsync(HttpResponseMessage response) =>
         (await ReadJsonAsync(response)).GetProperty("code").GetInt32();
 

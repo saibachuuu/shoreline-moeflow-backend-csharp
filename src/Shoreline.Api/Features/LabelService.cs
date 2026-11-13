@@ -276,6 +276,7 @@ public sealed partial class LabelService(
         var translation = await CreateTranslationCoreAsync(source, file, target, actor, content, session, ct);
         if (translation is null) return null;
 
+        await ReconcileFileTargetAsync(file, targetId, session, ct);
         await HeartbeatQuietlyAsync(session.Project, actor, ct);
         return await TranslationViewAsync(context, translation, target, ct);
     }
@@ -372,6 +373,7 @@ public sealed partial class LabelService(
         }
 
         var current = await RequireTranslationAsync(translationId, ct);
+        await ReconcileFileTargetAsync(file, target["_id"].AsObjectId, session, ct);
         await HeartbeatQuietlyAsync(session.Project, actor, ct);
         return await TranslationViewAsync(context, current, target, ct);
     }
@@ -398,6 +400,7 @@ public sealed partial class LabelService(
         session.AssertReferenceEpoch(file);
 
         await ClearTranslationCoreAsync(translation, source, file, session, ct);
+        await ReconcileFileTargetAsync(file, TranslationTargetId(translation), session, ct);
     }
 
     // ------------------------------------------------------------------
