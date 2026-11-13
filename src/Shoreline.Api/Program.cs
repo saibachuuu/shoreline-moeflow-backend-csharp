@@ -178,6 +178,7 @@ app.MapTerms();
 app.MapPresence();
 app.MapAvatarEndpoints();
 app.MapAdminStorageOverviewEndpoints();
+app.MapAdminRecount();
 app.MapNotificationEndpoints();
 app.MapNotificationPublishEndpoints();
 app.MapProjectMembers();
