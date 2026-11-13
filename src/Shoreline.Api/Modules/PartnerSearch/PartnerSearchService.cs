@@ -186,12 +186,12 @@ public sealed class PartnerSearchService
             {
                 ["id"] = id.ToString(),
                 ["name"] = Text(row, "n"),
-                ["source_name"] = NullableText(row, "sn"),
-                ["target_name"] = NullableText(row, "tn"),
+                ["source_name"] = NullableBson(NullableText(row, "sn")),
+                ["target_name"] = NullableBson(NullableText(row, "tn")),
                 ["status"] = Integer(row, "st"),
                 ["intro"] = Text(row, "i"),
                 ["team_id"] = teamId is null ? BsonNull.Value : teamId.Value.ToString(),
-                ["team_name"] = team is null ? BsonNull.Value : NullableText(team, "n"),
+                ["team_name"] = team is null ? BsonNull.Value : NullableBson(NullableText(team, "n")),
                 ["thumbnail_url"] = thumbnail is null ? BsonNull.Value : thumbnail,
             });
         }
@@ -617,6 +617,13 @@ public sealed class PartnerSearchService
         document.TryGetValue(field, out var value) && value.BsonType == BsonType.String
             ? value.AsString
             : null;
+
+    /// <summary>
+    /// A BsonDocument rejects a null BsonValue, while the implicit conversion
+    /// from string yields exactly that. Legacy projects often have no sn/tn, so
+    /// the value has to become an explicit BsonNull instead of crashing.
+    /// </summary>
+    private static BsonValue NullableBson(string? value) => value is null ? BsonNull.Value : value;
 
     private static int Integer(BsonDocument document, string field, int fallback = 0)
     {
