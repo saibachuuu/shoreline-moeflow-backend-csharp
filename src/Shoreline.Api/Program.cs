@@ -262,6 +262,14 @@ using (var scope = app.Services.CreateScope())
 }
 await app.Services.GetRequiredService<LanguageCatalog>().InitializeAsync(CancellationToken.None);
 await app.Services.GetRequiredService<LegacyTypes>().InitializeAsync(CancellationToken.None);
+// A request killed mid-flight leaves its project_label_lock row behind and
+// every later request for that project answers 409 LabelBusyError. The row has
+// no TTL (Python behaves the same), so drop whatever a previous process owned
+// before accepting traffic. Single-writer deployment only; replicas would need
+// a heartbeat instead.
+await app.Services.GetRequiredService<ProjectLabelLock>().ClearStaleAsync(
+    System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime(),
+    CancellationToken.None);
 if (bootstrapEnabled)
 {
     using var bootstrapScope = app.Services.CreateScope();

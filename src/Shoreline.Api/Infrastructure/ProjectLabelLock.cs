@@ -310,6 +310,26 @@ public sealed class ProjectLabelLock(
         await ReleaseBoundedAsync(lease.ProjectId, lease.Owner);
 
     /// <summary>
+    /// A lock row outlives the process that took it whenever the process is
+    /// killed mid-request, and the row has no TTL. Startup therefore drops
+    /// everything created before this process began: no previous owner can
+    /// still be alive. The supported deployment runs a single api writer; a
+    /// multi-replica setup would need a heartbeat instead.
+    /// </summary>
+    public async Task<long> ClearStaleAsync(DateTime processStartedUtc, CancellationToken ct = default)
+    {
+        var result = await Locks.DeleteManyAsync(
+            new BsonDocument("created", new BsonDocument("$lt", processStartedUtc)), ct);
+        if (result.DeletedCount > 0)
+        {
+            logger?.LogWarning(
+                "Removed {Count} project label lock(s) left by a previous process",
+                result.DeletedCount);
+        }
+        return result.DeletedCount;
+    }
+
+    /// <summary>
     /// Owner-scoped CAS delete with an independent five second budget. Returns
     /// false only when the delete could not be attempted or failed; that case is
     /// logged because the lock has no TTL and needs manual recovery attention.
