@@ -53,6 +53,30 @@ public sealed class MongoStoreIndexCompatTests
         }
     }
 
+    [Fact]
+    public async Task Initialize_CreatesTheTranslationTargetIndex()
+    {
+        var database = "mongo_store_translation_index_" + Guid.NewGuid().ToString("N");
+        var store = new MongoStore(BuildConfiguration(database));
+        try
+        {
+            // A database the Python app has been serving indexes translations by
+            // source only, so every "read one target" query scans the collection.
+            await store.Collection("translation").Indexes.CreateOneAsync(
+                new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending("o")));
+
+            await store.InitializeAsync(CancellationToken.None);
+
+            var indexes = await (await store.Collection("translation").Indexes.ListAsync()).ToListAsync();
+            Assert.Contains(indexes, index => index["name"].AsString == "t_1");
+            Assert.Contains(indexes, index => index["name"].AsString == "o_1");
+        }
+        finally
+        {
+            await store.Database.Client.DropDatabaseAsync(database);
+        }
+    }
+
     private static IConfiguration BuildConfiguration(string database) =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

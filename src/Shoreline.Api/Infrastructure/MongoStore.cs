@@ -123,6 +123,16 @@ public sealed class MongoStore
         await Collection("identity_operation").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
             Builders<BsonDocument>.IndexKeys.Ascending("project").Ascending("operation_id"),
             new CreateIndexOptions { Unique = true, Name = "project_1_operation_id_1" }), cancellationToken: ct);
+
+        // Translations are read by target far more often than by source: the
+        // counters, exports, the label reconciler and every list endpoint start
+        // from a target. The legacy models only index `o` (and a compound
+        // `o_1_t_1_u_1` whose leftmost key is `o`), so each of those queries was
+        // a full collection scan - 309k documents on the production dump.
+        await EnsureIndexTolerantAsync("translation",
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("t"),
+                new CreateIndexOptions { Name = "t_1" }), ct);
     }
 
     // Reconcile a named index instead of failing the whole startup when a
