@@ -79,14 +79,11 @@ public sealed class OutputHttpTests
         var created = await world.SendAsync(HttpMethod.Post, $"/v1/teams/{world.TeamId}/outputs");
         Assert.True(created.StatusCode == HttpStatusCode.OK, await created.Content.ReadAsStringAsync());
         Assert.Equal("Export task created successfully.", (await JsonAsync(created)).GetProperty("message").GetString());
-        Assert.Equal(2, await world.Store.Collection("output")
-            .CountDocumentsAsync(new BsonDocument("p", world.ProjectId)));
-        Assert.Equal(2, await world.Store.Collection("csharp_job")
-            .CountDocumentsAsync(new BsonDocument
-            {
-                ["kind"] = OutputService.JobKind,
-                ["payload.project_id"] = world.ProjectId,
-            }));
+        // Python output_team_projects() hands the work to a worker whenever one is
+        // alive and returns immediately, so the durable job is the only thing the
+        // request promises. TeamOutputJobTests covers the rows the job builds.
+        Assert.Equal(1, await world.Store.Collection("csharp_job")
+            .CountDocumentsAsync(new BsonDocument("kind", OutputService.TeamJobKind)));
     }
 
     [Fact]

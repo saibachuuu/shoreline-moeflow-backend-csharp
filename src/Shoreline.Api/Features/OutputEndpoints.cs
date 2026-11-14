@@ -94,7 +94,12 @@ public static class OutputEndpoints
             var team = await projects.GetTeamAsync(teamId, ct);
             var snapshot = await permissions.TeamSnapshotAsync(actor, team, ct);
             if (!snapshot.Has("team:AUTO_BECOME_PROJECT_ADMIN")) throw ApiError.Forbidden();
-            await outputs.CreateTeamAsync(team, actor, ct);
+            // Python output_team_projects() enqueues the task whenever a worker is
+            // alive and only runs it inline on an empty pool. A team with a thousand
+            // projects cannot create every output row inside the request: the
+            // synchronous version blew past the edge timeout and the caller saw a
+            // failed export even though rows were being written.
+            await outputs.ScheduleTeamAsync(team["_id"].AsObjectId, actor["_id"].AsObjectId, ct);
             return new { message = LegacySuccessMessages.Get(context, "创建导出任务成功") };
         });
     }
