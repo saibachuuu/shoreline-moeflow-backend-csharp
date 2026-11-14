@@ -432,8 +432,7 @@ public sealed class LegacyRuntimeDifferentialTests
 
     private static void CompareJson(DifferentialReport report, string name, string path,
         JsonElement expected, JsonElement actual)
-    {
-        if (expected.ValueKind != actual.ValueKind)
+    {        if (expected.ValueKind != actual.ValueKind)
         {
             Add(report, name, "json", path, Kind(expected), Kind(actual), "business",
                 SourceFor(name, path), "JSON value kinds differ.");
@@ -459,6 +458,13 @@ public sealed class LegacyRuntimeDifferentialTests
                 foreach (var property in actualProperties)
                 {
                     if (expectedProperties.ContainsKey(property.Key)) continue;
+                    if (DeliberateExtensions.Contains(property.Key))
+                    {
+                        Add(report, name, "extension", path + "." + property.Key, "<missing>", ToJson(property.Value),
+                            "extension", SourceFor(name, path + "." + property.Key),
+                            "Field added by the C# runtime on purpose.");
+                        continue;
+                    }
                     Add(report, name, "json", path + "." + property.Key, "<missing>", ToJson(property.Value),
                         "business", SourceFor(name, path + "." + property.Key),
                         "Field present in the C# response is missing in the Python reference.");
@@ -648,6 +654,15 @@ public sealed class LegacyRuntimeDifferentialTests
         _ => "unknown"
     };
 
+    /// <summary>
+    /// Fields the C# runtime adds on purpose. The Python reference cannot contain
+    /// them, so they are reported separately instead of failing the parity gate.
+    /// </summary>
+    private static readonly HashSet<string> DeliberateExtensions = new(StringComparer.Ordinal)
+    {
+        "project_name_blocklist",
+    };
+
     private static void Add(DifferentialReport report, string caseName, string kind, string path,
         string expected, string actual, string classification, string source, string description)
     {
@@ -669,6 +684,9 @@ public sealed class LegacyRuntimeDifferentialTests
                 break;
             case "wire-format":
                 report.WireFormatDifferences.Add(difference);
+                break;
+            case "extension":
+                report.ExtensionDifferences.Add(difference);
                 break;
             default:
                 report.BusinessDifferences.Add(difference);
@@ -725,6 +743,8 @@ public sealed class LegacyRuntimeDifferentialTests
         public List<Difference> BusinessDifferences { get; set; } = new();
         public List<Difference> ExpectedFrameworkDifferences { get; set; } = new();
         public List<Difference> WireFormatDifferences { get; set; } = new();
+        // Fields the C# runtime adds on purpose; the Python reference cannot contain them.
+        public List<Difference> ExtensionDifferences { get; set; } = new();
         public string Conclusion { get; set; } = "";
         public string ReportPath { get; set; } = "";
 
