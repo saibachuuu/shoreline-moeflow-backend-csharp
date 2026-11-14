@@ -171,8 +171,13 @@ public sealed class TeamService(MongoStore store, TeamMemberService members, Ide
         }
         if (data.TryGetProperty("proofread_marker_enabled", out _)) changes["pme"] = data.RequiredBoolean("proofread_marker_enabled");
         if (data.TryGetProperty("proofread_marker_opacity", out _)) changes["pmo"] = Choice(data, "proofread_marker_opacity", 0, 100);
-        if (data.TryGetProperty("archive_api_keys", out var keys)) changes["aak"] = ArchiveKeyList.Apply(team.GetValue("aak", new BsonArray()).AsBsonArray, keys, secrets);
-        if (data.TryGetProperty("archive_api_url", out var url))
+        if (data.TryGetProperty("project_name_blocklist", out var blocklist))
+        {
+            if (snapshot.SourceTags.FirstOrDefault() != "creator")
+                throw new ApiError("NoPermissionError", 103, "只有团队创建者可以设置项目名称黑名单");
+            changes[NameBlocklist.Field] = NameBlocklist.Parse(blocklist);
+        }
+        if (data.TryGetProperty("archive_api_keys", out var keys)) changes["aak"] = ArchiveKeyList.Apply(team.GetValue("aak", new BsonArray()).AsBsonArray, keys, secrets);        if (data.TryGetProperty("archive_api_url", out var url))
         {
             var value = url.ValueKind == JsonValueKind.Null ? "" : data.RequiredText("archive_api_url", 512).Trim();
             try { changes["aau"] = value.Length == 0 ? "" : ExternalApiUrl.Normalize(value, ExternalApiUrl.ReadArchiveAllowedHosts(configuration)); }
@@ -215,6 +220,7 @@ public sealed class TeamService(MongoStore store, TeamMemberService members, Ide
         view["create_time"] = team.Timestamp("m_c"); view["edit_time"] = team.Timestamp("m_e");
         view["ocr_quota_month"] = team.Integer("om"); view["ocr_quota_used"] = team.Integer("ou");
         view["archive_api_keys"] = ArchiveKeyList.View(team.GetValue("aak", new BsonArray()).AsBsonArray, secrets); view["archive_api_url"] = team.Text("aau");
+        view["project_name_blocklist"] = team.GetValue(NameBlocklist.Field, new BsonArray()).AsBsonArray.Select(entry => entry.IsString ? entry.AsString : string.Empty).ToArray();
         return view;
     }
 
