@@ -145,7 +145,7 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
         if (name.Length == 0) throw ApiError.Invalid("Invalid request");
         // The team creator can forbid words in project names; check before any
         // row is written so a rejected create leaves nothing behind.
-        if (NameBlocklist.FirstMatch(team, name) is { } blocked) throw NameBlocklist.Blocked(blocked);
+        if (NameBlocklist.FirstMatch(team, name) is not null) throw NameBlocklist.Blocked();
         var intro = data.OptionalText("intro", 140);
         // Python's CreateProjectSchema declares labelplus_txt as an optional
         // string. Keep the raw value so Project.create can parse it before the

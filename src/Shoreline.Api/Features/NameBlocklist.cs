@@ -59,7 +59,11 @@ public static class NameBlocklist
         return null;
     }
 
-    /// <summary>Legacy error used by the project create path.</summary>
-    public static ApiError Blocked(string word) =>
-        new("ValidateError", 2, $"项目名称包含禁止使用的内容：{word}");
+    /// <summary>
+    /// The rejection deliberately does not echo the matched word: the word list is
+    /// the creator's private policy, and telling the caller which entry matched
+    /// lets them probe the list by trial and error.
+    /// </summary>
+    public static ApiError Blocked() =>
+        new("ValidateError", 2, "项目名称包含禁止使用的内容");
 }

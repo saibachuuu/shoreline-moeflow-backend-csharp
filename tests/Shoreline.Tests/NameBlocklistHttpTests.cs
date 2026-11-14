@@ -34,10 +34,14 @@ public sealed class NameBlocklistHttpTests(LocalServices services)
         Assert.Equal(2, read.GetProperty("project_name_blocklist").GetArrayLength());
 
         // Matching is case-insensitive and substring based.
-        await AuthzAssert.ErrorAsync(
+        var blockedBySchool = await AuthzAssert.ErrorAsync(
             await world.Client("owner").PostAsJsonAsync($"{teamPath}/projects",
                 Project("Old SCHOOL Project")),
             HttpStatusCode.BadRequest, 2);
+        Assert.Equal("项目名称包含禁止使用的内容",
+            blockedBySchool.GetProperty("message").GetString());
+        Assert.DoesNotContain("school",
+            blockedBySchool.GetProperty("message").GetString()!, StringComparison.OrdinalIgnoreCase);
 
         await AuthzAssert.ErrorAsync(
             await world.Client("owner").PostAsJsonAsync($"{teamPath}/projects",
