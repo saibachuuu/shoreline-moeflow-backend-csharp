@@ -553,7 +553,13 @@ public sealed class ProjectService(MongoStore store, TimeProvider clock, LegacyT
             var tags = relation?.GetValue("tags", new BsonArray()) is BsonArray tagArray ? tagArray : new BsonArray();
             if (tags.Count > 0)
             {
-                role = types.RoleView("project", await types.SystemRoleAsync("project", tags[0].AsString, ct), chinese);
+                // Python User.get_project_relation maps the persisted tags to a role
+                // code first: ``typesetter`` is stored but the role is picture_editor,
+                // and unknown tags fall back to translator. Looking the raw tag up
+                // made GET /v1/projects/{id} fail with RoleNotExistError for every
+                // member whose only tag was typesetter.
+                var code = ProjectInvitationService.RoleCodeFromTags(tags.Select(tag => tag.AsString));
+                role = types.RoleView("project", await types.SystemRoleAsync("project", code, ct), chinese);
             }
             else
             {
