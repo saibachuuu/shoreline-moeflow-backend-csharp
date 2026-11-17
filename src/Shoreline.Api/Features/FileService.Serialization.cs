@@ -139,12 +139,17 @@ public sealed partial class FileService
             var saveName = file.Text("sa");
             var thumbnailStatus = file.Integer("th");
             await using var storageLease = await LeaseForProjectAsync(project, ct);
-            var storage = storageLease?.Backend ?? _storage;
+            // The cover always lives on the deployment's own storage, and a
+            // project with no csid lives there too. Borrow that lease instead of
+            // using the raw singleton so STORAGE_MEDIA_PROXY applies to both.
+            await using var defaultLease = _router is null ? null : await _router.ForDefaultAsync(ct);
+            var defaultStorage = defaultLease?.Backend ?? _storage;
+            var storage = storageLease?.Backend ?? defaultStorage;
             data["parse_status_detail_name"] = DetailName(ImageParseStatusNames, ImageParseStatusNamesEn, parseStatus, ChinesePreferred());
             data["url"] = await OriginalUrlAsync(saveName, storage, ct);
             // app/models/file.py:749-751: the small cover always lives on the
             // default storage; only resample follows the project backend.
-            data["cover_url"] = await ProcessedUrlAsync(file, _storage, "cover", thumbnailStatus, ct);
+            data["cover_url"] = await ProcessedUrlAsync(file, defaultStorage, "cover", thumbnailStatus, ct);
             data["resample_url"] = await ProcessedUrlAsync(file, storage, "resample", thumbnailStatus, ct);
             data["thumbnail_status"] = thumbnailStatus;
             data["thumbnail_error"] = file.Text("the");

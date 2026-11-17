@@ -9,6 +9,7 @@ using MongoDB.Driver;
 using Shoreline.Api.Features;
 using Shoreline.Api.Modules.StoragePool;
 using Shoreline.Api.Security;
+using Shoreline.Api.Storage;
 
 namespace Shoreline.Tests;
 
@@ -232,6 +233,104 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
     }
 
     [Fact]
+    public async Task DefaultSourceRow_IsPinnedReadOnlyAndNeverDeletable()
+    {
+        var (_, admin) = await UserAsync(true);
+
+        // Pinned: the very first row of the first page is the deployment's own
+        // storage, flagged so the console can hide the delete action.
+        var first = await admin.GetAsync($"{Base}/sources?limit=1&page=1", Ct);
+        var firstRows = (await BodyAsync(first)).EnumerateArray().ToList();
+        var row = Assert.Single(firstRows);
+        Assert.Equal("default", row.GetProperty("id").GetString());
+        Assert.True(row.GetProperty("is_default").GetBoolean());
+        Assert.True(row.GetProperty("from_env").GetBoolean());
+        Assert.False(row.GetProperty("editable").GetBoolean());
+        Assert.False(row.GetProperty("deletable").GetBoolean());
+        Assert.False(row.TryGetProperty("secret_access_key", out _));
+
+        // Updating anything about it is refused rather than silently dropped:
+        // the values come from STORAGE_* and would be restored on restart.
+        var update = await admin.PutAsJsonAsync($"{Base}/sources/default",
+            new { name = "hijacked" }, Ct);
+        Assert.Equal(HttpStatusCode.Conflict, update.StatusCode);
+        AssertError(await BodyAsync(update), "StoragePoolSourceReadOnly", 2, "默认存储由环境变量配置，不可修改");
+
+        var remove = await admin.DeleteAsync($"{Base}/sources/default", Ct);
+        Assert.Equal(HttpStatusCode.Conflict, remove.StatusCode);
+        AssertError(await BodyAsync(remove), "StoragePoolSourceReadOnly", 2, "默认存储由环境变量配置，不可删除");
+
+        // The probe route still works on the real backend, not on a missing row.
+        var probe = await admin.PostAsync($"{Base}/sources/default/test", null, Ct);
+        Assert.Equal(HttpStatusCode.OK, probe.StatusCode);
+        Assert.True((await BodyAsync(probe)).GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
+    public async Task MediaProxy_ServesTheObjectForASignedSelfHostedUrl()
+    {
+        var (_, admin) = await UserAsync(true);
+
+        // Put an object on the deployment's own bucket under the file prefix.
+        var name = Unique("media") + ".png";
+        var bytes = Encoding.UTF8.GetBytes("media-proxy-bytes");
+        var storage = services.App.Services.GetRequiredService<Shoreline.Api.Storage.ObjectStorage>();
+        await storage.PutAsync("files/" + name, new MemoryStream(bytes), "image/png", Ct);
+
+        var signer = services.App.Services.GetRequiredService<MediaProxySigner>();
+        var url = signer.BuildUrl(MediaProxySigner.DefaultSourceToken, "files/" + name,
+            TimeSpan.FromMinutes(5));
+        // The link carries the public /api prefix that nginx strips; the test
+        // host has no nginx, so call the backend route directly.
+        var path = url.StartsWith("/api/", StringComparison.Ordinal) ? url["/api".Length..] : url;
+
+        // The signed link needs no session: it is what a poster pastes into chat.
+        var anonymous = services.App.CreateClient();
+        var media = await anonymous.GetAsync(path.TrimStart('/'), Ct);
+        Assert.Equal(HttpStatusCode.OK, media.StatusCode);
+        Assert.Equal(bytes, await media.Content.ReadAsByteArrayAsync(Ct));
+        Assert.Equal("image/png", media.Content.Headers.ContentType?.MediaType);
+
+        // An unsigned or edited link is refused with 403 and no body leak.
+        var forged = path[..^1] + (path[^1] == 'A' ? 'B' : 'A');
+        var denied = await anonymous.GetAsync(forged.TrimStart('/'), Ct);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        var deniedBody = await BodyAsync(denied);
+        AssertError(deniedBody, "MediaSignatureInvalid", 1005, "媒体链接无效或已过期");
+
+        // A valid signature for an object that does not exist is a 404.
+        var missing = signer.BuildUrl(MediaProxySigner.DefaultSourceToken, "files/missing-" + name,
+            TimeSpan.FromMinutes(5));
+        var missingPath = missing.StartsWith("/api/", StringComparison.Ordinal)
+            ? missing["/api".Length..]
+            : missing;
+        var absent = await anonymous.GetAsync(missingPath.TrimStart('/'), Ct);
+        Assert.Equal(HttpStatusCode.NotFound, absent.StatusCode);
+
+        await admin.GetAsync(Base + "/sources", Ct);
+    }
+
+    [Fact]
+    public async Task SourceReverseProxy_IsStoredAndDrivesSelfHostedMediaUrls()
+    {
+        var (_, admin) = await UserAsync(true);
+
+        var created = await admin.PostAsJsonAsync(Base + "/sources",
+            SourcePayload(Unique("proxy"), proxy: true));
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var body = await BodyAsync(created);
+        Assert.True(body.GetProperty("proxy").GetBoolean());
+        var id = body.GetProperty("id").GetString()!;
+        Assert.False(body.GetProperty("is_default").GetBoolean());
+
+        // Turning it off again is an ordinary field update.
+        var updated = await admin.PutAsJsonAsync($"{Base}/sources/{id}",
+            new { proxy = false }, Ct);
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.False((await BodyAsync(updated)).GetProperty("proxy").GetBoolean());
+    }
+
+    [Fact]
     public async Task SourcesList_MasksSecretsAndAppliesPaginationHeaders()
     {
         var (_, admin) = await UserAsync(true);
@@ -239,15 +338,21 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
         await InsertSourceAsync();
         var total = await services.Store.Collection("storage_pool_source")
             .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct);
+        // The list also pins the deployment's own storage on top, which has no
+        // row here; the headers count what the console renders.
+        var expected = (total + 1).ToString();
 
         var page = await admin.GetAsync($"{Base}/sources?limit=1&page=1", Ct);
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         Assert.Equal("1", Header(page, "X-Pagination-Page"));
         Assert.Equal("1", Header(page, "X-Pagination-Limit"));
-        Assert.Equal(total.ToString(), Header(page, "X-Pagination-Count"));
-        Assert.Equal(total.ToString(), Header(page, "X-Pagination-Page-Count"));
+        Assert.Equal(expected, Header(page, "X-Pagination-Count"));
+        Assert.Equal(expected, Header(page, "X-Pagination-Page-Count"));
         var rows = (await BodyAsync(page)).EnumerateArray().ToList();
         Assert.Single(rows);
+        // Page 1 slot 0 is always the default source.
+        Assert.Equal("default", rows[0].GetProperty("id").GetString());
+        Assert.True(rows[0].GetProperty("is_default").GetBoolean());
 
         var all = await admin.GetAsync($"{Base}/sources?limit=500", Ct);
         Assert.Equal("100", Header(all, "X-Pagination-Limit"));
@@ -736,15 +841,21 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
         public override bool CanSeek => false;
     }
 
-    private static Dictionary<string, object?> SourcePayload(string name, string? endpoint = null) => new()
+    private static Dictionary<string, object?> SourcePayload(string name, string? endpoint = null,
+        bool? proxy = null)
     {
-        ["name"] = name,
-        ["endpoint"] = endpoint ?? "http://127.0.0.1:" + TestEnvironment.S3Port,
-        ["bucket"] = "shoreline-test",
-        ["sub_path"] = "pool/" + name + "/",
-        ["access_key_id"] = "local-test-only",
-        ["secret_access_key"] = "local-disposable-test-secret",
-    };
+        var payload = new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["endpoint"] = endpoint ?? "http://127.0.0.1:" + TestEnvironment.S3Port,
+            ["bucket"] = "shoreline-test",
+            ["sub_path"] = "pool/" + name + "/",
+            ["access_key_id"] = "local-test-only",
+            ["secret_access_key"] = "local-disposable-test-secret",
+        };
+        if (proxy is { } value) payload["proxy"] = value;
+        return payload;
+    }
 
     private static Dictionary<string, object?> With(
         Dictionary<string, object?> payload, (string Key, object? Value) change)
@@ -846,9 +957,10 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
         var sources = services.Store.Collection("storage_pool_source");
         var projects = services.Store.Collection("project");
         var transfers = services.Store.Collection("storage_transfer");
+        // /stats counts the pinned default source too even though it has no row.
         return (
-            await sources.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct),
-            await sources.CountDocumentsAsync(new BsonDocument("e", true), cancellationToken: Ct),
+            await sources.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct) + 1,
+            await sources.CountDocumentsAsync(new BsonDocument("e", true), cancellationToken: Ct) + 1,
             await projects.CountDocumentsAsync(
                 new BsonDocument("csid", new BsonDocument("$ne", BsonNull.Value)), cancellationToken: Ct),
             await transfers.CountDocumentsAsync(new BsonDocument("st",

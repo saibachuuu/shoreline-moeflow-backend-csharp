@@ -22,7 +22,8 @@ public sealed class StorageBackendDescriptor
         string accessKey,
         string secretKey,
         string publicDomain = "",
-        bool verifySsl = true)
+        bool verifySsl = true,
+        string proxyToken = "")
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         if (!endpoint.IsAbsoluteUri || (endpoint.Scheme != Uri.UriSchemeHttp && endpoint.Scheme != Uri.UriSchemeHttps))
@@ -45,6 +46,7 @@ public sealed class StorageBackendDescriptor
         SecretKey = secretKey;
         PublicDomain = (publicDomain ?? "").Trim();
         VerifySsl = verifySsl;
+        ProxyToken = (proxyToken ?? "").Trim();
     }
 
     public Uri Endpoint { get; }
@@ -56,6 +58,14 @@ public sealed class StorageBackendDescriptor
     public string SecretKey { get; }
     public string PublicDomain { get; }
     public bool VerifySsl { get; }
+
+    /// <summary>
+    /// Non-empty when this source serves media through the site itself
+    /// (<c>/api/v1/media/{token}/{key}</c>) instead of handing out bucket or CDN
+    /// URLs. The token is the source id; the site's own storage uses
+    /// <see cref="MediaProxySigner.DefaultSourceToken"/>.
+    /// </summary>
+    public string ProxyToken { get; }
 
     public string MaskedAccessKey
     {
@@ -89,6 +99,23 @@ public sealed class StorageBackendDescriptor
 /// </summary>
 public sealed class StorageBackendFactory
 {
+    private readonly MediaProxySigner? mediaSigner;
+    private readonly bool proxyDefaultStorage;
+
+    /// <summary>
+    /// The host registers the factory with the signer so a proxy-enabled source
+    /// can mint <c>/api/v1/media/...</c> links. Tests may build a factory without
+    /// one, in which case proxy links fall back to the bucket/CDN URL.
+    /// <paramref name="proxyDefaultStorage"/> mirrors the deployment's
+    /// <c>STORAGE_MEDIA_PROXY</c> switch for its own bucket, which has no
+    /// storage-source row to carry the flag.
+    /// </summary>
+    public StorageBackendFactory(MediaProxySigner? mediaSigner = null, bool proxyDefaultStorage = false)
+    {
+        this.mediaSigner = mediaSigner;
+        this.proxyDefaultStorage = proxyDefaultStorage;
+    }
+
     public IStorageBackend Create(StorageBackendDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
@@ -109,14 +136,30 @@ public sealed class StorageBackendFactory
             ["Storage:Domain"] = descriptor.PublicDomain,
         };
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
-        return new ObjectStorageBackend(new ObjectStorage(configuration), ownsStorage: true);
+        var backend = new ObjectStorageBackend(new ObjectStorage(configuration), ownsStorage: true);
+        if (mediaSigner is null || descriptor.ProxyToken.Length == 0) return backend;
+        // The proxy wrapper only changes how read URLs look; every other
+        // operation still goes straight to the object store.
+        return new ProxySigningBackend(backend, mediaSigner, descriptor.ProxyToken);
     }
 
     public StorageBackendLease CreateLease(StorageBackendDescriptor descriptor) =>
         new(Create(descriptor), ownsBackend: true);
 
-    public StorageBackendLease BorrowDefault(ObjectStorage storage) =>
-        new(new ObjectStorageBackend(storage, ownsStorage: false), ownsBackend: false);
+    /// <summary>
+    /// The lease for the deployment's own storage. When the site opted into
+    /// proxying its own bucket (<c>STORAGE_MEDIA_PROXY=true</c>), read URLs come
+    /// back as <c>/api/v1/media/default/...</c> so the bucket endpoint never
+    /// reaches the browser; every other operation is unchanged.
+    /// </summary>
+    public StorageBackendLease BorrowDefault(ObjectStorage storage)
+    {
+        ArgumentNullException.ThrowIfNull(storage);
+        IStorageBackend backend = new ObjectStorageBackend(storage, ownsStorage: false);
+        if (mediaSigner is not null && proxyDefaultStorage)
+            backend = new ProxySigningBackend(backend, mediaSigner, MediaProxySigner.DefaultSourceToken);
+        return new StorageBackendLease(backend, ownsBackend: false);
+    }
 
     /// <summary>
     /// Performs a server-side copy when both descriptors point at the same S3
@@ -229,6 +272,58 @@ internal sealed class ObjectStorageBackend : IStorageBackend
 }
 
 /// <summary>
+/// Wraps a backend so read URLs point back at this site instead of at the
+/// bucket or CDN. Only <see cref="SignGetAsync(string, TimeSpan)"/> and
+/// <see cref="SignGetAsync(string, TimeSpan, string?)"/> change; everything else
+/// is the inner backend's job, because a proxied source still stores its
+/// objects exactly where it says it does.
+/// </summary>
+internal sealed class ProxySigningBackend : IStorageBackend
+{
+    private readonly IStorageBackend inner;
+    private readonly MediaProxySigner signer;
+    private readonly string proxyToken;
+
+    public ProxySigningBackend(IStorageBackend inner, MediaProxySigner signer, string proxyToken)
+    {
+        this.inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        this.signer = signer ?? throw new ArgumentNullException(nameof(signer));
+        this.proxyToken = proxyToken ?? throw new ArgumentNullException(nameof(proxyToken));
+    }
+
+    public Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken,
+        long? contentLength = null) =>
+        inner.PutAsync(key, content, contentType, cancellationToken, contentLength);
+
+    public Task<ObjectDownload> GetAsync(string key, CancellationToken cancellationToken) =>
+        inner.GetAsync(key, cancellationToken);
+
+    public Task<ObjectInfo?> HeadAsync(string key, CancellationToken cancellationToken) =>
+        inner.HeadAsync(key, cancellationToken);
+
+    public Task<long?> SizeAsync(string key, CancellationToken cancellationToken) =>
+        inner.SizeAsync(key, cancellationToken);
+
+    public Task DeleteAsync(string key, CancellationToken cancellationToken) =>
+        inner.DeleteAsync(key, cancellationToken);
+
+    public Task CopyAsync(string source, string destination, CancellationToken cancellationToken) =>
+        inner.CopyAsync(source, destination, cancellationToken);
+
+    public Task<string> SignGetAsync(string key, TimeSpan validity) =>
+        Task.FromResult(signer.BuildUrl(proxyToken, key, validity));
+
+    public Task<string> SignGetAsync(string key, TimeSpan validity, string? contentDisposition) =>
+        Task.FromResult(signer.BuildUrl(proxyToken, key, validity, contentDisposition));
+
+    public Task<ObjectPage> ListAsync(string prefix, string? startAfter, int maxKeys,
+        CancellationToken cancellationToken) =>
+        inner.ListAsync(prefix, startAfter, maxKeys, cancellationToken);
+
+    public void Dispose() => inner.Dispose();
+}
+
+/// <summary>
 /// A backend plus ownership. Borrowed leases (the site default backend) must not
 /// dispose the singleton ObjectStorage.
 /// </summary>
@@ -264,7 +359,15 @@ public static class ProjectStorageServiceCollectionExtensions
     /// <summary>Registers only the module-neutral router/factory foundation.</summary>
     public static IServiceCollection AddProjectStorageCore(this IServiceCollection services)
     {
-        services.AddSingleton<StorageBackendFactory>();
+        // The signer is optional: a test host that never registers
+        // MediaProxySigner still builds a factory, and proxy-enabled sources
+        // simply fall back to bucket/CDN URLs.
+        services.AddSingleton(sp =>
+        {
+            var configuration = sp.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
+            var proxyDefault = configuration?.GetValue("Storage:MediaProxy", false) ?? false;
+            return new StorageBackendFactory(sp.GetService<MediaProxySigner>(), proxyDefault);
+        });
         services.AddSingleton<ProjectStorageResolverRegistry>();
         services.AddScoped<ProjectStorageRouter>();
         return services;

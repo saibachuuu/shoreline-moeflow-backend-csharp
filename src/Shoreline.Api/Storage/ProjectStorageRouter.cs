@@ -99,6 +99,22 @@ public sealed class ProjectStorageRouter
         throw SourceUnavailable();
     }
 
+    /// <summary>
+    /// Resolves the backend named by a media-proxy URL token:
+    /// <see cref="MediaProxySigner.DefaultSourceToken"/> is the site's own
+    /// configured storage, anything else must be a storage-source ObjectId.
+    /// A token that does not resolve throws, never falls back quietly — a
+    /// proxied link that silently changed buckets would serve the wrong file.
+    /// </summary>
+    public async ValueTask<StorageBackendLease> ForMediaTokenAsync(string token,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.Equals(token, MediaProxySigner.DefaultSourceToken, StringComparison.Ordinal))
+            return factory.BorrowDefault(defaultStorage);
+        if (!ObjectId.TryParse(token, out var sourceId)) throw SourceUnavailable();
+        return await ForSourceAsync(sourceId, cancellationToken).ConfigureAwait(false);
+    }
+
     public static ObjectId? ReadSourceId(BsonDocument project)
     {
         if (!project.TryGetValue("csid", out var value) || value.IsBsonNull) return null;

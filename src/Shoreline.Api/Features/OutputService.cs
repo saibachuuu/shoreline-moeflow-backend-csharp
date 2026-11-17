@@ -363,7 +363,13 @@ public sealed class OutputService(
                 if (fileName.Length > 0)
                 {
                     await using var storageLease = await LeaseForProjectAsync(project, ct);
-                    var objectStorage = storageLease?.Backend ?? storage;
+                    // A project on the deployment's own storage has no csid, so
+                    // borrow the default lease as well: STORAGE_MEDIA_PROXY then
+                    // applies to export links too, not just to pool images.
+                    await using var defaultLease = storageLease is null && router is not null
+                        ? await router.ForDefaultAsync(ct)
+                        : null;
+                    var objectStorage = storageLease?.Backend ?? defaultLease?.Backend ?? storage;
                     link = await objectStorage.SignGetAsync(
                         cleanup.OutputPrefix + output["_id"].AsObjectId + "/" + fileName,
                         TimeSpan.FromDays(7),

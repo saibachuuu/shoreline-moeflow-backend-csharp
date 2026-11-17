@@ -15,6 +15,7 @@ public sealed class StoragePoolSourceService
     private readonly StorageBackendFactory factory;
     private readonly TimeProvider clock;
     private readonly string probeFilePrefix;
+    private readonly Microsoft.Extensions.Configuration.IConfiguration? configuration;
 
     public StoragePoolSourceService(
         MongoStore store,
@@ -25,6 +26,7 @@ public sealed class StoragePoolSourceService
         this.store = store;
         this.factory = factory;
         this.clock = clock;
+        this.configuration = configuration;
         probeFilePrefix = configuration is null
             ? "files/"
             : StoragePoolPrefixes.From(configuration).FilePrefix;
@@ -34,18 +36,52 @@ public sealed class StoragePoolSourceService
     private IMongoCollection<BsonDocument> Projects => store.Collection("project");
     private IMongoCollection<BsonDocument> Transfers => store.Collection(StoragePoolConstants.TransferCollection);
 
+    /// <summary>
+    /// The synthetic, read-only row for the deployment's own storage. Projects on
+    /// the default backend carry no <c>csid</c>, so this row has no database
+    /// counterpart; it is derived from <c>STORAGE_*</c> on every request.
+    /// </summary>
+    private BsonDocument? DefaultRow() => StoragePoolDefaultSource.Read(configuration);
+
+    /// <summary>True when the deployment's own storage is shown as a row.</summary>
+    public bool HasDefaultSource => DefaultRow() is not null;
+
     public async Task<List<BsonDocument>> ListAsync(int skip, int limit, CancellationToken ct)
     {
+        // The default source is pinned to index 0, so it is rendered only on the
+        // first page and shifts every database row down by one slot.
+        var result = new List<BsonDocument>();
+        var defaultRow = DefaultRow();
+        var hasDefault = defaultRow is not null;
+        if (hasDefault && skip == 0)
+        {
+            result.Add(ToApi(defaultRow!));
+        }
+
+        // Database rows start after the pinned slot; on later pages the whole
+        // requested window is database rows.
+        var offset = hasDefault ? 1 : 0;
+        var dbSkip = Math.Max(0, skip - offset);
+        var dbLimit = limit - result.Count;
+        if (dbLimit <= 0) return result;
+
         var rows = await Sources.Find(FilterDefinition<BsonDocument>.Empty)
             .Sort(new BsonDocument { ["ct"] = -1, ["_id"] = -1 })
-            .Skip(skip).Limit(limit).ToListAsync(ct).ConfigureAwait(false);
-        return rows.Select(ToApi).ToList();
+            .Skip(dbSkip).Limit(dbLimit).ToListAsync(ct).ConfigureAwait(false);
+        result.AddRange(rows.Select(ToApi));
+        return result;
     }
 
-    public Task<long> CountAsync(CancellationToken ct) => Sources.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: ct);
+    public async Task<long> CountAsync(CancellationToken ct)
+    {
+        var count = await Sources.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: ct)
+            .ConfigureAwait(false);
+        return count + (DefaultRow() is null ? 0 : 1);
+    }
 
     public async Task<BsonDocument> GetAsync(string id, CancellationToken ct)
     {
+        if (StoragePoolDefaultSource.IsDefaultId(id)) return ToApi(DefaultRow() ?? throw Missing());
         var row = await Sources.Find(new BsonDocument("_id", BsonFields.Id(id))).FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
         return row is null ? throw Missing() : ToApi(row);
@@ -54,6 +90,9 @@ public sealed class StoragePoolSourceService
     public async Task<BsonDocument> CreateAsync(JsonElement data, ObjectId actor, CancellationToken ct)
     {
         _ = actor;
+        // A caller must not be able to create a row carrying the sentinel id.
+        if (StoragePoolDefaultSource.IsDefaultId(StoragePoolJson.OptionalString(data, "id")))
+            throw ReadOnlyDefault();
         var name = StoragePoolJson.RequiredString(data, "name", 64);
         var endpoint = StoragePoolJson.RequiredString(data, "endpoint", 255).TrimEnd('/');
         var bucket = StoragePoolJson.RequiredString(data, "bucket", 128);
@@ -74,6 +113,7 @@ public sealed class StoragePoolSourceService
         var maxObjects = StoragePoolJson.OptionalInteger(data, "max_objects_per_run") ?? 2000;
         if (maxObjects is < 1 or > 100000) throw ApiError.Field("max_objects_per_run", "范围为 1 到 100000");
         var enabled = StoragePoolJson.OptionalBoolean(data, "enabled") ?? true;
+        var proxy = StoragePoolJson.OptionalBoolean(data, "proxy") ?? false;
         ValidateEndpointAndDomain(endpoint, publicDomain);
 
         var now = clock.GetUtcNow().UtcDateTime;
@@ -91,6 +131,7 @@ public sealed class StoragePoolSourceService
             ["ak"] = accessKey,
             ["sk"] = secretKey,
             ["pd"] = publicDomain,
+            ["px"] = proxy,
             ["rm"] = remark,
             ["iad"] = inactiveDays,
             ["mo"] = maxObjects,
@@ -107,6 +148,10 @@ public sealed class StoragePoolSourceService
     public async Task<BsonDocument> UpdateAsync(string id, JsonElement data, ObjectId actor, CancellationToken ct)
     {
         _ = actor;
+        // Every field of the default source comes from the deployment's
+        // environment, so a write would only appear to work until the next
+        // restart. Reject it instead of storing a value nothing reads.
+        if (StoragePoolDefaultSource.IsDefaultId(id)) throw ReadOnlyDefault();
         var objectId = BsonFields.Id(id);
         var row = await Sources.Find(new BsonDocument("_id", objectId)).FirstOrDefaultAsync(ct).ConfigureAwait(false)
             ?? throw Missing();
@@ -152,6 +197,8 @@ public sealed class StoragePoolSourceService
         }
         if (StoragePoolJson.Has(data, "public_domain"))
             updates["pd"] = (StoragePoolJson.OptionalString(data, "public_domain") ?? "").Trim();
+        if (StoragePoolJson.Has(data, "proxy"))
+            updates["px"] = StoragePoolJson.RequiredBoolean(data, "proxy");
         if (StoragePoolJson.Has(data, "remark"))
         {
             var remark = StoragePoolJson.OptionalString(data, "remark") ?? "";
@@ -199,6 +246,7 @@ public sealed class StoragePoolSourceService
 
     public async Task DeleteAsync(string id, CancellationToken ct)
     {
+        if (StoragePoolDefaultSource.IsDefaultId(id)) throw DefaultNeverDeletable();
         var objectId = BsonFields.Id(id);
         if (!await Sources.Find(new BsonDocument("_id", objectId)).AnyAsync(ct).ConfigureAwait(false)) throw Missing();
         if (await Projects.Find(new BsonDocument("csid", objectId)).AnyAsync(ct).ConfigureAwait(false))
@@ -220,8 +268,10 @@ public sealed class StoragePoolSourceService
 
     public async Task<BsonDocument> TestAsync(string id, CancellationToken ct)
     {
-        var row = await Sources.Find(new BsonDocument("_id", BsonFields.Id(id))).FirstOrDefaultAsync(ct)
-            .ConfigureAwait(false) ?? throw Missing();
+        var row = StoragePoolDefaultSource.IsDefaultId(id)
+            ? DefaultRow() ?? throw Missing()
+            : await Sources.Find(new BsonDocument("_id", BsonFields.Id(id))).FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false) ?? throw Missing();
         try
         {
             await ProbeAsync(row, ct).ConfigureAwait(false);
@@ -282,15 +332,32 @@ public sealed class StoragePoolSourceService
         StoragePoolBson.String(source, "ak"),
         StoragePoolBson.String(source, "sk"),
         StoragePoolBson.String(source, "pd"),
-        StoragePoolBson.Bool(source, "vs", true));
+        StoragePoolBson.Bool(source, "vs", true),
+        ProxyToken(source));
+
+    /// <summary>
+    /// The token a proxied read URL carries: the source id, or
+    /// <c>default</c> for the environment-configured storage. Empty when the
+    /// source does not use the reverse-proxy switch.
+    /// </summary>
+    private static string ProxyToken(BsonDocument source)
+    {
+        if (!StoragePoolBson.Bool(source, "px")) return "";
+        if (!source.TryGetValue("_id", out var id) || id.IsBsonNull) return "";
+        if (id.IsString) return id.AsString;
+        return id.IsObjectId ? id.AsObjectId.ToString() : "";
+    }
 
     public static BsonDocument ToApi(BsonDocument source)
     {
         var accessKey = StoragePoolBson.String(source, "ak");
         var masked = accessKey.Length <= 8 ? new string('*', accessKey.Length) : accessKey[..4] + "..." + accessKey[^4..];
+        var id = StoragePoolBson.ObjectId(source, "_id")?.ToString()
+            ?? (source.TryGetValue("_id", out var rawId) && rawId.IsString ? rawId.AsString : "");
+        var isDefault = StoragePoolDefaultSource.IsDefaultId(id);
         return new BsonDocument
         {
-            ["id"] = StoragePoolBson.ObjectId(source, "_id")?.ToString() ?? "",
+            ["id"] = id,
             ["name"] = StoragePoolBson.String(source, "n"),
             ["enabled"] = StoragePoolBson.Bool(source, "e", true),
             ["endpoint"] = StoragePoolBson.String(source, "ep"),
@@ -301,10 +368,18 @@ public sealed class StoragePoolSourceService
             ["verify_ssl"] = StoragePoolBson.Bool(source, "vs", true),
             ["access_key_id"] = masked,
             ["public_domain"] = StoragePoolBson.String(source, "pd"),
+            ["proxy"] = StoragePoolBson.Bool(source, "px"),
             ["remark"] = StoragePoolBson.String(source, "rm"),
             ["inactive_days"] = StoragePoolBson.Int(source, "iad", 90),
             ["max_objects_per_run"] = StoragePoolBson.Int(source, "mo", 2000),
             ["has_data"] = StoragePoolBson.Bool(source, "hd"),
+            // The default entry has no database row: its values are read from
+            // the deployment's environment on every request, so the console must
+            // pin it first and refuse to edit or delete it.
+            ["is_default"] = isDefault,
+            ["from_env"] = isDefault,
+            ["editable"] = !isDefault,
+            ["deletable"] = !isDefault,
             ["create_time"] = StoragePoolBson.Iso(source, "ct"),
             ["update_time"] = StoragePoolBson.Iso(source, "ut"),
         };
@@ -315,6 +390,10 @@ public sealed class StoragePoolSourceService
         new("StoragePoolUnreachable", 4, "verify_ssl=false 不受支持，已拒绝连接", 400);
     public static ApiError LocationLocked() =>
         new("StoragePoolLocationLocked", 3, "存储来源已有数据，不能修改位置", 409);
+    public static ApiError ReadOnlyDefault() =>
+        new("StoragePoolSourceReadOnly", 2, "默认存储由环境变量配置，不可修改", 409);
+    public static ApiError DefaultNeverDeletable() =>
+        new("StoragePoolSourceReadOnly", 2, "默认存储由环境变量配置，不可删除", 409);
 
     private static bool LocationChanged(BsonDocument oldRow, BsonDocument newRow) =>
         !Equals(StoragePoolBson.String(oldRow, "ep"), StoragePoolBson.String(newRow, "ep")) ||

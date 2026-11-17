@@ -39,6 +39,24 @@ C# 进程启动时会调用 `LegacyEnvironmentConfiguration.Apply`。它只在�
 | `OSS_KEY_PREFIX` | `Storage:KeyPrefix`；`STORAGE_TYPE` 存在且未显式设置时默认 `storage/` |
 | `STORAGE_DOMAIN` | `Storage:Domain` |
 | `OSS_VIA_CDN=True` | `Storage:ViaCdn=true` |
+| `STORAGE_MEDIA_PROXY=True` | `Storage:MediaProxy=true`：默认存储源走本站反向代理（见下） |
+
+## 反向代理（媒体取自本站域名）
+
+对象存储源（包括由环境变量合成的「默认存储」）可以打开「反向代理」。打开后
+`SignGetAsync` 不再返回预签名 URL 或 CDN 地址，而是返回本站的签名链接
+`/api/v1/media/{source}/{key}?e=…&s=…`：
+
+- 域名与前缀天然与主站一致，前端不需要知道对象存储/CDN 的真实域名；
+- 链接本身带 HMAC 签名（`Auth:Secret` 派生，独立于会话 token），浏览器不需要
+  Cookie 或登录态即可取图；
+- 请求进到 `MediaProxyEndpoints` 后，后端用该存储源自己的凭据回源读取，
+  流式转发，并设置 `Cache-Control`，因此 CDN/前置代理仍可缓存；
+- 默认存储由 `STORAGE_MEDIA_PROXY=True` 控制，存储池里的其它源用界面上的
+  「反向代理」开关（字段 `proxy`）控制。
+
+`Storage:MediaProxyBase`（默认 `/api`）是链接前缀；部署时 nginx 会把
+`/api/` 剥掉再转给 C#，所以保留默认值即可。
 
 ## CDN 说明
 

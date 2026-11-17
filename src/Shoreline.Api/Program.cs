@@ -84,6 +84,7 @@ builder.Services.AddScoped<ApplicationService>();
 builder.Services.AddScoped<IdentityTagPolicyService>();
 builder.Services.AddScoped<BootstrapService>();
 builder.Services.AddSingleton<ObjectStorage>();
+builder.Services.AddSingleton<MediaProxySigner>();
 builder.Services.AddSingleton(sp => new JobQueue(
     sp.GetRequiredService<MongoStore>(),
     sp.GetRequiredService<TimeProvider>(),
@@ -196,6 +197,7 @@ app.MapThumbnailEndpoints();
 app.MapArchiveImports();
 app.MapPartnerSearch();
 app.MapStoragePool();
+app.MapMediaProxy();
 app.MapZitengPartner();
 var mitStorageRoot = builder.Configuration["Mit:StorageRoot"] ?? Environment.GetEnvironmentVariable("MIT_STORAGE_ROOT");
 if (!string.IsNullOrWhiteSpace(mitStorageRoot) && mitStorageRoot != "/MIT_STORAGE_ROOT_UNDEFINED")

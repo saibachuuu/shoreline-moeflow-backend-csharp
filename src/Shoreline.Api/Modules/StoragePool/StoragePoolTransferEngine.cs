@@ -1006,29 +1006,11 @@ public sealed class StoragePoolTransferEngine
 
     private StorageBackendDescriptor? DefaultDescriptor()
     {
-        var type = (configuration["Storage:Type"] ?? configuration["Storage:BucketStyle"] ?? "S3").Trim();
-        if (type.Equals("Local", StringComparison.OrdinalIgnoreCase) ||
-            type.Equals("FILESYSTEM", StringComparison.OrdinalIgnoreCase) ||
-            type.Equals("FILE", StringComparison.OrdinalIgnoreCase) ||
-            type.Equals("DISK", StringComparison.OrdinalIgnoreCase)) return null;
-        var endpointText = configuration["Storage:Endpoint"];
-        var bucket = configuration["Storage:Bucket"];
-        var accessKey = configuration["Storage:AccessKey"];
-        var secretKey = configuration["Storage:SecretKey"];
-        if (string.IsNullOrWhiteSpace(endpointText) ||
-            !Uri.TryCreate(endpointText, UriKind.Absolute, out var endpoint) ||
-            string.IsNullOrWhiteSpace(bucket) || string.IsNullOrWhiteSpace(accessKey) || string.IsNullOrWhiteSpace(secretKey))
-            return null;
-        return new StorageBackendDescriptor(
-            endpoint,
-            bucket,
-            configuration["Storage:KeyPrefix"] ?? "",
-            configuration["Storage:Region"] ?? "us-east-1",
-            configuration.GetValue("Storage:ForcePathStyle", true),
-            accessKey,
-            secretKey,
-            configuration["Storage:Domain"] ?? "",
-            true);
+        // Reuse the same derivation as the admin console's pinned default row so a
+        // copy to/from the default backend and the media URL for it can never
+        // describe two different buckets.
+        var row = StoragePoolDefaultSource.Read(configuration);
+        return row is null ? null : StoragePoolSourceService.Descriptor(row);
     }
 
     private Task MarkObjectAsync(BsonDocument row, int status, string error, CancellationToken ct,

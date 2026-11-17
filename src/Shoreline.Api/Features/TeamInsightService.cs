@@ -17,7 +17,8 @@ public sealed class TeamInsightService(
     ProjectService projects,
     UserView userView,
     ObjectStorage storage,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    ProjectStorageRouter? router = null)
 {
     private const string NoInsightMessage = "您没有权限查看本团队项目统计";
     private static readonly TimeSpan SignedUrlValidity = ObjectStorage.DefaultSignedUrlValidity;
@@ -432,9 +433,15 @@ public sealed class TeamInsightService(
                 // rather than silently signing a default-bucket URL for a
                 // project whose artifacts live in another storage source.
                 if (!project.GetValue("csid", BsonNull.Value).IsObjectId && fileName.Length > 0)
-                    link = await storage.SignGetAsync(OutputPrefix() + output["_id"].AsObjectId + "/" + fileName,
+                {
+                    // Same reason as FileService: go through the default lease so
+                    // STORAGE_MEDIA_PROXY keeps export links on the site's domain.
+                    await using var defaultLease = router is null ? null : await router.ForDefaultAsync();
+                    var backend = defaultLease?.Backend ?? storage;
+                    link = await backend.SignGetAsync(OutputPrefix() + output["_id"].AsObjectId + "/" + fileName,
                         SignedUrlValidity,
                         contentDisposition: "attachment");
+                }
                 item["link"] = link;
             }
             result.Add(item);

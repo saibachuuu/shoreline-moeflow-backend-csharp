@@ -120,6 +120,14 @@ public sealed class StoragePoolProjectService
             .ConfigureAwait(false);
         var enabled = await Sources.CountDocumentsAsync(new BsonDocument("e", true), cancellationToken: ct)
             .ConfigureAwait(false);
+        // The list pins the environment-configured default source on top, so the
+        // headline counters must agree with what the console renders. The default
+        // row is always enabled.
+        if (sources.HasDefaultSource)
+        {
+            sourceCount++;
+            enabled++;
+        }
         var migrated = await Projects.CountDocumentsAsync(new BsonDocument("csid", new BsonDocument("$ne", BsonNull.Value)),
             cancellationToken: ct).ConfigureAwait(false);
         var active = await TransferRows.CountDocumentsAsync(new BsonDocument

@@ -67,6 +67,10 @@ public static class LegacyEnvironmentConfiguration
         {
             configuration["Storage:ViaCdn"] = "true";
         }
+        // The reverse-proxy switch for the site's own bucket. It has no
+        // storage-source row to carry the flag, so the deployment names it here;
+        // the admin console then shows it on the pinned default entry.
+        Alias(configuration, "Storage:MediaProxy", "STORAGE_MEDIA_PROXY");
 
         if (string.IsNullOrWhiteSpace(configuration["Mongo:Uri"]))
         {
