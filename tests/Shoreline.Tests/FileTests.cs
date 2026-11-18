@@ -941,6 +941,50 @@ public sealed class FileTests(LocalServices services)
         Assert.Null(await Storage().HeadAsync(key, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task PooledProject_CoverStaysOnDefaultStorageWhileResampleFollowsTheSource()
+    {
+        // ThumbnailService publishes the cover through the default lease and the
+        // resample through the project lease, matching the Python layout. The
+        // serializer must sign each URL with the backend that actually holds it.
+        var sourceId = await InsertStorageSourceAsync();
+        var project = await InsertProjectAsync(storageSourceId: sourceId);
+        var files = Service(new TestClock(BaseTime));
+        var file = await InsertFileAsync(new BsonDocument
+        {
+            ["n"] = "cover.png",
+            ["t"] = FileService.TypeImage,
+            ["p"] = project["_id"].AsObjectId,
+            ["f"] = BsonNull.Value,
+            ["a"] = new BsonArray(),
+            ["mo"] = BsonNull.Value,
+            ["sn"] = "000001.png",
+            ["dn"] = "",
+            ["sa"] = "6afd6c979729be356a20ef3c.jpg",
+            ["md"] = "",
+            ["fs"] = new BsonInt64(2),
+            ["th"] = 3,
+            ["the"] = "",
+            ["fo"] = 0,
+            ["fc"] = 0,
+            ["sc"] = 0,
+            ["tsc"] = 0,
+            ["csc"] = 0,
+            ["ss"] = 0,
+            ["ps"] = 0,
+            ["op"] = 0,
+        });
+
+        var view = await files.GetAsync(file, project, null, CancellationToken.None);
+        var coverUrl = Assert.IsType<string>(view["cover_url"]);
+        var resampleUrl = Assert.IsType<string>(view["resample_url"]);
+
+        Assert.DoesNotContain("/file-pool/", coverUrl);
+        Assert.Contains("files/cover-6afd6c979729be356a20ef3c.webp", coverUrl);
+        Assert.Contains("/file-pool/", resampleUrl);
+        Assert.Contains("files/resample-6afd6c979729be356a20ef3c.webp", resampleUrl);
+    }
+
     // ---------------------------------------------------------------- fixtures
 
     private FileService Service(TestClock clock) => new(

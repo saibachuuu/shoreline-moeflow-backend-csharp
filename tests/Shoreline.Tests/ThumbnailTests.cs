@@ -176,14 +176,18 @@ public sealed class ThumbnailTests(LocalServicesWithoutWorker services) : IDispo
         Assert.Equal(ThumbnailService.ThumbnailSucceeded, (await LoadFileAsync(file)).Integer("th"));
         var coverKey = CoverKey(save);
         var resampleKey = ResampleKey(save);
-        Assert.Null(await Storage().HeadAsync(coverKey, ct));
+        // The cover stays on the deployment's own storage; only the resample
+        // follows the pool source.
+        Assert.NotNull(await Storage().HeadAsync(coverKey, ct));
         Assert.Null(await Storage().HeadAsync(resampleKey, ct));
+        Assert.Null(await Storage().HeadAsync(
+            $"files/.thumbnail-staging/{payload.Text("run_id")}/cover.webp", ct));
         await using (var lease = await router.ForOriginalAsync(projectDocument, ct))
         {
-            Assert.NotNull(await lease.Backend.HeadAsync(coverKey, ct));
+            Assert.Null(await lease.Backend.HeadAsync(coverKey, ct));
             Assert.NotNull(await lease.Backend.HeadAsync(resampleKey, ct));
             Assert.Null(await lease.Backend.HeadAsync(
-                $"files/.thumbnail-staging/{payload.Text("run_id")}/cover.webp", ct));
+                $"files/.thumbnail-staging/{payload.Text("run_id")}/resample.webp", ct));
         }
     }
 

@@ -35,6 +35,11 @@ public sealed partial class ThumbnailService
 
             storageLease = await LeaseForProjectAsync(project, ct);
             var storage = storageLease?.Backend ?? _storage;
+            // app/models/file.py:749-751: the small cover always lives on the
+            // deployment's own storage, so a storage-pooled project keeps only
+            // its resample on the pool source. Both derivations are published
+            // in the same critical section below.
+            var coverStorage = _storage;
             var sourceId = ProjectStorageRouter.ReadSourceId(project);
 
             Directory.CreateDirectory(tempDirectory);
@@ -43,12 +48,12 @@ public sealed partial class ThumbnailService
             ct.ThrowIfCancellationRequested();
 
             var processed = _processor.Process(sourcePath, tempDirectory, ct);
-            await UploadStagingAsync(storage, processed, runId, ct);
+            await UploadStagingAsync(storage, coverStorage, processed, runId, ct);
             ct.ThrowIfCancellationRequested();
 
             if (!await PublishAsync(
                     fileId, projectId, saveName, runId, revision, sourceId,
-                    processed.CoverBytes, processed.ResampleBytes, ct))
+                    coverStorage, processed.CoverBytes, processed.ResampleBytes, ct))
             {
                 return;
             }
@@ -79,7 +84,11 @@ public sealed partial class ThumbnailService
         {
             try
             {
-                await CleanupAsync(runId, tempDirectory, storageLease?.Backend ?? _storage);
+                await CleanupAsync(
+                    runId,
+                    tempDirectory,
+                    storageLease?.Backend ?? _storage,
+                    _storage);
             }
             finally
             {
@@ -222,11 +231,12 @@ public sealed partial class ThumbnailService
 
     private async Task UploadStagingAsync(
         IStorageBackend storage,
+        IStorageBackend coverStorage,
         ImageProcessingResult processed,
         string runId,
         CancellationToken ct)
     {
-        await PutFileAsync(storage, StagingCoverKey(runId), processed.CoverPath, ct);
+        await PutFileAsync(coverStorage, StagingCoverKey(runId), processed.CoverPath, ct);
         await PutFileAsync(storage, StagingResampleKey(runId), processed.ResamplePath, ct);
     }
 
@@ -251,6 +261,7 @@ public sealed partial class ThumbnailService
         string runId,
         long revision,
         ObjectId? expectedSourceId,
+        IStorageBackend coverStorage,
         long coverBytes,
         long resampleBytes,
         CancellationToken ct)
@@ -296,7 +307,7 @@ public sealed partial class ThumbnailService
             return false;
         }
 
-        await storage.CopyAsync(StagingCoverKey(runId), FinalCoverKey(saveName), ct);
+        await coverStorage.CopyAsync(StagingCoverKey(runId), FinalCoverKey(saveName), ct);
         await storage.CopyAsync(StagingResampleKey(runId), FinalResampleKey(saveName), ct);
 
         var now = _clock.GetUtcNow().UtcDateTime;
@@ -480,9 +491,13 @@ public sealed partial class ThumbnailService
         }
     }
 
-    private async Task CleanupAsync(string runId, string tempDirectory, IStorageBackend storage)
+    private async Task CleanupAsync(
+        string runId,
+        string tempDirectory,
+        IStorageBackend storage,
+        IStorageBackend coverStorage)
     {
-        await TryDeleteStagingAsync(storage, StagingCoverKey(runId));
+        await TryDeleteStagingAsync(coverStorage, StagingCoverKey(runId));
         await TryDeleteStagingAsync(storage, StagingResampleKey(runId));
 
         try
