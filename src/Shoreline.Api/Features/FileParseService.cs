@@ -426,6 +426,7 @@ public sealed partial class FileParseService(
             {
                 ["x"] = oldSource.GetValue("x", 0.0),
                 ["y"] = oldSource.GetValue("y", 0.0),
+                ["u"] = oldSource.GetValue("u", BsonNull.Value),
                 ["v"] = oldSource.GetValue("v", new BsonArray()),
                 ["lf"] = oldSource.Flag("lf") || !oldSource.Contains("lf"),
                 ["b"] = oldSource.Flag("b"),
@@ -433,6 +434,7 @@ public sealed partial class FileParseService(
             }), cancellationToken: ct);
         source["x"] = oldSource.GetValue("x", 0.0);
         source["y"] = oldSource.GetValue("y", 0.0);
+        source["u"] = oldSource.GetValue("u", BsonNull.Value);
         source["v"] = oldSource.GetValue("v", new BsonArray());
         source["lf"] = oldSource.Flag("lf") || !oldSource.Contains("lf");
         source["b"] = oldSource.Flag("b");

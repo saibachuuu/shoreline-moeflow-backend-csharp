@@ -189,6 +189,7 @@ public sealed partial class LabelService
         }
 
         var userIds = new HashSet<ObjectId>();
+        foreach (var row in rows) AddUserId(userIds, row, "u");
         foreach (var row in myRows.Concat(otherRows))
         {
             AddUserId(userIds, row, "u");
@@ -209,7 +210,7 @@ public sealed partial class LabelService
         foreach (var row in rows)
         {
             var sourceId = IdValue(row);
-            var item = SourceView(row);
+            var item = BuildSourceView(row, users);
             item["translations"] = othersBySource.TryGetValue(sourceId, out var others)
                 ? others.Select(value => BuildTranslationView(value, users, targetView)).ToList()
                 : new List<Dictionary<string, object?>>();
@@ -250,15 +251,32 @@ public sealed partial class LabelService
         return BuildTipView(tip, await UsersAsync(ids, context, ct));
     }
 
-    private static Dictionary<string, object?> SourceView(BsonDocument source) => new()
+    private async Task<Dictionary<string, object?>> SourceViewAsync(
+        HttpContext context,
+        BsonDocument source,
+        CancellationToken ct)
+    {
+        var ids = new HashSet<ObjectId>();
+        AddUserId(ids, source, "u");
+        return BuildSourceView(source, await UsersAsync(ids, context, ct));
+    }
+
+    private static Dictionary<string, object?> BuildSourceView(
+        BsonDocument source,
+        IReadOnlyDictionary<string, Dictionary<string, object?>?> users) => new()
     {
         ["id"] = IdValue(source).ToString(),
         ["content"] = source.Text("c"),
         ["x"] = DoubleOf(source.GetValue("x", 0)),
         ["y"] = DoubleOf(source.GetValue("y", 0)),
         ["position_type"] = IntOf(source.GetValue("p", PositionIn)),
-        ["machine"] = source.GetValue("cm", true).ToBoolean()
+        ["machine"] = source.GetValue("cm", true).ToBoolean(),
+        ["creator_id"] = CreatorId(source),
+        ["creator"] = UserViewOrNull(users, source, "u")
     };
+
+    private static string? CreatorId(BsonDocument source) =>
+        ObjectIdOf(source.GetValue("u", BsonNull.Value))?.ToString();
 
     private static Dictionary<string, object?> BuildTranslationView(
         BsonDocument translation,

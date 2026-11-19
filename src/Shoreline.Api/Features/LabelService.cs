@@ -135,6 +135,7 @@ public sealed partial class LabelService(
             ["c"] = content,
             ["x"] = x,
             ["y"] = y,
+            ["u"] = IdValue(actor),
             ["v"] = new BsonArray(),
             ["p"] = positionType,
             ["lf"] = true,
@@ -148,7 +149,7 @@ public sealed partial class LabelService(
         await Sources.InsertOneAsync(source, cancellationToken: ct);
         await AdjustSourceCountAsync(file, session, +1, ct);
         await TouchFileEditTimeAsync(file, session, now, ct);
-        return SourceView(source);
+        return await SourceViewAsync(context, source, ct);
     }
 
     // ------------------------------------------------------------------
@@ -192,7 +193,7 @@ public sealed partial class LabelService(
             new BsonDocument("$set", set), cancellationToken: ct);
         await TouchFileEditTimeAsync(file, session, now, ct);
         var updated = await RequireSourceAsync(sourceId, ct);
-        return SourceView(updated);
+        return await SourceViewAsync(context, updated, ct);
     }
 
     // ------------------------------------------------------------------
