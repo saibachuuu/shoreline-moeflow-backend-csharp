@@ -135,6 +135,110 @@ public sealed class LabelHttpTests
     }
 
     [Fact]
+    public async Task Http_source_creator_ignores_spoofed_identity_fields()
+    {
+        await using var world = await HttpWorld.CreateAsync();
+        var forgedId = ObjectId.GenerateNewId().ToString();
+
+        var created = await world.SendAsync(HttpMethod.Post,
+            $"/v1/files/{world.FileId}/sources", new
+            {
+                content = "",
+                creator_id = forgedId,
+                u = forgedId,
+                creator = new { id = forgedId, name = "spoofed" }
+            });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var body = await ReadJsonAsync(created);
+        var sourceId = body.GetProperty("id").GetString()!;
+        Assert.Equal(world.UserId.ToString(), body.GetProperty("creator_id").GetString());
+        Assert.Equal(world.UserId.ToString(), body.GetProperty("creator").GetProperty("id").GetString());
+
+        var stored = await world.LoadAsync("source", ObjectId.Parse(sourceId));
+        Assert.Equal(world.UserId, stored["u"].AsObjectId);
+
+        var edited = await world.SendAsync(HttpMethod.Put, $"/v1/sources/{sourceId}", new
+        {
+            content = "edited",
+            creator_id = forgedId,
+            u = forgedId,
+            creator = new { id = forgedId }
+        });
+        Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
+        var editedBody = await ReadJsonAsync(edited);
+        Assert.Equal(world.UserId.ToString(), editedBody.GetProperty("creator_id").GetString());
+        var editedStored = await world.LoadAsync("source", ObjectId.Parse(sourceId));
+        Assert.Equal(world.UserId, editedStored["u"].AsObjectId);
+
+        var list = await world.SendAsync(HttpMethod.Get,
+            $"/v1/files/{world.FileId}/sources?target_id={world.TargetId}&paging=false");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        var row = Assert.Single((await ReadJsonAsync(list)).EnumerateArray());
+        Assert.Equal(world.UserId.ToString(), row.GetProperty("creator_id").GetString());
+        Assert.Equal(world.UserId.ToString(), row.GetProperty("creator").GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public async Task Http_legacy_source_has_null_creator_fields_and_unknown_creator_keeps_id()
+    {
+        await using var world = await HttpWorld.CreateAsync();
+        var legacyId = ObjectId.GenerateNewId();
+        await world.Store.Collection("source").InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = legacyId,
+            ["f"] = world.FileId,
+            ["r"] = 0,
+            ["c"] = "legacy",
+            ["x"] = 0.0,
+            ["y"] = 0.0,
+            ["v"] = new BsonArray(),
+            ["p"] = 1,
+            ["lf"] = true,
+            ["b"] = false,
+            ["cm"] = false,
+            ["pt"] = new BsonArray(),
+            ["ct"] = DateTime.UtcNow,
+            ["e"] = DateTime.UtcNow,
+            ["label_epoch"] = 0L
+        });
+        var missingUser = ObjectId.GenerateNewId();
+        await world.Store.Collection("source").InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = ObjectId.GenerateNewId(),
+            ["f"] = world.FileId,
+            ["r"] = 1,
+            ["c"] = "orphan",
+            ["x"] = 0.0,
+            ["y"] = 0.0,
+            ["u"] = missingUser,
+            ["v"] = new BsonArray(),
+            ["p"] = 1,
+            ["lf"] = true,
+            ["b"] = false,
+            ["cm"] = false,
+            ["pt"] = new BsonArray(),
+            ["ct"] = DateTime.UtcNow,
+            ["e"] = DateTime.UtcNow,
+            ["label_epoch"] = 0L
+        });
+
+        var list = await world.SendAsync(HttpMethod.Get,
+            $"/v1/files/{world.FileId}/sources?target_id={world.TargetId}&paging=false");
+        var rows = (await ReadJsonAsync(list)).EnumerateArray()
+            .ToDictionary(row => row.GetProperty("content").GetString()!, row => row);
+        Assert.Null(rows["legacy"].GetProperty("creator_id").GetString());
+        Assert.Equal(JsonValueKind.Null, rows["legacy"].GetProperty("creator").ValueKind);
+        Assert.Equal(missingUser.ToString(), rows["orphan"].GetProperty("creator_id").GetString());
+        Assert.Equal(JsonValueKind.Null, rows["orphan"].GetProperty("creator").ValueKind);
+
+        var edited = await world.SendAsync(HttpMethod.Put, $"/v1/sources/{legacyId}", new { content = "edited" });
+        Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
+        var editedBody = await ReadJsonAsync(edited);
+        Assert.Null(editedBody.GetProperty("creator_id").GetString());
+        Assert.Equal(JsonValueKind.Null, editedBody.GetProperty("creator").ValueKind);
+    }
+
+    [Fact]
     public async Task Http_rejects_invalid_schema_and_non_permission_without_writing()
     {
         await using var world = await HttpWorld.CreateAsync();

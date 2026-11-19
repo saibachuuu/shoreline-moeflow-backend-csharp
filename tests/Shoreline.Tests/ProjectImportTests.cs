@@ -281,6 +281,30 @@ public sealed class ProjectImportTests(LocalServicesWithoutWorker services)
     }
 
     [Fact]
+    public async Task RunLeavesImportedSourceCreatorsAnonymousEvenForTheImportActor()
+    {
+        var creator = await UserAsync();
+        using var owner = Client(creator);
+        var (_, project) = await SetupAsync(owner);
+        var projectDoc = await ProjectAsync(project);
+        var (imports, _) = await ImportServicesAsync();
+        await imports.InitializeAfterCreateAsync(projectDoc, creator, ImportText, "req", CancellationToken.None);
+
+        await RunQueuedAsync(imports, project);
+
+        var file = await FileAsync(project);
+        var sources = await services.Store.Collection("source")
+            .Find(new BsonDocument("f", file["_id"])).ToListAsync();
+        Assert.Equal(2, sources.Count);
+        // Importing is not authorship: even the creator actor must not be
+        // recorded, including the label whose translation is empty.
+        Assert.All(sources, source => Assert.False(source.Contains("u")));
+        Assert.Contains(sources, source => source.Text("c") == "");
+        Assert.DoesNotContain(sources, source =>
+            source.Contains("u") && source["u"].AsObjectId == creator["_id"].AsObjectId);
+    }
+
+    [Fact]
     public async Task RunIsIdempotentAfterSuccess()
     {
         var creator = await UserAsync();

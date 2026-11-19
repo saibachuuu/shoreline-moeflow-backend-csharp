@@ -56,6 +56,34 @@ public sealed class LabelSnapshotTests(LocalServices services)
     }
 
     [Fact]
+    public async Task Create_restore_roundtrip_keeps_named_and_anonymous_source_creators()
+    {
+        var world = await WorldAsync();
+        var creator = await UserAsync("source-creator");
+        var named = await SourceAsync(world, 0, content: "named", creator: creator["_id"]);
+        var nullCreator = await SourceAsync(world, 1, content: "null-u", creator: BsonNull.Value);
+        var missingCreator = await SourceAsync(world, 2, content: "missing-u");
+
+        var snapshotId = await world.Service.CreateSnapshotAsync(world.Actor, world.ProjectId, "creators");
+        var snapshot = await world.Service.LoadSnapshotAsync(world.ProjectId, snapshotId.ToString());
+        var snapshotSources = snapshot["sources"].ToList();
+        Assert.Equal(creator["_id"].AsObjectId, snapshotSources.Single(row => row.Text("c") == "named")["u"].AsObjectId);
+        Assert.True(snapshotSources.Single(row => row.Text("c") == "null-u")["u"].IsBsonNull);
+        Assert.False(snapshotSources.Single(row => row.Text("c") == "missing-u").Contains("u"));
+
+        await Store("source").UpdateOneAsync(new BsonDocument("_id", named["_id"]),
+            new BsonDocument("$set", new BsonDocument("u", world.Actor["_id"])));
+        await world.Service.RestoreSnapshotAsync(world.Actor, world.ProjectId, snapshotId.ToString());
+
+        var restoredNamed = await LoadAsync("source", named["_id"].AsObjectId);
+        Assert.Equal(creator["_id"].AsObjectId, restoredNamed["u"].AsObjectId);
+        var restoredNull = await LoadAsync("source", nullCreator["_id"].AsObjectId);
+        Assert.True(restoredNull["u"].IsBsonNull);
+        var restoredMissing = await LoadAsync("source", missingCreator["_id"].AsObjectId);
+        Assert.False(restoredMissing.Contains("u"));
+    }
+
+    [Fact]
     public async Task Canonical_file_target_cache_is_reused_and_stamped_without_shadow_collection()
     {
         var world = await WorldAsync();
@@ -840,7 +868,8 @@ public sealed class LabelSnapshotTests(LocalServices services)
         World world,
         int rank = 0,
         string content = "source",
-        ObjectId? fileId = null)
+        ObjectId? fileId = null,
+        BsonValue? creator = null)
     {
         var now = DateTime.UtcNow;
         var source = new BsonDocument
@@ -861,6 +890,7 @@ public sealed class LabelSnapshotTests(LocalServices services)
             ["e"] = now,
             ["label_epoch"] = 0L
         };
+        if (creator is not null) source["u"] = creator;
         await Store("source").InsertOneAsync(source);
         return source;
     }

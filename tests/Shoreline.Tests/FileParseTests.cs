@@ -114,6 +114,38 @@ public sealed class FileParseTests(LocalServicesWithoutWorker services)
     }
 
     [Fact]
+    public async Task ParseText_OldRevision_PreservesSourceCreatorAndKeepsUnnamedAnonymous()
+    {
+        var clock = new TestClock();
+        var project = await ProjectAsync(withTarget: true);
+        var old = await FileAsync(project, "old.txt", ParseText("named\nanon"));
+        var file = await FileAsync(project, "new.txt", ParseText("named\nanon"));
+        var creator = ObjectId.GenerateNewId();
+
+        var namedSource = await InsertSourceAsync(old, 0, "named", sc: true);
+        await services.Store.Collection("source").UpdateOneAsync(
+            new BsonDocument("_id", namedSource),
+            new BsonDocument("$set", new BsonDocument("u", creator)), cancellationToken: ct);
+        await InsertSourceAsync(old, 1, "anon", sc: true);
+
+        await Service(clock).ParseTextAsync(file, old, runSync: true, ct);
+
+        var newSources = await SourcesAsync(file);
+        Assert.Equal(2, newSources.Count);
+        Assert.Equal(creator, newSources.Single(row => row.Text("c") == "named")["u"].AsObjectId);
+        var anonymous = newSources.Single(row => row.Text("c") == "anon");
+        // Re-parse copies the stored value verbatim: a legacy row without `u`
+        // is written as an explicit BSON null, which reads back as anonymous.
+        Assert.True(!anonymous.Contains("u") || anonymous["u"].IsBsonNull);
+
+        // A fresh parse (no old revision) must not invent a creator.
+        var fresh = await FileAsync(project, "fresh.txt", ParseText("fresh"));
+        await Service(clock).ParseTextAsync(fresh, null, runSync: true, ct);
+        var freshSource = Assert.Single(await SourcesAsync(fresh));
+        Assert.False(freshSource.Contains("u"));
+    }
+
+    [Fact]
     public async Task ParseText_MissingSource_MarksFailedAndIncrementsParseTimes()
     {
         var clock = new TestClock();

@@ -92,6 +92,127 @@ public sealed class LabelTests(LocalServices services)
     }
 
     [Fact]
+    public async Task Create_empty_source_records_creator_without_translation_counts()
+    {
+        var world = await WorldAsync();
+
+        var created = await world.Labels.CreateSourceAsync(
+            Context(), world.Actor, world.FileId, "", 0.1, 0.2, LabelService.PositionIn, Ct);
+
+        var actorId = world.Actor["_id"].AsObjectId;
+        Assert.Equal(actorId.ToString(), created["creator_id"]);
+        var creator = Assert.IsType<Dictionary<string, object?>>(created["creator"]);
+        Assert.Equal(actorId.ToString(), creator["id"]);
+        Assert.Equal("", created["content"]);
+
+        var stored = await LoadAsync("source", ObjectId.Parse((string)created["id"]!));
+        Assert.Equal(actorId, stored["u"].AsObjectId);
+
+        var file = await LoadAsync("file", world.FileId);
+        Assert.Equal(1, file.Integer("sc"));
+        Assert.Equal(0, file.Integer("tsc"));
+        Assert.Equal(0, file.Integer("csc"));
+        var project = await LoadAsync("project", world.ProjectId);
+        Assert.Equal(1, project.Integer("sc"));
+        Assert.Equal(0, project.Integer("tsc"));
+        Assert.Equal(0, project.Integer("csc"));
+
+        var list = await world.Labels.ListSourcesAsync(
+            Context(), world.Actor, world.FileId, world.TargetId, paging: false, Ct);
+        var item = Assert.Single(list.Items);
+        Assert.Equal(actorId.ToString(), item["creator_id"]);
+        Assert.Equal(actorId.ToString(),
+            Assert.IsType<Dictionary<string, object?>>(item["creator"])["id"]);
+        Assert.Empty(Assert.IsAssignableFrom<IEnumerable<Dictionary<string, object?>>>(item["translations"]));
+        Assert.False((bool)item["has_other_language_translation"]!);
+        Assert.False(item.ContainsKey("my_translation"));
+    }
+
+    [Fact]
+    public async Task Legacy_source_missing_or_null_creator_stays_anonymous_after_edit()
+    {
+        var world = await WorldAsync();
+        var missing = await SourceAsync(world, 0, content: "missing-u");
+        var nul = await SourceAsync(world, 1, content: "null-u", creator: BsonNull.Value);
+
+        var list = await world.Labels.ListSourcesAsync(
+            Context(), world.Actor, world.FileId, world.TargetId, paging: false, Ct);
+        Assert.Equal(2, list.Items.Count);
+        Assert.All(list.Items, item =>
+        {
+            Assert.Null(item["creator_id"]);
+            Assert.Null(item["creator"]);
+        });
+
+        var updated = await world.Labels.EditSourceAsync(
+            Context(), world.Actor, missing["_id"].AsObjectId,
+            new SourceEditRequest("edited", 0.2, 0.3), Ct);
+        Assert.Equal("edited", updated["content"]);
+        Assert.Null(updated["creator_id"]);
+        Assert.Null(updated["creator"]);
+
+        var stored = await LoadAsync("source", missing["_id"].AsObjectId);
+        Assert.False(stored.Contains("u"));
+        var storedNul = await LoadAsync("source", nul["_id"].AsObjectId);
+        Assert.True(storedNul["u"].IsBsonNull);
+    }
+
+    [Fact]
+    public async Task Other_member_edit_move_and_reorder_do_not_change_source_creator()
+    {
+        var world = await WorldAsync();
+        var created = await world.Labels.CreateSourceAsync(
+            Context(), world.Actor, world.FileId, "owned", 0.1, 0.2, LabelService.PositionIn, Ct);
+        var second = await world.Labels.CreateSourceAsync(
+            Context(), world.Actor, world.FileId, "second", 0.3, 0.4, LabelService.PositionIn, Ct);
+        var sourceId = ObjectId.Parse((string)created["id"]!);
+        var secondId = ObjectId.Parse((string)second["id"]!);
+        var actorId = world.Actor["_id"].AsObjectId;
+
+        var other = await UserAsync("mover");
+        await AddMemberAsync(world, other, "typesetter");
+
+        var edited = await world.Labels.EditSourceAsync(
+            Context(), other, sourceId, new SourceEditRequest("moved", 0.5, 0.6), Ct);
+        Assert.Equal(actorId.ToString(), edited["creator_id"]);
+
+        await world.Labels.MoveSourceRankAsync(Context(), other, sourceId, "end", Ct);
+        await world.Labels.MoveSourceRankAsync(Context(), other, secondId, secondId.ToString(), Ct);
+
+        var stored = await LoadAsync("source", sourceId);
+        Assert.Equal(actorId, stored["u"].AsObjectId);
+        var list = await world.Labels.ListSourcesAsync(
+            Context(), world.Actor, world.FileId, world.TargetId, paging: false, Ct);
+        var item = list.Items.Single(row => Equals(row["id"], sourceId.ToString()));
+        Assert.Equal(actorId.ToString(), item["creator_id"]);
+        Assert.Equal(actorId.ToString(),
+            Assert.IsType<Dictionary<string, object?>>(item["creator"])["id"]);
+    }
+
+    [Fact]
+    public async Task Deleted_creator_user_keeps_creator_id_but_hides_creator_view()
+    {
+        var world = await WorldAsync();
+        var created = await world.Labels.CreateSourceAsync(
+            Context(), world.Actor, world.FileId, "orphan", 0.1, 0.2, LabelService.PositionIn, Ct);
+        var sourceId = ObjectId.Parse((string)created["id"]!);
+        var actorId = world.Actor["_id"].AsObjectId;
+
+        await Store("user").DeleteOneAsync(new BsonDocument("_id", actorId));
+
+        var list = await world.Labels.ListSourcesAsync(
+            Context(), world.Actor, world.FileId, world.TargetId, paging: false, Ct);
+        var item = Assert.Single(list.Items);
+        Assert.Equal(actorId.ToString(), item["creator_id"]);
+        Assert.Null(item["creator"]);
+
+        var edited = await world.Labels.EditSourceAsync(
+            Context(), world.Actor, sourceId, new SourceEditRequest("still-orphan"), Ct);
+        Assert.Equal(actorId.ToString(), edited["creator_id"]);
+        Assert.Null(edited["creator"]);
+    }
+
+    [Fact]
     public async Task Create_source_requires_image_and_valid_vocabulary()
     {
         var text = await WorldAsync(fileType: 3);
@@ -813,7 +934,8 @@ public sealed class LabelTests(LocalServices services)
         bool blank = false,
         string content = "source",
         ObjectId? fileId = null,
-        long? epoch = 0L)
+        long? epoch = 0L,
+        BsonValue? creator = null)
     {
         var now = DateTime.UtcNow;
         var source = new BsonDocument
@@ -833,6 +955,7 @@ public sealed class LabelTests(LocalServices services)
             ["ct"] = now,
             ["e"] = now
         };
+        if (creator is not null) source["u"] = creator;
         if (epoch is not null) source["label_epoch"] = epoch.Value == 0 ? world.Revision : epoch.Value;
         await Store("source").InsertOneAsync(source);
         return source;

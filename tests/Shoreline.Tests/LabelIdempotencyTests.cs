@@ -124,6 +124,21 @@ public sealed class LabelIdempotencyTests(LocalServices services)
     }
 
     [Fact]
+    public async Task Stable_id_source_once_path_does_not_record_creator()
+    {
+        var world = await WorldAsync();
+        var sourceId = ObjectId.GenerateNewId();
+
+        var result = await world.Labels.CreateSourceOnceAsync(Context(), world.Actor, world.FileId,
+            sourceId, "", 0.1, 0.2, 1, 0, world.Revision, CancellationToken.None);
+
+        Assert.Equal(SourceWriteOutcome.Created, result.Outcome);
+        var stored = await LoadAsync(world, "source", sourceId);
+        Assert.Equal("", stored.Text("c"));
+        Assert.False(stored.Contains("u"));
+    }
+
+    [Fact]
     public async Task Translation_retry_after_insert_then_exception_converges()
     {
         var world = await WorldAsync();
