@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Net.Http.Headers;
 using Shoreline.Api.Storage;
 
 namespace Shoreline.Tests;
@@ -79,6 +80,43 @@ public sealed class MediaProxySignerTests
         // Anything else is normalised away, so a link cannot smuggle a header.
         Assert.Equal("", MediaProxySigner.NormalizeDisposition("inline; filename=\"x\""));
         Assert.Equal("", MediaProxySigner.NormalizeDisposition(null));
+    }
+
+    [Fact]
+    public void FormatContentDisposition_EncodesNonAsciiAndStripsControlCharacters()
+    {
+        var exportName = "Blue Archive - 眉毛 私だけの先生…EX - 中文（繁体）.zip";
+        var formatted = MediaProxyEndpoints.FormatContentDisposition(
+            "attachment", $"outputs/6afe8758737906ff97b59e9f/{exportName}");
+
+        // Kestrel rejects any non-ASCII or control character in response headers.
+        Assert.All(formatted, c => Assert.InRange(c, '\x20', '\x7E'));
+        Assert.True(ContentDispositionHeaderValue.TryParse(formatted, out var parsed));
+        Assert.Equal("attachment", parsed!.DispositionType.Value);
+        Assert.Equal(exportName, parsed.FileNameStar.Value);
+
+        var ascii = MediaProxyEndpoints.FormatContentDisposition("attachment", "outputs/1/report.zip");
+        Assert.All(ascii, c => Assert.InRange(c, '\x20', '\x7E'));
+        Assert.True(ContentDispositionHeaderValue.TryParse(ascii, out var parsedAscii));
+        Assert.Equal("attachment", parsedAscii!.DispositionType.Value);
+        Assert.Equal("report.zip", parsedAscii.FileName.Value);
+        Assert.Equal("report.zip", parsedAscii.FileNameStar.Value);
+
+        var withControls = MediaProxyEndpoints.FormatContentDisposition(
+            "attachment", "outputs/1/bad\r\nname\t.zip");
+        Assert.All(withControls, c => Assert.InRange(c, '\x20', '\x7E'));
+    }
+
+    [Fact]
+    public void BuildUrl_AndVerify_RoundTripNonAsciiExportKey()
+    {
+        var signer = Signer();
+        var key = "outputs/6afe8758737906ff97b59e9f/Blue Archive - 眉毛 私だけの先生…EX - 中文（繁体）.zip";
+        var url = signer.BuildUrl(MediaProxySigner.DefaultSourceToken, key, TimeSpan.FromMinutes(5), "attachment");
+        var (expires, signature) = Parse(url, out var disposition);
+
+        Assert.Equal("attachment", disposition);
+        Assert.True(signer.Verify(MediaProxySigner.DefaultSourceToken, key, expires, signature, disposition));
     }
 
     [Fact]

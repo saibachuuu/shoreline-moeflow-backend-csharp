@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Net.Http.Headers;
 using MongoDB.Bson;
 using Shoreline.Api.Infrastructure;
 
@@ -78,14 +79,32 @@ public static class MediaProxyEndpoints
                     var remaining = Math.Max(0, expires - DateTimeOffset.UtcNow.ToUnixTimeSeconds());
                     context.Response.Headers.CacheControl = "public, max-age=" + remaining.ToString();
                     if (MediaProxySigner.NormalizeDisposition(query["cd"]) is { Length: > 0 } disposition)
-                        context.Response.Headers.ContentDisposition =
-                            disposition + "; filename=\"" + Path.GetFileName(objectKey).Replace("\"", "") + "\"";
+                        context.Response.Headers.ContentDisposition = FormatContentDisposition(disposition, objectKey);
                     context.Response.ContentType = download.ContentType;
                     context.Response.ContentLength = download.Length;
                     await download.Content.CopyToAsync(context.Response.Body, ct).ConfigureAwait(false);
                 }
             }
         });
+    }
+
+    internal static string FormatContentDisposition(string disposition, string objectKey)
+    {
+        // Kestrel rejects any non-ASCII or control character in response headers.
+        // Export archives routinely contain CJK/full-width characters in project
+        // and target names, so emit RFC 6266 / RFC 5987 headers (ASCII fallback
+        // in filename= plus UTF-8 in filename*=).
+        var header = new ContentDispositionHeaderValue(disposition);
+        var fileName = SanitizeFileName(Path.GetFileName(objectKey));
+        if (fileName.Length > 0)
+            header.SetHttpFileName(fileName);
+        return header.ToString();
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        if (string.IsNullOrEmpty(fileName)) return "";
+        return string.Concat(fileName.Where(c => !char.IsControl(c)));
     }
 
     private static ApiError Invalid() => new("MediaSignatureInvalid", 1005, "媒体链接无效或已过期", 403);

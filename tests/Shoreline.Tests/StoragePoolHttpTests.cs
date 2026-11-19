@@ -311,6 +311,32 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
     }
 
     [Fact]
+    public async Task MediaProxy_AttachmentWithNonAsciiFilenameReturnsRfc5987Header()
+    {
+        var exportName = "Blue Archive - 眉毛 私だけの先生…EX - 中文（繁体）.zip";
+        var key = $"outputs/{Unique("out")}/{exportName}";
+        var bytes = Encoding.UTF8.GetBytes("zip-archive-bytes");
+        var storage = services.App.Services.GetRequiredService<Shoreline.Api.Storage.ObjectStorage>();
+        await storage.PutAsync(key, new MemoryStream(bytes), "application/zip", Ct);
+
+        var signer = services.App.Services.GetRequiredService<MediaProxySigner>();
+        var url = signer.BuildUrl(MediaProxySigner.DefaultSourceToken, key, TimeSpan.FromMinutes(5), "attachment");
+        var path = url.StartsWith("/api/", StringComparison.Ordinal) ? url["/api".Length..] : url;
+
+        var anonymous = services.App.CreateClient();
+        var media = await anonymous.GetAsync(path.TrimStart('/'), Ct);
+        Assert.Equal(HttpStatusCode.OK, media.StatusCode);
+        Assert.Equal(bytes, await media.Content.ReadAsByteArrayAsync(Ct));
+        Assert.Equal("application/zip", media.Content.Headers.ContentType?.MediaType);
+
+        Assert.True(media.Content.Headers.TryGetValues("Content-Disposition", out var values));
+        var rawHeader = Assert.Single(values);
+        Assert.All(rawHeader, c => Assert.InRange(c, '\x20', '\x7E'));
+        Assert.Equal("attachment", media.Content.Headers.ContentDisposition?.DispositionType);
+        Assert.Equal(exportName, media.Content.Headers.ContentDisposition?.FileNameStar);
+    }
+
+    [Fact]
     public async Task SourceReverseProxy_IsStoredAndDrivesSelfHostedMediaUrls()
     {
         var (_, admin) = await UserAsync(true);
