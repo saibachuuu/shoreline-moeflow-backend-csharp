@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -34,9 +35,14 @@ public static class MediaProxyEndpoints
             }
 
             var query = context.Request.Query;
-            if (!long.TryParse(query["e"], out var expires))
-                throw Invalid();
-            if (!signer.Verify(source, objectKey, expires, query["s"], query["cd"]))
+            long? expires = null;
+            if (query.TryGetValue("e", out var expiryValues))
+            {
+                if (!long.TryParse(expiryValues, CultureInfo.InvariantCulture, out var parsedExpiry) || parsedExpiry <= 0)
+                    throw Invalid();
+                expires = parsedExpiry;
+            }
+            if (!await signer.VerifyAsync(source, objectKey, expires, query["s"], query["cd"], ct).ConfigureAwait(false))
                 throw Invalid();
 
             StorageBackendLease lease;
@@ -76,8 +82,16 @@ public static class MediaProxyEndpoints
 
                 using (download)
                 {
-                    var remaining = Math.Max(0, expires - DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                    context.Response.Headers.CacheControl = "public, max-age=" + remaining.ToString();
+                    if (expires is { } bounded)
+                    {
+                        var remaining = Math.Max(0, bounded - DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                        context.Response.Headers.CacheControl =
+                            "public, max-age=" + remaining.ToString(CultureInfo.InvariantCulture);
+                    }
+                    else
+                    {
+                        context.Response.Headers.CacheControl = "public, max-age=31536000";
+                    }
                     if (MediaProxySigner.NormalizeDisposition(query["cd"]) is { Length: > 0 } disposition)
                         context.Response.Headers.ContentDisposition = FormatContentDisposition(disposition, objectKey);
                     context.Response.ContentType = download.ContentType;

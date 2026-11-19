@@ -18,6 +18,8 @@ public static class StoragePoolRegistration
     {
         services.AddProjectStorageCore();
         services.TryAddSingleton<ProjectLabelLock>();
+        services.AddSingleton<StoragePoolMediaProxyPolicy>();
+        services.AddSingleton<IMediaProxyPolicy>(sp => sp.GetRequiredService<StoragePoolMediaProxyPolicy>());
         services.AddSingleton<StoragePoolSourceResolver>();
         services.AddScoped<StoragePoolSourceService>();
         services.AddScoped<StoragePoolSettingsService>();

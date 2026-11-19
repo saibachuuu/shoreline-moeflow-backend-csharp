@@ -337,6 +337,82 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
     }
 
     [Fact]
+    public async Task MediaProxy_NeverExpireUrlsFollowStoragePoolSetting()
+    {
+        var (adminUser, admin) = await UserAsync(true);
+        var name = Unique("never") + ".png";
+        var key = "files/" + name;
+        var bytes = Encoding.UTF8.GetBytes("never-expire-media");
+        var storage = services.App.Services.GetRequiredService<Shoreline.Api.Storage.ObjectStorage>();
+        await storage.PutAsync(key, new MemoryStream(bytes), "image/png", Ct);
+
+        var signer = services.App.Services.GetRequiredService<MediaProxySigner>();
+        var descriptor = new StorageBackendDescriptor(
+            new Uri("http://127.0.0.1:" + TestEnvironment.S3Port), "shoreline-test", "storage/", "us-east-1",
+            true, "local-test-only", "local-disposable-test-secret", "", true, MediaProxySigner.DefaultSourceToken);
+        using var lease = new StorageBackendFactory(signer).CreateLease(descriptor);
+        var anonymous = services.App.CreateClient();
+
+        try
+        {
+            await admin.PutAsJsonAsync($"{Base}/settings", new { proxy_media_never_expire = false }, Ct);
+            var expiringUrl = await lease.Backend.SignGetAsync(key, TimeSpan.FromMinutes(5));
+            Assert.Contains("?e=", expiringUrl);
+            var expiringPath = expiringUrl.StartsWith("/api/", StringComparison.Ordinal)
+                ? expiringUrl["/api".Length..]
+                : expiringUrl;
+
+            var enable = await admin.PutAsJsonAsync($"{Base}/settings", new { proxy_media_never_expire = true }, Ct);
+            Assert.Equal(HttpStatusCode.OK, enable.StatusCode);
+            var enableBody = await BodyAsync(enable);
+            Assert.True(enableBody.GetProperty("proxy_media_never_expire").GetBoolean());
+
+            var audit = await services.Store.Collection("storage_pool_audit")
+                .Find(new BsonDocument { ["c"] = "settings.update", ["a"] = adminUser["_id"] })
+                .Sort(new BsonDocument("ct", -1)).FirstAsync(Ct);
+            Assert.True(audit["v"].AsBsonDocument["pmu"].AsBoolean);
+
+            var firstNeverUrl = await lease.Backend.SignGetAsync(key, TimeSpan.FromMinutes(5));
+            var secondNeverUrl = await lease.Backend.SignGetAsync(key, TimeSpan.FromMinutes(30));
+            Assert.Equal(firstNeverUrl, secondNeverUrl);
+            Assert.DoesNotContain("e=", firstNeverUrl);
+            Assert.Contains("?s=", firstNeverUrl);
+
+            var neverPath = firstNeverUrl.StartsWith("/api/", StringComparison.Ordinal)
+                ? firstNeverUrl["/api".Length..]
+                : firstNeverUrl;
+
+            var neverResp = await anonymous.GetAsync(neverPath.TrimStart('/'), Ct);
+            Assert.Equal(HttpStatusCode.OK, neverResp.StatusCode);
+            Assert.Equal(bytes, await neverResp.Content.ReadAsByteArrayAsync(Ct));
+            Assert.Equal(TimeSpan.FromDays(365), neverResp.Headers.CacheControl?.MaxAge);
+
+            // Legacy expiring URLs issued earlier remain valid until their expiry.
+            var legacyResp = await anonymous.GetAsync(expiringPath.TrimStart('/'), Ct);
+            Assert.Equal(HttpStatusCode.OK, legacyResp.StatusCode);
+
+            // An explicit malformed/zero `e` parameter must never bypass expiry verification.
+            var badExpiry = await anonymous.GetAsync((neverPath + "&e=0").TrimStart('/'), Ct);
+            Assert.Equal(HttpStatusCode.Forbidden, badExpiry.StatusCode);
+
+            var disable = await admin.PutAsJsonAsync($"{Base}/settings", new { proxy_media_never_expire = false }, Ct);
+            Assert.Equal(HttpStatusCode.OK, disable.StatusCode);
+            Assert.False((await BodyAsync(disable)).GetProperty("proxy_media_never_expire").GetBoolean());
+
+            // Non-expiring URLs are immediately rejected once the setting is turned off.
+            var revokedResp = await anonymous.GetAsync(neverPath.TrimStart('/'), Ct);
+            Assert.Equal(HttpStatusCode.Forbidden, revokedResp.StatusCode);
+
+            var reissuedUrl = await lease.Backend.SignGetAsync(key, TimeSpan.FromMinutes(5));
+            Assert.Contains("?e=", reissuedUrl);
+        }
+        finally
+        {
+            await admin.PutAsJsonAsync($"{Base}/settings", new { proxy_media_never_expire = false }, Ct);
+        }
+    }
+
+    [Fact]
     public async Task SourceReverseProxy_IsStoredAndDrivesSelfHostedMediaUrls()
     {
         var (_, admin) = await UserAsync(true);
@@ -663,6 +739,7 @@ public sealed class StoragePoolHttpTests(LocalServicesWithoutWorker services)
         Assert.Equal(20L * 1024 * 1024 * 1024, initialBody.GetProperty("run_max_bytes").GetInt64());
         Assert.Equal(2000, initialBody.GetProperty("run_max_objects").GetInt32());
         Assert.Equal(20, initialBody.GetProperty("run_max_projects").GetInt32());
+        Assert.False(initialBody.GetProperty("proxy_media_never_expire").GetBoolean());
         Assert.Equal(JsonValueKind.Null, initialBody.GetProperty("updated_by").ValueKind);
         Assert.Equal("", initialBody.GetProperty("last_scan_result").GetString());
         Assert.Equal(0, initialBody.GetProperty("last_scan_queued").GetInt32());

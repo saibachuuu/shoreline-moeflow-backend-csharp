@@ -311,10 +311,10 @@ internal sealed class ProxySigningBackend : IStorageBackend
         inner.CopyAsync(source, destination, cancellationToken);
 
     public Task<string> SignGetAsync(string key, TimeSpan validity) =>
-        Task.FromResult(signer.BuildUrl(proxyToken, key, validity));
+        signer.BuildUrlAsync(proxyToken, key, validity).AsTask();
 
     public Task<string> SignGetAsync(string key, TimeSpan validity, string? contentDisposition) =>
-        Task.FromResult(signer.BuildUrl(proxyToken, key, validity, contentDisposition));
+        signer.BuildUrlAsync(proxyToken, key, validity, contentDisposition).AsTask();
 
     public Task<ObjectPage> ListAsync(string prefix, string? startAfter, int maxKeys,
         CancellationToken cancellationToken) =>

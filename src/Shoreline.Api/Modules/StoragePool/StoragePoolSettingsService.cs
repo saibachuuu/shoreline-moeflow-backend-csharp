@@ -10,11 +10,16 @@ public sealed class StoragePoolSettingsService
 {
     private readonly MongoStore store;
     private readonly TimeProvider clock;
+    private readonly StoragePoolMediaProxyPolicy? proxyPolicy;
 
-    public StoragePoolSettingsService(MongoStore store, TimeProvider clock)
+    public StoragePoolSettingsService(
+        MongoStore store,
+        TimeProvider clock,
+        StoragePoolMediaProxyPolicy? proxyPolicy = null)
     {
         this.store = store;
         this.clock = clock;
+        this.proxyPolicy = proxyPolicy;
     }
 
     private IMongoCollection<BsonDocument> Settings => store.Collection(StoragePoolConstants.SettingCollection);
@@ -23,16 +28,23 @@ public sealed class StoragePoolSettingsService
     {
         var existing = await Settings.Find(new BsonDocument("_id", "default")).FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
-        if (existing is not null) return existing;
+        if (existing is not null)
+        {
+            proxyPolicy?.Set(StoragePoolBson.Bool(existing, "pmu"));
+            return existing;
+        }
         var defaults = Defaults(clock.GetUtcNow().UtcDateTime);
         try
         {
             await Settings.InsertOneAsync(defaults, cancellationToken: ct).ConfigureAwait(false);
+            proxyPolicy?.Set(StoragePoolBson.Bool(defaults, "pmu"));
             return defaults;
         }
         catch (MongoWriteException error) when (error.WriteError?.Category == ServerErrorCategory.DuplicateKey)
         {
-            return await Settings.Find(new BsonDocument("_id", "default")).FirstAsync(ct).ConfigureAwait(false);
+            var concurrent = await Settings.Find(new BsonDocument("_id", "default")).FirstAsync(ct).ConfigureAwait(false);
+            proxyPolicy?.Set(StoragePoolBson.Bool(concurrent, "pmu"));
+            return concurrent;
         }
     }
 
@@ -74,12 +86,16 @@ public sealed class StoragePoolSettingsService
             if (value is < 1 or > 1000) throw ApiError.Field("run_max_projects", "范围为 1 到 1000");
             AddChanged(updates, current, "rmp", value);
         }
+        if (StoragePoolJson.Has(data, "proxy_media_never_expire"))
+            AddChanged(updates, current, "pmu", StoragePoolJson.RequiredBoolean(data, "proxy_media_never_expire"));
         if (updates.ElementCount > 0)
         {
             updates["ub"] = actor;
             updates["ut"] = clock.GetUtcNow().UtcDateTime;
             await Settings.UpdateOneAsync(new BsonDocument("_id", "default"),
                 new BsonDocument("$set", updates), cancellationToken: ct).ConfigureAwait(false);
+            if (updates.Contains("pmu"))
+                proxyPolicy?.Set(updates["pmu"].AsBoolean);
             await store.Collection(StoragePoolConstants.AuditCollection).InsertOneAsync(new BsonDocument
             {
                 ["a"] = actor,
@@ -130,6 +146,7 @@ public sealed class StoragePoolSettingsService
         ["rmb"] = 20L * 1024 * 1024 * 1024,
         ["rmo"] = 2000,
         ["rmp"] = 20,
+        ["pmu"] = false,
         ["ub"] = BsonNull.Value,
         ["ut"] = now,
         ["lst"] = BsonNull.Value,
@@ -145,6 +162,7 @@ public sealed class StoragePoolSettingsService
         ["run_max_bytes"] = StoragePoolBson.Long(row, "rmb", 20L * 1024 * 1024 * 1024),
         ["run_max_objects"] = StoragePoolBson.Int(row, "rmo", 2000),
         ["run_max_projects"] = StoragePoolBson.Int(row, "rmp", 20),
+        ["proxy_media_never_expire"] = StoragePoolBson.Bool(row, "pmu"),
         ["updated_by"] = StoragePoolBson.ObjectId(row, "ub") is { } updatedBy
             ? (BsonValue)updatedBy.ToString()
             : BsonNull.Value,

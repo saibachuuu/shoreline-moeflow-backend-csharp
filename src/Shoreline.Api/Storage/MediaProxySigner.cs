@@ -6,6 +6,16 @@ using Microsoft.Extensions.Configuration;
 namespace Shoreline.Api.Storage;
 
 /// <summary>
+/// Runtime policy controlling whether reverse-proxied media URLs omit the
+/// per-request expiry timestamp (<c>e</c>) so browsers and caches see stable,
+/// non-expiring URLs.
+/// </summary>
+public interface IMediaProxyPolicy
+{
+    ValueTask<bool> UseNeverExpireUrlsAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Signs self-hosted media URLs.
 ///
 /// A source with the reverse-proxy switch on hands out
@@ -29,8 +39,9 @@ public sealed class MediaProxySigner
     private readonly byte[] signingKey;
     private readonly TimeProvider clock;
     private readonly string basePath;
+    private readonly IMediaProxyPolicy? policy;
 
-    public MediaProxySigner(IConfiguration configuration, TimeProvider clock)
+    public MediaProxySigner(IConfiguration configuration, TimeProvider clock, IMediaProxyPolicy? policy = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         var secret = configuration["Auth:Secret"];
@@ -41,6 +52,7 @@ public sealed class MediaProxySigner
         signingKey = SHA256.HashData(
             [.. Encoding.UTF8.GetBytes(secret), .. Encoding.UTF8.GetBytes("|media-proxy")]);
         this.clock = clock;
+        this.policy = policy;
         // The frontend talks to the API under /api (nginx strips it before the
         // backend sees the request), so a self-hosted link has to start there.
         var configured = configuration["Storage:MediaProxyBase"];
@@ -48,24 +60,72 @@ public sealed class MediaProxySigner
     }
 
     /// <summary>
+    /// Builds the public link for one object using the active expiry policy.
+    /// </summary>
+    public async ValueTask<string> BuildUrlAsync(
+        string sourceToken,
+        string key,
+        TimeSpan validity,
+        string? contentDisposition = null,
+        CancellationToken cancellationToken = default)
+    {
+        var neverExpire = policy is not null &&
+            await policy.UseNeverExpireUrlsAsync(cancellationToken).ConfigureAwait(false);
+        return BuildUrl(sourceToken, key, validity, contentDisposition, neverExpire);
+    }
+
+    /// <summary>
     /// Builds the public link for one object. <paramref name="sourceToken"/> is
     /// either <see cref="DefaultSourceToken"/> or a storage-source ObjectId.
     /// </summary>
-    public string BuildUrl(string sourceToken, string key, TimeSpan validity, string? contentDisposition = null)
+    public string BuildUrl(
+        string sourceToken,
+        string key,
+        TimeSpan validity,
+        string? contentDisposition = null,
+        bool neverExpire = false)
     {
         StorageKey.ValidateObjectKey(key);
         if (validity <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(validity), "Media URL validity must be positive.");
-        var expires = clock.GetUtcNow().Add(validity).ToUnixTimeSeconds();
         var disposition = NormalizeDisposition(contentDisposition);
-        var signature = Sign(sourceToken, key, expires, disposition);
-        var url = basePath + RoutePrefix + Uri.EscapeDataString(sourceToken) + "/"
-            + StorageKey.EncodePath(key)
-            + "?e=" + expires.ToString(CultureInfo.InvariantCulture)
-            + "&s=" + signature;
+        var prefix = basePath + RoutePrefix + Uri.EscapeDataString(sourceToken) + "/"
+            + StorageKey.EncodePath(key);
+        string url;
+        if (neverExpire)
+        {
+            var signature = SignNever(sourceToken, key, disposition);
+            url = prefix + "?s=" + signature;
+        }
+        else
+        {
+            var expires = clock.GetUtcNow().Add(validity).ToUnixTimeSeconds();
+            var signature = Sign(sourceToken, key, expires, disposition);
+            url = prefix + "?e=" + expires.ToString(CultureInfo.InvariantCulture) + "&s=" + signature;
+        }
         if (disposition.Length > 0)
             url += "&cd=" + disposition;
         return url;
+    }
+
+    /// <summary>
+    /// Verifies either an expiring link (<paramref name="expires"/> has value)
+    /// or a non-expiring link (<paramref name="expires"/> is <c>null</c>).
+    /// Non-expiring links are only accepted while the runtime policy allows them.
+    /// </summary>
+    public async ValueTask<bool> VerifyAsync(
+        string sourceToken,
+        string key,
+        long? expires,
+        string? signature,
+        string? contentDisposition,
+        CancellationToken cancellationToken = default)
+    {
+        if (expires is { } bounded)
+            return Verify(sourceToken, key, bounded, signature, contentDisposition);
+        if (policy is null || !await policy.UseNeverExpireUrlsAsync(cancellationToken).ConfigureAwait(false))
+            return false;
+        return VerifyNever(sourceToken, key, signature, contentDisposition);
     }
 
     /// <summary>
@@ -74,14 +134,32 @@ public sealed class MediaProxySigner
     /// </summary>
     public bool Verify(string sourceToken, string key, long expires, string? signature, string? contentDisposition)
     {
-        if (string.IsNullOrEmpty(signature)) return false;
-        if (sourceToken.Length == 0 || sourceToken.Length > 64) return false;
-        if (key.Length == 0 || key.Length > 1024) return false;
-        if (expires < clock.GetUtcNow().ToUnixTimeSeconds()) return false;
+        if (!HasValidInputs(sourceToken, key, signature)) return false;
+        if (expires <= 0 || expires < clock.GetUtcNow().ToUnixTimeSeconds()) return false;
         var disposition = NormalizeDisposition(contentDisposition);
         var expected = Sign(sourceToken, key, expires, disposition);
         return CryptographicOperations.FixedTimeEquals(
-            Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(signature));
+            Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(signature!));
+    }
+
+    /// <summary>
+    /// Recomputes the signature for a non-expiring link.
+    /// </summary>
+    public bool VerifyNever(string sourceToken, string key, string? signature, string? contentDisposition)
+    {
+        if (!HasValidInputs(sourceToken, key, signature)) return false;
+        var disposition = NormalizeDisposition(contentDisposition);
+        var expected = SignNever(sourceToken, key, disposition);
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(signature!));
+    }
+
+    private static bool HasValidInputs(string sourceToken, string key, string? signature)
+    {
+        if (string.IsNullOrEmpty(signature)) return false;
+        if (sourceToken.Length == 0 || sourceToken.Length > 64) return false;
+        if (key.Length == 0 || key.Length > 1024) return false;
+        return true;
     }
 
     /// <summary>
@@ -92,13 +170,18 @@ public sealed class MediaProxySigner
     public static string NormalizeDisposition(string? value) =>
         string.Equals(value?.Trim(), "attachment", StringComparison.OrdinalIgnoreCase) ? "attachment" : "";
 
-    private string Sign(string sourceToken, string key, long expires, string disposition)
-    {
-        var payload = string.Join('|',
+    private string Sign(string sourceToken, string key, long expires, string disposition) =>
+        SignPayload(string.Join('|',
             sourceToken,
             key,
             expires.ToString(CultureInfo.InvariantCulture),
-            disposition);
+            disposition));
+
+    private string SignNever(string sourceToken, string key, string disposition) =>
+        SignPayload(string.Join('|', sourceToken, key, "never", disposition));
+
+    private string SignPayload(string payload)
+    {
         var mac = HMACSHA256.HashData(signingKey, Encoding.UTF8.GetBytes(payload));
         return Convert.ToBase64String(mac).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }

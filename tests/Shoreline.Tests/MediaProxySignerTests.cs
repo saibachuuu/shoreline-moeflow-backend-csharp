@@ -13,11 +13,18 @@ namespace Shoreline.Tests;
 /// </summary>
 public sealed class MediaProxySignerTests
 {
-    private static MediaProxySigner Signer(string? secret = null) =>
+    private sealed class TogglePolicy(bool enabled) : IMediaProxyPolicy
+    {
+        public bool Enabled { get; set; } = enabled;
+        public ValueTask<bool> UseNeverExpireUrlsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Enabled);
+    }
+
+    private static MediaProxySigner Signer(string? secret = null, IMediaProxyPolicy? policy = null) =>
         new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Auth:Secret"] = secret ?? SecurityTests.Secret,
-        }).Build(), TimeProvider.System);
+        }).Build(), TimeProvider.System, policy);
 
     [Fact]
     public void BuildUrl_KeepsTheSiteOriginAndDropsBucketDetails()
@@ -157,6 +164,51 @@ public sealed class MediaProxySignerTests
         using var lease = new StorageBackendFactory(signer).CreateLease(proxied);
         var url = await lease.Backend.SignGetAsync("files/one.png", TimeSpan.FromMinutes(5));
         Assert.StartsWith("/api/v1/media/507f1f77bcf86cd799439011/files/one.png?e=", url);
+    }
+
+    [Fact]
+    public void BuildUrl_NeverExpireOmitsExpiryAndSignsDeterministically()
+    {
+        var signer = Signer();
+        var first = signer.BuildUrl("default", "files/one.png", TimeSpan.FromMinutes(5), "attachment", neverExpire: true);
+        var second = signer.BuildUrl("default", "files/one.png", TimeSpan.FromMinutes(30), "attachment", neverExpire: true);
+
+        Assert.Equal(first, second);
+        Assert.DoesNotContain("e=", first);
+        Assert.StartsWith("/api/v1/media/default/files/one.png?s=", first);
+
+        var (expires, signature) = Parse(first, out var disposition);
+        Assert.Equal(0, expires);
+        Assert.Equal("attachment", disposition);
+        Assert.True(signer.VerifyNever("default", "files/one.png", signature, disposition));
+        Assert.False(signer.VerifyNever("default", "files/two.png", signature, disposition));
+        // Expiring and non-expiring signatures must not cross-verify.
+        Assert.False(signer.Verify("default", "files/one.png", DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(),
+            signature, disposition));
+    }
+
+    [Fact]
+    public async Task PolicyToggle_ControlsBuildUrlAsyncAndVerifyAsync()
+    {
+        var policy = new TogglePolicy(false);
+        var signer = Signer(policy: policy);
+
+        var expiringUrl = await signer.BuildUrlAsync("default", "files/one.png", TimeSpan.FromMinutes(5));
+        var (expiringAt, expiringSig) = Parse(expiringUrl);
+        Assert.True(expiringAt > 0);
+        Assert.True(await signer.VerifyAsync("default", "files/one.png", expiringAt, expiringSig, null));
+
+        // Enabling non-expiring mode mints stable URLs while honoring unexpired legacy links.
+        policy.Enabled = true;
+        var neverUrl = await signer.BuildUrlAsync("default", "files/one.png", TimeSpan.FromMinutes(5));
+        var (noExpiry, neverSig) = Parse(neverUrl);
+        Assert.Equal(0, noExpiry);
+        Assert.True(await signer.VerifyAsync("default", "files/one.png", null, neverSig, null));
+        Assert.True(await signer.VerifyAsync("default", "files/one.png", expiringAt, expiringSig, null));
+
+        // Turning the policy back off immediately invalidates non-expiring links.
+        policy.Enabled = false;
+        Assert.False(await signer.VerifyAsync("default", "files/one.png", null, neverSig, null));
     }
 
     private static (long Expires, string Signature) Parse(string url) => Parse(url, out _);
