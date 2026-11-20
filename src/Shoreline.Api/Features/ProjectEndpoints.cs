@@ -179,6 +179,15 @@ public static class ProjectEndpoints
             }
             filter["ps"] = new BsonDocument("$in", new BsonArray(ids));
         }
+        var mode = query["mode"].ToString();
+        if (mode.Length > 0 && mode is not ("search-project-name" or "search-worker"))
+            throw IdentityErrors.InvalidRequest("invalid project search mode");
+        if (mode == "search-worker")
+        {
+            var tag = query["tag"].ToString().Trim();
+            if (tag.Length > 0 && !await HasProjectTagAsync(store, team, tag, ct)) throw IdentityErrors.InvalidTag();
+            await ApplyWorkerSearchAsync(store, team, filter, query["worker_name"].ToString(), tag, ct);
+        }
         var count = await store.Collection("project").CountDocumentsAsync(filter, cancellationToken: ct);
         var rows = await store.Collection("project").Find(filter)
             // app/models/team.py:478 orders by ["-edit_time", "-id"]; GroupMixin maps
@@ -247,5 +256,72 @@ public static class ProjectEndpoints
     {
         var tokens = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return tokens.Length == 0 ? null : tokens;
+    }
+
+    // app/services/project_member.py:1205-1365 (search_team_projects): worker search
+    // resolves the matching members first, then keeps only their projects, while the
+    // project-side filters (name, status, project sets) stay applied. Without this
+    // branch `mode=search-worker` was ignored and every team project came back.
+    private static async Task ApplyWorkerSearchAsync(MongoStore store, BsonDocument team, BsonDocument filter,
+        string workerName, string tag, CancellationToken ct)
+    {
+        var memberStatus = new BsonDocument("$in", new BsonArray { "active", "invited" });
+        var baseIds = await DistinctIdsAsync(store.Collection("project"), "_id", filter, ct);
+        var memberFilter = new BsonDocument
+        {
+            ["project"] = new BsonDocument("$in", new BsonArray(baseIds)),
+            ["status"] = memberStatus
+        };
+        var needle = SearchText.Normalize(workerName);
+        if (needle.Length > 0)
+        {
+            var pattern = new BsonRegularExpression(Regex.Escape(needle), "i");
+            // Users match by normalized name or by one of their aliases; team members
+            // add the aliases the team assigned to them.
+            var subjects = await DistinctIdsAsync(store.Collection("user"), "_id", new BsonDocument("$or", new BsonArray
+            {
+                new BsonDocument("ns", pattern),
+                new BsonDocument("asrch", needle)
+            }), ct);
+            subjects.AddRange(await DistinctIdsAsync(store.Collection("team_member"), "user", new BsonDocument
+            {
+                ["team"] = team["_id"],
+                ["status"] = "active",
+                ["asrch"] = needle
+            }, ct));
+            // Project-level display names (the name a member uses inside a project)
+            // are searched on their own projection.
+            var displayMatches = await DistinctIdsAsync(store.Collection("project_member"), "_id", new BsonDocument
+            {
+                ["project"] = memberFilter["project"],
+                ["status"] = memberStatus,
+                ["dns"] = pattern
+            }, ct);
+            var alternatives = new BsonArray
+            {
+                new BsonDocument("_id", new BsonDocument("$in", new BsonArray(displayMatches)))
+            };
+            if (subjects.Count > 0)
+                alternatives.Add(new BsonDocument("user", new BsonDocument("$in", new BsonArray(subjects.Distinct()))));
+            memberFilter["$or"] = alternatives;
+        }
+        if (tag.Length > 0) memberFilter["tags"] = tag;
+        var matched = await DistinctIdsAsync(store.Collection("project_member"), "project", memberFilter, ct);
+        filter["_id"] = new BsonDocument("$in", new BsonArray(matched.Distinct()));
+    }
+
+    private static async Task<List<BsonValue>> DistinctIdsAsync(IMongoCollection<BsonDocument> collection, string field,
+        BsonDocument filter, CancellationToken ct) =>
+        (await collection.Find(filter).Project(new BsonDocument(field, 1)).ToListAsync(ct))
+            .Select(document => document.GetValue(field, BsonNull.Value))
+            .Where(value => value.IsObjectId)
+            .ToList();
+
+    private static async Task<bool> HasProjectTagAsync(MongoStore store, BsonDocument team, string tag, CancellationToken ct)
+    {
+        if (IdentityPermissions.SystemTagDefinitions("project").Contains(tag)) return true;
+        var policy = await store.Collection("identity_tag_policy")
+            .Find(new BsonDocument("team", team["_id"])).FirstOrDefaultAsync(ct);
+        return policy is not null && policy.GetValue("project_tags", new BsonDocument()).AsBsonDocument.Contains(tag);
     }
 }
