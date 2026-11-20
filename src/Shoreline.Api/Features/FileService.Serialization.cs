@@ -153,6 +153,20 @@ public sealed partial class FileService
             // Sign it with the default lease so STORAGE_MEDIA_PROXY also applies.
             data["cover_url"] = await ProcessedUrlAsync(file, defaultStorage, "cover", thumbnailStatus, ct);
             data["resample_url"] = await ProcessedUrlAsync(file, storage, "resample", thumbnailStatus, ct);
+            if (_reconciler is not null
+                && thumbnailStatus is not (0 or 3)
+                && (storage is not LocalStorageBackend || defaultStorage is not LocalStorageBackend)
+                && file.Contains("p") && file["p"].IsObjectId)
+            {
+                // At least one processed object lives on object storage and the
+                // row is not settled: the URLs above are placeholders, so hand
+                // the row to the background reconciler (it deduplicates).
+                _reconciler.Trigger(
+                    file["_id"].AsObjectId,
+                    file["p"].AsObjectId,
+                    saveName,
+                    StorageSourceText(project));
+            }
             data["thumbnail_status"] = thumbnailStatus;
             data["thumbnail_error"] = file.Text("the");
             var ocrPercent = file.Integer("op");
@@ -172,6 +186,37 @@ public sealed partial class FileService
            && project.Contains("csid")
            && !project["csid"].IsBsonNull
            && project["csid"].ToJson().Trim('"').Length > 0;
+
+    /// <summary>
+    /// Read the project's storage source id as text without throwing: the
+    /// serializer feeds it straight into the background reconciler, and a
+    /// malformed legacy value must not fail an otherwise fine list response.
+    /// </summary>
+    private static string? StorageSourceText(BsonDocument? project)
+    {
+        if (project is null)
+        {
+            return null;
+        }
+
+        if (!project.TryGetValue("csid", out var value) || value.IsBsonNull)
+        {
+            return null;
+        }
+
+        if (value.IsObjectId)
+        {
+            return value.AsObjectId.ToString();
+        }
+
+        if (value.IsString && value.AsString.Length > 0
+            && ObjectId.TryParse(value.AsString, out var parsed))
+        {
+            return parsed.ToString();
+        }
+
+        return null;
+    }
 
     private async Task<string> OriginalUrlAsync(string saveName, IStorageBackend storage,
         CancellationToken ct)
@@ -211,6 +256,13 @@ public sealed partial class FileService
         var objectStorage = storage is not LocalStorageBackend;
         if (objectStorage && thumbnailStatus is 0 or 3)
             return await storage.SignGetAsync(key, UrlValidity);
+        if (objectStorage)
+            // A non-terminal object-storage row used to probe the backend
+            // here, costing the whole list seconds per stalled row (each HEAD
+            // is a network round trip to the object endpoint). Return the
+            // placeholder and let ThumbnailStatusReconciler verify the objects
+            // in the background.
+            return "generating";
         var exists = await storage.HeadAsync(key, ct);
         return exists is null ? "generating" : await storage.SignGetAsync(key, UrlValidity);
     }

@@ -81,6 +81,7 @@ public sealed partial class FileService
     private readonly ProjectLabelLock _labels;
     private readonly LabelRequestContext _labelContext;
     private readonly IThumbnailScheduler? _thumbnails;
+    private readonly ThumbnailStatusReconciler? _reconciler;
     private readonly ILogger<FileService>? _logger;
 
     private readonly IMongoCollection<BsonDocument> _files;
@@ -107,7 +108,8 @@ public sealed partial class FileService
         LabelRequestContext? labelContext = null,
         ProjectStorageRouter? router = null,
         IThumbnailScheduler? thumbnails = null,
-        IHttpContextAccessor? http = null)
+        IHttpContextAccessor? http = null,
+        ThumbnailStatusReconciler? reconciler = null)
     {
         _store = store;
         _projects = projects;
@@ -120,6 +122,7 @@ public sealed partial class FileService
         _labels = labelLock ?? new ProjectLabelLock(store, clock);
         _labelContext = labelContext ?? new LabelRequestContext();
         _thumbnails = thumbnails;
+        _reconciler = reconciler;
         _logger = logger;
         _files = store.Collection("file");
         _caches = store.Collection("file_target_cache");
