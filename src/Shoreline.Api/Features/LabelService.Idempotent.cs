@@ -61,10 +61,12 @@ public sealed partial class LabelService
     public LabelIdempotentHooks? IdempotentHooks { get; set; }
 
     /// <summary>
-    /// Create one image source with a caller-supplied stable id. The whole
-    /// operation runs under the shared project label lease. Counters are
+    /// Create one image source with a caller-supplied stable id. Counters are
     /// rebuilt from primary rows, never incremented, so an unknown insert
-    /// outcome or a partial counter write converges on retry.
+    /// outcome or a partial counter write converges on retry. This is the
+    /// background import-job path: it keeps the real project lock (expected
+    /// revision + pending markers make it resumable, and import jobs are too
+    /// rare to benefit from optimistic entry).
     /// <paramref name="context"/> is nullable because the import job calls this
     /// outside an HTTP request; the helper borrows the scoped
     /// <see cref="LabelRequestContext"/> instead of reading the HttpContext.
@@ -88,7 +90,7 @@ public sealed partial class LabelService
             throw ApiError.Invalid("缺少稳定的原文 id");
 
         var projectId = await ProjectIdOfFileAsync(fileId, ct);
-        await using var session = await EnterAsync(projectId, ct);
+        await using var session = await EnterLockedAsync(projectId, ct);
         if (session.Revision != expectedRevision)
             throw LabelErrors.Busy("后台任务的标签版本已过期");
 
@@ -188,7 +190,8 @@ public sealed partial class LabelService
         var source = await RequireSourceAsync(sourceId, ct);
         var fileId = SourceFileId(source);
         var projectId = await ProjectIdOfFileAsync(fileId, ct);
-        await using var session = await EnterAsync(projectId, ct);
+        // Import-job path: real lock, same reasoning as CreateSourceOnceAsync.
+        await using var session = await EnterLockedAsync(projectId, ct);
         if (session.Revision != expectedRevision)
             throw LabelErrors.Busy("后台任务的标签版本已过期");
 
