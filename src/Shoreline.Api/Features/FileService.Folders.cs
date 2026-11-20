@@ -21,8 +21,9 @@ public sealed partial class FileService
         EnsureWorking(project);
         var projectId = project["_id"].AsObjectId;
 
-        await using var labelSession = await EnterLabelAsync(projectId, ct);
+        // Global lock order: mutation gate first, then the label lease.
         using var _ = await _gate.EnterAsync(projectId, ct);
+        await using var labelSession = await EnterLabelAsync(projectId, ct);
         project = await _projects.GetProjectAsync(projectId.ToString(), ct);
 
         var parsed = ParseFilename(name, folder: true);

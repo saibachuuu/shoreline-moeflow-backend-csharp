@@ -120,7 +120,7 @@ public sealed class LabelSession : IAsyncDisposable
     private readonly LabelRequestContext? context;
     private readonly bool owner;
 
-    internal LabelSession(LabelRequestContext context, ProjectLabelLease lease, bool owner)
+    internal LabelSession(LabelRequestContext? context, ProjectLabelLease lease, bool owner)
     {
         this.context = context;
         this.owner = owner;
@@ -170,6 +170,20 @@ internal interface ILabelLeaseOwner
 }
 
 /// <summary>
+/// Owner for optimistic label sessions. It inserts no lock row, so releasing
+/// is a no-op; the lease only exists to carry the project row and revision
+/// through LabelService code that expects a LabelSession.
+/// </summary>
+internal sealed class NoopLeaseOwner : ILabelLeaseOwner
+{
+    public static readonly NoopLeaseOwner Instance = new();
+
+    private NoopLeaseOwner() { }
+
+    Task ILabelLeaseOwner.ReleaseAsync(ProjectLabelLease lease) => Task.CompletedTask;
+}
+
+/// <summary>
 /// Optional fault-injection seam around the lock collection and the post-insert
 /// project read. It exists so tests can reproduce transport cancellation and an
 /// unknown insert outcome without replacing the real Mongo lock implementation.
@@ -195,7 +209,14 @@ public sealed class ProjectLabelLock(
     ILogger<ProjectLabelLock>? logger = null,
     ProjectLabelLockHooks? hooks = null) : ILabelLeaseOwner
 {
-    public const int WaitMilliseconds = 2000;
+    /// <summary>
+    /// Real-lock wait budget. Ordinary single-row label writers no longer
+    /// queue here (they run optimistically), so the waiters are multi-row
+    /// mutations (rank moves, cascades) and bulk label operations. A budget
+    /// matched to the mutation gate (10s) keeps the rare real-lock collision
+    /// from failing fast like the old 2s one did under parallel uploads.
+    /// </summary>
+    public const int WaitMilliseconds = 10000;
     public const int PollMilliseconds = 25;
 
     private IMongoCollection<BsonDocument> Locks => store.Collection("project_label_lock");
@@ -223,6 +244,30 @@ public sealed class ProjectLabelLock(
         long? expectedRevision = null,
         CancellationToken ct = default) =>
         context.EnterAsync(this, projectId, recovery: true, expectedRevision, ct);
+
+    /// <summary>
+    /// Optimistic session for single-row label writes: no lock row is inserted
+    /// and nothing is serialized. The recovery barrier still rejects ordinary
+    /// writers mid-restore, and the session carries the current revision for
+    /// the per-row checks. Callers must guard their UpdateOne/DeleteOne with a
+    /// label_epoch CAS filter (see LabelService): a bulk operation stamps every
+    /// row to a new revision, which makes stale writers fail with 409 instead
+    /// of queueing behind the lock. Disposing the session is a no-op; it is
+    /// deliberately not registered in a LabelRequestContext so a later real
+    /// lock in the same request can never borrow this lease.
+    /// </summary>
+    public async Task<LabelSession> EnterOptimisticAsync(
+        ObjectId projectId,
+        CancellationToken ct = default)
+    {
+        var project = await Projects.Find(new BsonDocument("_id", projectId)).FirstOrDefaultAsync(ct);
+        if (project is null) throw ProjectNotFound();
+        if (HasRecovery(project))
+            throw LabelErrors.Busy();
+        var lease = new ProjectLabelLease(NoopLeaseOwner.Instance, projectId, owner: "",
+            project, project.Integer("label_revision", 0), recovery: false);
+        return new LabelSession(context: null, lease, owner: true);
+    }
 
     /// <summary>
     /// Explicit entry point for snapshot/recovery jobs. Callers receive an

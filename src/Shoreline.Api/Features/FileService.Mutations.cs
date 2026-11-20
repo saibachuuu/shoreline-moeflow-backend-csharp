@@ -15,8 +15,9 @@ public sealed partial class FileService
         CancellationToken ct)
     {
         var projectId = project["_id"].AsObjectId;
-        await using var labelSession = await EnterLabelAsync(projectId, ct);
+        // Global lock order: mutation gate first, then the label lease.
         using var _ = await _gate.EnterAsync(projectId, ct);
+        await using var labelSession = await EnterLabelAsync(projectId, ct);
         file = await GetFileAsync(file["_id"].AsObjectId.ToString(), ct);
         EnsureActivated(file);
         labelSession.AssertReferenceEpoch(file);
@@ -66,8 +67,9 @@ public sealed partial class FileService
         CancellationToken ct)
     {
         var projectId = project["_id"].AsObjectId;
-        await using var labelSession = await EnterLabelAsync(projectId, ct);
+        // Global lock order: mutation gate first, then the label lease.
         using var _ = await _gate.EnterAsync(projectId, ct);
+        await using var labelSession = await EnterLabelAsync(projectId, ct);
         file = await GetFileAsync(file["_id"].AsObjectId.ToString(), ct);
         EnsureActivated(file);
         labelSession.AssertReferenceEpoch(file);
@@ -226,8 +228,9 @@ public sealed partial class FileService
         CancellationToken ct)
     {
         var projectId = project["_id"].AsObjectId;
-        await using var labelSession = await EnterLabelAsync(projectId, ct);
+        // Global lock order: mutation gate first, then the label lease.
         using var _ = await _gate.EnterAsync(projectId, ct);
+        await using var labelSession = await EnterLabelAsync(projectId, ct);
         file = await GetFileAsync(file["_id"].AsObjectId.ToString(), ct);
         EnsureActivated(file);
         labelSession.AssertReferenceEpoch(file);

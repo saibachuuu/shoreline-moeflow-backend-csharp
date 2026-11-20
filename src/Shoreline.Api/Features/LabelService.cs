@@ -10,11 +10,15 @@ namespace Shoreline.Api.Features;
 
 /// <summary>
 /// E1 label main chain: image sources, translations, tips, caches and the
-/// shared project label lock. This is a direct port of the read/write behavior
+/// per-row label epoch guard. This is a direct port of the read/write behavior
 /// in app/apis/source.py, translation.py and tip.py.
 ///
-/// All public mutations enter the project lease once. Internal helpers never
-/// enter the non-reentrant database lock again.
+/// Reads and single-row mutations run optimistically against the current
+/// label_revision; writes re-validate through a label_epoch CAS filter so a
+/// concurrent bulk operation (which stamps new epochs on every row) turns
+/// them into 409 instead of queueing. Multi-row mutations (rank moves,
+/// cascading deletes, loop selection) still take the real project lock.
+/// Internal helpers never enter the non-reentrant database lock again.
 /// </summary>
 public sealed partial class LabelService(
     MongoStore store,
@@ -34,8 +38,43 @@ public sealed partial class LabelService(
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
+    /// <summary>
+    /// Optimistic entry: no lock row, no queueing. Reads observe committed
+    /// state, and single-row writers re-validate per row with a label_epoch
+    /// CAS filter (see EpochClause/AssertMatched) so a bulk operation that
+    /// stamped new epochs turns stale writers into 409 instead of making
+    /// them wait. The recovery barrier still rejects ordinary work mid-restore.
+    /// </summary>
     private async Task<LabelSession> EnterAsync(ObjectId projectId, CancellationToken ct) =>
+        await labels.EnterOptimisticAsync(projectId, ct);
+
+    /// <summary>
+    /// Real project lock for multi-row mutations that have no per-row atomic
+    /// story: rank moves (two rows swap), source deletion (cascades), and loop
+    /// selection (writes many translations at once).
+    /// </summary>
+    private async Task<LabelSession> EnterLockedAsync(ObjectId projectId, CancellationToken ct) =>
         await labels.EnterAsync(requestScope, projectId, recovery: false, expectedRevision: null, ct);
+
+    /// <summary>
+    /// Filter clause matching the label_epoch a writer observed. AssertEpoch
+    /// treats a missing field as 0, so revision 0 must also match rows that
+    /// predate the column entirely (no label_epoch field at all; in Mongo a
+    /// null in $in matches a missing field).
+    /// </summary>
+    private static BsonValue EpochClause(long revision) => revision == 0
+        ? new BsonDocument("$in", new BsonArray { 0, BsonNull.Value })
+        : revision;
+
+    /// <summary>
+    /// Throws StaleReference when an epoch-CAS write matched nothing: the row
+    /// was deleted, or a bulk operation re-stamped it after this request read
+    /// it. Both cases ask the client to reload.
+    /// </summary>
+    private static void AssertMatched(long matched)
+    {
+        if (matched == 0) throw LabelErrors.StaleReference();
+    }
 
     // ------------------------------------------------------------------
     // GET /v1/files/{fileId}/sources
@@ -70,7 +109,9 @@ public sealed partial class LabelService(
         CancellationToken ct)
     {
         var projectId = await ProjectIdOfFileAsync(fileId, ct);
-        await using var session = await EnterAsync(projectId, ct);
+        // Multi-row: writes several translations at once; no per-row atomic
+        // story across them, so it keeps the real project lock.
+        await using var session = await EnterLockedAsync(projectId, ct);
         var file = await RequireFileAsync(fileId, ct);
         await permissions.RequireProjectAsync(actor, session.Project, "project:CHECK_TRA", ct);
         session.AssertReferenceEpoch(file);
@@ -112,7 +153,11 @@ public sealed partial class LabelService(
         CancellationToken ct)
     {
         var projectId = await ProjectIdOfFileAsync(fileId, ct);
-        await using var session = await EnterAsync(projectId, ct);
+        // Multi-step insert: the source row and its file counters must land
+        // together; an optimistic failure after InsertOne would leave an
+        // orphan and a retried duplicate. The critical section is tiny (two
+        // Mongo writes, no network IO), so the real lock costs nothing.
+        await using var session = await EnterLockedAsync(projectId, ct);
         var file = await RequireFileAsync(fileId, ct);
         RequireImage(file, "只有图片文件能添加原文");
         await permissions.RequireProjectAsync(actor, session.Project, "project:ADD_LABEL", ct);
@@ -189,8 +234,12 @@ public sealed partial class LabelService(
         if (edit.Vertices is not null) set["v"] = new BsonArray(edit.Vertices);
         if (edit.PositionType is not null) set["p"] = edit.PositionType.Value;
 
-        await Sources.UpdateOneAsync(new BsonDocument("_id", sourceId),
+        // Epoch CAS: a bulk operation that re-stamped this source (or a
+        // concurrent delete) makes this match nothing and the client reloads.
+        var result = await Sources.UpdateOneAsync(
+            new BsonDocument { ["_id"] = sourceId, ["label_epoch"] = EpochClause(session.Revision) },
             new BsonDocument("$set", set), cancellationToken: ct);
+        AssertMatched(result.MatchedCount);
         await TouchFileEditTimeAsync(file, session, now, ct);
         var updated = await RequireSourceAsync(sourceId, ct);
         return await SourceViewAsync(context, updated, ct);
@@ -206,7 +255,10 @@ public sealed partial class LabelService(
         CancellationToken ct)
     {
         var projectId = await ProjectIdOfSourceAsync(sourceId, ct);
-        await using var session = await EnterAsync(projectId, ct);
+        // Multi-row: deleting a source cascades into its translations and
+        // tips; the rows are removed by filter, not by _id CAS, so this keeps
+        // the real project lock.
+        await using var session = await EnterLockedAsync(projectId, ct);
         var source = await RequireSourceAsync(sourceId, ct);
         var file = await RequireFileAsync(SourceFileId(source), ct);
         RequireImage(file, "只有图片文件能删除原文");
@@ -231,7 +283,10 @@ public sealed partial class LabelService(
         CancellationToken ct)
     {
         var projectId = await ProjectIdOfSourceAsync(sourceId, ct);
-        await using var session = await EnterAsync(projectId, ct);
+        // Multi-row: a rank move shifts the ranks of every source between the
+        // old and new positions; the interval update cannot be per-row CAS'd,
+        // so this keeps the real project lock.
+        await using var session = await EnterLockedAsync(projectId, ct);
         var source = await RequireSourceAsync(sourceId, ct);
         var file = await RequireFileAsync(SourceFileId(source), ct);
         RequireImage(file, "只有图片文件能修改原文顺序");
@@ -368,8 +423,11 @@ public sealed partial class LabelService(
 
             var update = new BsonDocument("$set", set);
             if (unset.ElementCount > 0) update["$unset"] = unset;
-            await Translations.UpdateOneAsync(new BsonDocument("_id", translationId),
+            // Epoch CAS: see EditSourceAsync.
+            var result = await Translations.UpdateOneAsync(
+                new BsonDocument { ["_id"] = translationId, ["label_epoch"] = EpochClause(session.Revision) },
                 update, cancellationToken: ct);
+            AssertMatched(result.MatchedCount);
             await TouchFileEditTimeAsync(file, session, now, ct);
         }
 
@@ -459,13 +517,16 @@ public sealed partial class LabelService(
         session.AssertReferenceEpoch(file);
 
         var now = Now();
-        await Tips.UpdateOneAsync(new BsonDocument("_id", tipId),
+        // Epoch CAS: see EditSourceAsync.
+        var tipResult = await Tips.UpdateOneAsync(
+            new BsonDocument { ["_id"] = tipId, ["label_epoch"] = EpochClause(session.Revision) },
             new BsonDocument("$set", new BsonDocument
             {
                 ["c"] = content,
                 ["et"] = now,
                 ["label_epoch"] = session.Revision
             }), cancellationToken: ct);
+        AssertMatched(tipResult.MatchedCount);
         await TouchSourceEditTimeAsync(source, session, now, ct);
         await TouchFileEditTimeAsync(file, session, now, ct);
         await HeartbeatQuietlyAsync(session.Project, actor, ct);
@@ -493,7 +554,11 @@ public sealed partial class LabelService(
         session.AssertReferenceEpoch(source);
         session.AssertReferenceEpoch(file);
 
-        await Tips.DeleteOneAsync(new BsonDocument("_id", tipId), ct);
+        // Epoch CAS: a bulk operation that re-stamped this tip makes the
+        // delete match nothing and the client reloads.
+        var tipDelete = await Tips.DeleteOneAsync(
+            new BsonDocument { ["_id"] = tipId, ["label_epoch"] = EpochClause(session.Revision) }, ct);
+        AssertMatched(tipDelete.DeletedCount);
         var now = Now();
         await TouchSourceEditTimeAsync(source, session, now, ct);
         await TouchFileEditTimeAsync(file, session, now, ct);

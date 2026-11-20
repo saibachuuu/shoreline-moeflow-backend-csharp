@@ -444,13 +444,21 @@ public sealed partial class LabelService
             }
 
             var editTime = await NextEditTimeAsync(sourceId, targetId, existing, ct);
-            await Translations.UpdateOneAsync(new BsonDocument("_id", IdValue(existing)),
+            // Epoch CAS: see LabelService.EditSourceAsync. On failure the row
+            // was re-stamped by a bulk operation; the caller reloads.
+            var result = await Translations.UpdateOneAsync(
+                new BsonDocument
+                {
+                    ["_id"] = IdValue(existing),
+                    ["label_epoch"] = EpochClause(session.Revision)
+                },
                 new BsonDocument("$set", new BsonDocument
                 {
                     ["c"] = content,
                     ["e"] = editTime,
                     ["label_epoch"] = session.Revision
                 }), cancellationToken: ct);
+            AssertMatched(result.MatchedCount);
             await TouchFileEditTimeAsync(file, session, editTime, ct);
             return await RequireTranslationAsync(IdValue(existing), ct);
         }
@@ -527,11 +535,15 @@ public sealed partial class LabelService
 
             if (otherSelected is not null)
             {
+                // Filter by epoch so a stale request cannot drag rows that a
+                // bulk operation re-stamped back to the old revision. Matching
+                // zero is fine: the main-row CAS below is the real gate.
                 await Translations.UpdateManyAsync(new BsonDocument
                 {
                     ["o"] = sourceId,
                     ["t"] = targetId,
-                    ["_id"] = new BsonDocument("$ne", translationId)
+                    ["_id"] = new BsonDocument("$ne", translationId),
+                    ["label_epoch"] = EpochClause(session.Revision)
                 }, new BsonDocument
                 {
                     ["$set"] = new BsonDocument
@@ -543,7 +555,12 @@ public sealed partial class LabelService
                 }, cancellationToken: ct);
             }
 
-            await Translations.UpdateOneAsync(new BsonDocument("_id", translationId),
+            var selectedResult = await Translations.UpdateOneAsync(
+                new BsonDocument
+                {
+                    ["_id"] = translationId,
+                    ["label_epoch"] = EpochClause(session.Revision)
+                },
                 new BsonDocument
                 {
                     ["$set"] = new BsonDocument
@@ -554,13 +571,20 @@ public sealed partial class LabelService
                         ["label_epoch"] = session.Revision
                     }
                 }, cancellationToken: ct);
+            AssertMatched(selectedResult.MatchedCount);
 
             if (otherSelected is null && !source.Flag("b"))
                 await AdjustCountAsync(file, session, "checked_source_count", +1, targetId, ct);
         }
         else
         {
-            await Translations.UpdateOneAsync(new BsonDocument("_id", translationId),
+            // Epoch CAS on the main row; the sweep below only filters.
+            var clearedResult = await Translations.UpdateOneAsync(
+                new BsonDocument
+                {
+                    ["_id"] = translationId,
+                    ["label_epoch"] = EpochClause(session.Revision)
+                },
                 new BsonDocument
                 {
                     ["$set"] = new BsonDocument
@@ -571,11 +595,13 @@ public sealed partial class LabelService
                     },
                     ["$unset"] = new BsonDocument("sr", "")
                 }, cancellationToken: ct);
+            AssertMatched(clearedResult.MatchedCount);
             await Translations.UpdateManyAsync(new BsonDocument
             {
                 ["o"] = sourceId,
                 ["t"] = targetId,
-                ["_id"] = new BsonDocument("$ne", translationId)
+                ["_id"] = new BsonDocument("$ne", translationId),
+                ["label_epoch"] = EpochClause(session.Revision)
             }, new BsonDocument
             {
                 ["$set"] = new BsonDocument
@@ -606,6 +632,18 @@ public sealed partial class LabelService
         var sourceId = TranslationSourceId(translation);
         var targetId = TranslationTargetId(translation);
 
+        // Delete the main row first with an epoch CAS: if a bulk operation
+        // re-stamped it, the counters below must not move at all. Count drift
+        // after a successful delete (bulk lands between delete and count) is
+        // repaired by ReconcileFileTargetAsync on the caller's next request.
+        var deleteResult = await Translations.DeleteOneAsync(
+            new BsonDocument
+            {
+                ["_id"] = translationId,
+                ["label_epoch"] = EpochClause(session.Revision)
+            }, ct);
+        AssertMatched(deleteResult.DeletedCount);
+
         var others = await Translations.CountDocumentsAsync(new BsonDocument
         {
             ["o"] = sourceId,
@@ -617,8 +655,6 @@ public sealed partial class LabelService
             await AdjustCountAsync(file, session, "checked_source_count", -1, targetId, ct);
         if (others == 0)
             await AdjustCountAsync(file, session, "translated_source_count", -1, targetId, ct);
-
-        await Translations.DeleteOneAsync(new BsonDocument("_id", translationId), ct);
     }
 
     private async Task<BsonDocument> CreateTipCoreAsync(
@@ -645,13 +681,20 @@ public sealed partial class LabelService
         {
             session.AssertEpoch(existing);
             var editTime = await NextTipEditTimeAsync(sourceId, targetId, existing, ct);
-            await Tips.UpdateOneAsync(new BsonDocument("_id", IdValue(existing)),
+            // Epoch CAS: see LabelService.EditSourceAsync.
+            var result = await Tips.UpdateOneAsync(
+                new BsonDocument
+                {
+                    ["_id"] = IdValue(existing),
+                    ["label_epoch"] = EpochClause(session.Revision)
+                },
                 new BsonDocument("$set", new BsonDocument
                 {
                     ["c"] = content,
                     ["et"] = editTime,
                     ["label_epoch"] = session.Revision
                 }), cancellationToken: ct);
+            AssertMatched(result.MatchedCount);
             return await RequireTipAsync(IdValue(existing), ct);
         }
 
@@ -683,13 +726,21 @@ public sealed partial class LabelService
             }).FirstOrDefaultAsync(ct);
             if (winner is null) throw;
             var editTime = await NextTipEditTimeAsync(sourceId, targetId, winner, ct);
-            await Tips.UpdateOneAsync(new BsonDocument("_id", IdValue(winner)),
+            // Epoch CAS on the concurrent-insert winner: a bulk operation may
+            // have re-stamped it between the failed insert and this read.
+            var winnerResult = await Tips.UpdateOneAsync(
+                new BsonDocument
+                {
+                    ["_id"] = IdValue(winner),
+                    ["label_epoch"] = EpochClause(session.Revision)
+                },
                 new BsonDocument("$set", new BsonDocument
                 {
                     ["c"] = content,
                     ["et"] = editTime,
                     ["label_epoch"] = session.Revision
                 }), cancellationToken: ct);
+            AssertMatched(winnerResult.MatchedCount);
             return await RequireTipAsync(IdValue(winner), ct);
         }
     }
@@ -916,7 +967,13 @@ public sealed partial class LabelService
         DateTime editTime,
         CancellationToken ct)
     {
-        await Sources.UpdateOneAsync(new BsonDocument("_id", source["_id"]),
+        // Filter by epoch so a stale request cannot drag a re-stamped row back
+        // to the old revision; a skipped et update is cosmetic and harmless.
+        await Sources.UpdateOneAsync(new BsonDocument
+        {
+            ["_id"] = source["_id"],
+            ["label_epoch"] = EpochClause(session.Revision)
+        },
             new BsonDocument("$set", new BsonDocument
             {
                 ["e"] = editTime,
@@ -931,9 +988,12 @@ public sealed partial class LabelService
         CancellationToken ct)
     {
         var ids = FileIds(file);
+        // Epoch filter on the file rows (et is cosmetic; skipping a stale row
+        // is harmless). Project/set/team rows carry no label_epoch.
         await Files.UpdateManyAsync(new BsonDocument
         {
-            ["_id"] = new BsonDocument("$in", new BsonArray(ids))
+            ["_id"] = new BsonDocument("$in", new BsonArray(ids)),
+            ["label_epoch"] = EpochClause(session.Revision)
         }, new BsonDocument("$set", new BsonDocument
         {
             ["et"] = editTime,
@@ -982,9 +1042,15 @@ public sealed partial class LabelService
             _ => throw new ArgumentOutOfRangeException(nameof(cacheName))
         };
 
+        // Epoch filters on rows that carry label_epoch: a stale request must
+        // not drag re-stamped rows back to the old revision. Skipped rows are
+        // acceptable — count drift from a mid-flight bulk operation is
+        // repaired by ReconcileFileTargetAsync and the snapshot replay. The
+        // project row has no label_epoch field.
         await Files.UpdateManyAsync(new BsonDocument
         {
-            ["_id"] = new BsonDocument("$in", new BsonArray(ids))
+            ["_id"] = new BsonDocument("$in", new BsonArray(ids)),
+            ["label_epoch"] = EpochClause(session.Revision)
         }, new BsonDocument
         {
             ["$inc"] = new BsonDocument(fileField, step),
@@ -1004,19 +1070,23 @@ public sealed partial class LabelService
         await FileTargetCaches.UpdateManyAsync(new BsonDocument
         {
             ["f"] = new BsonDocument("$in", new BsonArray(ids)),
-            ["t"] = targetId.Value
+            ["t"] = targetId.Value,
+            ["label_epoch"] = EpochClause(session.Revision)
         }, new BsonDocument
         {
             ["$inc"] = new BsonDocument(cacheField, step),
             ["$set"] = new BsonDocument("label_epoch", session.Revision)
         }, cancellationToken: ct);
 
-        await Targets.UpdateOneAsync(new BsonDocument("_id", targetId.Value),
-            new BsonDocument
-            {
-                ["$inc"] = new BsonDocument(fileField, step),
-                ["$set"] = new BsonDocument("label_epoch", session.Revision)
-            }, cancellationToken: ct);
+        await Targets.UpdateOneAsync(new BsonDocument
+        {
+            ["_id"] = targetId.Value,
+            ["label_epoch"] = EpochClause(session.Revision)
+        }, new BsonDocument
+        {
+            ["$inc"] = new BsonDocument(fileField, step),
+            ["$set"] = new BsonDocument("label_epoch", session.Revision)
+        }, cancellationToken: ct);
     }
 
     /// <summary>

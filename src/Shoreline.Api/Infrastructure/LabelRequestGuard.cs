@@ -21,9 +21,14 @@ public sealed class LabelRequestGuardHooks
 /// Request-level label guard, ported from app/services/label_lock.py:293-399.
 ///
 /// The guard resolves the project from the route, rejects ordinary requests
-/// while a recovery is pending, takes the shared project label lock for every
-/// non-OPTIONS request (reads included), enforces X-Label-Revision on writes
-/// after a bulk operation, and appends the current revision headers.
+/// while a recovery is pending, validates X-Label-Revision on label writes
+/// after a bulk operation, and appends the current revision headers. Reads
+/// and single-row label writes pass through without the project lock: they
+/// only observe committed state, LabelService guards its writes with a
+/// per-row label_epoch CAS filter, and FileService takes the mutation gate
+/// plus the label lease itself around file metadata. Bulk label operations
+/// (the /label- and /snapshots routes) still take the shared project lock
+/// because they rewrite many rows at once.
 ///
 /// It is intentionally not registered by Program.cs; the integration owner
 /// must place it inside the existing error middleware and after routing.
@@ -78,11 +83,38 @@ public sealed class LabelRequestGuard(
             return;
         }
 
+        if (request.Method is "GET" or "HEAD")
+        {
+            // Reads never queue behind the project lock. A long writer (an
+            // upload or a bulk operation) must not block anyone who is only
+            // looking at the project; the revision header still reports the
+            // snapshot the response was built from. The recovery barrier
+            // above keeps reads out of a project mid-restore.
+            await InvokeAndAddHeadersAsync(context, pid, session: null);
+            return;
+        }
+
+        if (!isOperation)
+        {
+            // Ordinary label writes (single source/translation/tip rows,
+            // uploads) no longer take the project lock: LabelService guards
+            // each row with a label_epoch CAS filter and FileService takes
+            // the mutation gate plus the label lease itself, so a completed
+            // bulk operation rejects stale writers with 409 instead of every
+            // write queueing behind one long request. The revision header is
+            // still validated here so bulk-modified data fails fast.
+            AssertRevisionHeader(context, pid, revision);
+            await InvokeAndAddHeadersAsync(context, pid, session: null);
+            return;
+        }
+
         var scope = context.RequestServices.GetRequiredService<LabelRequestContext>();
         LabelSession? session = null;
         try
         {
-            session = await labels.EnterAsync(scope, pid, recovery: isOperation,
+            // Bulk label operations and snapshots keep the real project lock:
+            // they rewrite many rows and cannot be guarded per row.
+            session = await labels.EnterAsync(scope, pid, recovery: true,
                 expectedRevision: null, ct: context.RequestAborted);
 
             // Re-read after lock acquisition. The pre-lock value can race a
@@ -92,18 +124,7 @@ public sealed class LabelRequestGuard(
                 .FirstOrDefaultAsync(context.RequestAborted);
             revision = locked?.Integer("label_revision", 0) ?? 0;
 
-            var expected = request.Headers.TryGetValue("X-Label-Revision", out var values)
-                ? values.ToString()
-                : null;
-            var labelPath = LabelResources.Any(resource =>
-                request.Path.Value?.Contains("/" + resource, StringComparison.Ordinal) == true);
-
-            if (request.Method is not ("GET" or "HEAD") && labelPath && revision > 0 && expected is null)
-                throw LabelErrors.Busy("批量操作后的标签写入必须携带版本号，请重新打开编辑页面");
-
-            if (request.Method is not ("GET" or "HEAD") && expected is not null &&
-                expected != revision.ToString(CultureInfo.InvariantCulture))
-                throw LabelErrors.Busy("标签数据已被批量修改，请重新打开编辑页面");
+            AssertRevisionHeader(context, pid, revision);
 
             // Headers must be attached before the response starts. A minimal API
             // endpoint writes its body before this middleware resumes, so setting
@@ -127,6 +148,34 @@ public sealed class LabelRequestGuard(
                     await session.DisposeAsync().ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>
+    /// Fast-fail validation of X-Label-Revision on label writes after a bulk
+    /// operation. Optimistic single-row writers re-validate per row with a
+    /// label_epoch CAS filter, so this check only avoids wasted work.
+    /// </summary>
+    private void AssertRevisionHeader(HttpContext context, ObjectId pid, long revision)
+    {
+        var request = context.Request;
+        if (request.Method is "GET" or "HEAD")
+        {
+            return;
+        }
+
+        var labelPath = LabelResources.Any(resource =>
+            request.Path.Value?.Contains("/" + resource, StringComparison.Ordinal) == true);
+
+        var expected = request.Headers.TryGetValue("X-Label-Revision", out var values)
+            ? values.ToString()
+            : null;
+
+        if (labelPath && revision > 0 && expected is null)
+            throw LabelErrors.Busy("批量操作后的标签写入必须携带版本号，请重新打开编辑页面");
+
+        if (expected is not null &&
+            expected != revision.ToString(CultureInfo.InvariantCulture))
+            throw LabelErrors.Busy("标签数据已被批量修改，请重新打开编辑页面");
     }
 
     private async Task InvokeAndAddHeadersAsync(HttpContext context, ObjectId pid, LabelSession? session)

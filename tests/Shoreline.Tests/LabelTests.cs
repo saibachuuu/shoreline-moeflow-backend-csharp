@@ -548,8 +548,10 @@ public sealed class LabelTests(LocalServices services)
             ["created"] = DateTime.UtcNow
         });
 
-        var busy = await CaptureError(() => world.Labels.ListSourcesAsync(
-            Context(), world.Actor, world.FileId, world.TargetId, paging: false, Ct));
+        // Reads and single-row writes no longer take the project lock; block a
+        // locked-path writer (source creation holds the real lock) instead.
+        var busy = await CaptureError(() => world.Labels.CreateSourceAsync(
+            Context(), world.Actor, world.FileId, "blocked", 1.0, 2.0, 1, Ct));
         Assert.Equal(409, busy.Status);
         Assert.Equal(1, busy.Code);
         Assert.Equal("LabelBusyError", busy.Error);
