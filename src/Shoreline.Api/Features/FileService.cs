@@ -408,13 +408,16 @@ public sealed partial class FileService
             }
         }
 
-        var items = new List<Dictionary<string, object?>>(files.Count);
-        foreach (var file in files)
+        // Serialize rows concurrently: cover/resample probing (local storage)
+        // and any per-row storage lease resolution must not run one-by-one.
+        var apis = await Task.WhenAll(files.Select(file => ToApiAsync(file, project, ct)));
+        var items = new List<Dictionary<string, object?>>(apis.Length);
+        for (var index = 0; index < apis.Length; index++)
         {
-            var api = await ToApiAsync(file, project, ct);
+            var api = apis[index];
             if (targetId.HasValue)
             {
-                api["file_target_cache"] = caches.TryGetValue(file["_id"].AsObjectId, out var cache)
+                api["file_target_cache"] = caches.TryGetValue(files[index]["_id"].AsObjectId, out var cache)
                     ? CacheApi(cache)
                     : EmptyCacheApi();
             }
@@ -531,14 +534,19 @@ public sealed partial class FileService
         if (file.Integer("t") == TypeImage)
         {
             var (previous, next) = await NeighborsAsync(file, ct);
-            if (previous is not null)
+            // Serialize both neighbors concurrently; each may probe storage.
+            Task<Dictionary<string, object?>>? previousView =
+                previous is null ? null : ToApiAsync(previous, project, ct);
+            Task<Dictionary<string, object?>>? nextView =
+                next is null ? null : ToApiAsync(next, project, ct);
+            if (previousView is not null)
             {
-                data["prev_image"] = await ToApiAsync(previous, project, ct);
+                data["prev_image"] = await previousView;
             }
 
-            if (next is not null)
+            if (nextView is not null)
             {
-                data["next_image"] = await ToApiAsync(next, project, ct);
+                data["next_image"] = await nextView;
             }
         }
 

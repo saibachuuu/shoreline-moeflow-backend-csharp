@@ -52,10 +52,8 @@ public sealed partial class FileService
             .ToList();
 
         var items = new List<Dictionary<string, object?>>(files.Count);
-        foreach (var file in files)
-        {
-            items.Add(await ToApiAsync(file, project, ct));
-        }
+        // Serialize rows concurrently so one slow row cannot stall the whole view.
+        items.AddRange(await Task.WhenAll(files.Select(file => ToApiAsync(file, project, ct))));
 
         return new FileOrderView(items, version, defaultIds);
     }
@@ -260,19 +258,24 @@ public sealed partial class FileService
                     Builders<BsonDocument>.Filter.In("_id", projectIds))
                 .ToListAsync(ct)).ToDictionary(project => project["_id"].AsObjectId);
 
-        var items = new List<Dictionary<string, object?>>(files.Count);
+        // Python's File.to_api is wrapped by @need_activated, including the
+        // admin listing, so an inactive revision fails the whole request.
         foreach (var file in files)
         {
-            // Python's File.to_api is wrapped by @need_activated, including the
-            // admin listing, so an inactive revision fails the whole request.
             if (!file.Flag("ac"))
             {
                 throw new ApiError("FileNotActivatedError", 4016, "此修订版未激活");
             }
-
-            projects.TryGetValue(file["p"].AsObjectId, out var project);
-            items.Add(await ToApiAsync(file, project, ct));
         }
+
+        // Serialize rows concurrently: admin listings span many projects and
+        // per-row lease resolution must not run one-by-one.
+        var items = new List<Dictionary<string, object?>>(files.Count);
+        items.AddRange(await Task.WhenAll(files.Select(file =>
+        {
+            projects.TryGetValue(file["p"].AsObjectId, out var project);
+            return ToApiAsync(file, project, ct);
+        })));
 
         return (items, count);
     }
