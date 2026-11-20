@@ -92,6 +92,19 @@ public sealed class LabelRequestGuard(
             return;
         }
 
+        if (!isOperation && request.HasFormContentType)
+        {
+            // Multipart uploads stream their body inside the endpoint, which
+            // can take minutes for large files. Holding the project lock here
+            // would serialize concurrent uploads behind their own network
+            // transfer (2s wait -> LabelBusyError under parallel uploads).
+            // FileService.UploadAsync takes the label lock itself around the
+            // metadata write, which is the section bulk operations care
+            // about. Label-form endpoints keep the guarded path.
+            await InvokeAndAddHeadersAsync(context, pid, session: null);
+            return;
+        }
+
         var scope = context.RequestServices.GetRequiredService<LabelRequestContext>();
         LabelSession? session = null;
         try

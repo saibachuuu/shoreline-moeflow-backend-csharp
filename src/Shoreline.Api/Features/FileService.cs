@@ -557,77 +557,99 @@ public sealed partial class FileService
         EnsureWorking(project);
         var projectId = project["_id"].AsObjectId;
 
-        await using var labelSession = await EnterLabelAsync(projectId, ct);
-        using var _ = await _gate.EnterAsync(projectId, ct);
-        // Reload under the locks: another request may have changed the project.
-        project = await _projects.GetProjectAsync(projectId.ToString(), ct);
-        await using var storageLease = await LeaseForProjectAsync(project, ct);
-        var storage = storageLease?.Backend ?? _storage;
-
         var parsed = ParseFilename(filename, folder: false);
         if (parsed.Type != TypeImage && !(parsed.Type == TypeText && AllowTextUpload))
         {
             throw FilenameError("暂不支持的文件格式");
         }
 
+        // Pre-read outside any lock, only to determine the object key suffix:
+        // Python overwrite semantics keep the existing document's suffix, and
+        // the object has to exist before the metadata write can reference it.
         var parent = await ResolveFolderAsync(project, parentId, ct);
-        var old = await FindByNameAsync(projectId, parent, filename, activated: true, ct);
+        var oldPre = await FindByNameAsync(projectId, parent, filename, activated: true, ct);
         BsonDocument file;
         var isNew = false;
         var isRevision = false;
 
-        if (old is null)
-        {
-            file = await CreateFileDocumentAsync(project, parent, parsed, labelSession.Revision, ct);
-            isNew = true;
-        }
-        else if (old.Integer("t") == TypeImage)
-        {
-            // Legacy overwrite behaviour: same name keeps the same file id.
-            labelSession.AssertReferenceEpoch(old);
-            file = old;
-        }
-        else if (old.Integer("t") == TypeText)
-        {
-            labelSession.AssertReferenceEpoch(old);
-            file = await CreateRevisionAsync(project, old, labelSession.Revision, ct);
-            isRevision = true;
-        }
-        else
-        {
-            throw new ApiError("FilenameDuplicateError", 4007, "文件名重复");
-        }
-
         // Python overwrite keeps the existing document (and its name); the new
         // object key therefore uses the existing suffix, not the upload's one.
-        var saveSuffix = old is not null
-            ? SuffixOf(old.Text("n"))
+        var saveSuffix = oldPre is not null
+            ? SuffixOf(oldPre.Text("n"))
             : parsed.Suffix;
         var saveName = ObjectId.GenerateNewId().ToString() + "." + saveSuffix;
-        var oldSaveName = file.Text("sa");
-        var oldSize = file.Contains("fs") && !file["fs"].IsBsonNull ? file["fs"].ToInt64() : 0L;
         var tempPath = Path.Combine(OpenCodeTempDirectory(), "moeflow-" + Guid.NewGuid().ToString("N") + "-" + saveName);
         string md5;
         long byteLength;
 
+        // Receive the body and push the object before taking any lock: the
+        // client transfer and the storage write dominate upload latency and
+        // touch no Mongo state. The metadata write below still serializes
+        // under the mutation gate and the label lock, so bulk operations and
+        // other file mutations keep their ordering guarantees.
+        (md5, byteLength) = await WriteTempAsync(upload, tempPath, ct);
+        await using var storageLease = await LeaseForProjectAsync(project, ct);
+        var storage = storageLease?.Backend ?? _storage;
+        await using (var stream = new FileStream(
+                         tempPath,
+                         FileMode.Open,
+                         FileAccess.Read,
+                         FileShare.Read,
+                         81920,
+                         FileOptions.Asynchronous | FileOptions.SequentialScan))
+        {
+            await storage.PutAsync(
+                FilePrefix + saveName,
+                stream,
+                string.IsNullOrWhiteSpace(upload.ContentType) ? "application/octet-stream" : upload.ContentType,
+                ct);
+        }
+
         var metadataPersisted = false;
+        string? oldSaveName = null;
+        long revisionAtWrite = 0;
         try
         {
-            (md5, byteLength) = await WriteTempAsync(upload, tempPath, ct);
-            await using (var stream = new FileStream(
-                             tempPath,
-                             FileMode.Open,
-                             FileAccess.Read,
-                             FileShare.Read,
-                             81920,
-                             FileOptions.Asynchronous | FileOptions.SequentialScan))
+            using var _ = await _gate.EnterAsync(projectId, ct);
+            await using var labelSession = await EnterLabelAsync(projectId, ct);
+            // Reload under the locks: another request may have changed the project.
+            project = await _projects.GetProjectAsync(projectId.ToString(), ct);
+            parent = await ResolveFolderAsync(project, parentId, ct);
+            var old = await FindByNameAsync(projectId, parent, filename, activated: true, ct);
+            if ((oldPre is null) != (old is null) ||
+                (old is not null && SuffixOf(old.Text("n")) != saveSuffix))
             {
-                await storage.PutAsync(
-                    FilePrefix + saveName,
-                    stream,
-                    string.IsNullOrWhiteSpace(upload.ContentType) ? "application/octet-stream" : upload.ContentType,
-                    ct);
+                // The name's owner changed while the bytes were travelling.
+                // The metadata never referenced the uploaded object, so the
+                // catch below deletes it; the client can safely retry.
+                throw new ApiError("LabelBusyError", 1, "文件状态在上传期间发生变化，请刷新后重试");
             }
+
+            if (old is null)
+            {
+                file = await CreateFileDocumentAsync(project, parent, parsed, labelSession.Revision, ct);
+                isNew = true;
+            }
+            else if (old.Integer("t") == TypeImage)
+            {
+                // Legacy overwrite behaviour: same name keeps the same file id.
+                labelSession.AssertReferenceEpoch(old);
+                file = old;
+            }
+            else if (old.Integer("t") == TypeText)
+            {
+                labelSession.AssertReferenceEpoch(old);
+                file = await CreateRevisionAsync(project, old, labelSession.Revision, ct);
+                isRevision = true;
+            }
+            else
+            {
+                throw new ApiError("FilenameDuplicateError", 4007, "文件名重复");
+            }
+
+            oldSaveName = file.Text("sa");
+            var oldSize = file.Contains("fs") && !file["fs"].IsBsonNull ? file["fs"].ToInt64() : 0L;
+            revisionAtWrite = labelSession.Revision;
 
             // From here on the object is the pending target of the metadata
             // write. A failed or ambiguous Mongo update must never delete it:
@@ -658,34 +680,9 @@ public sealed partial class FileService
             file["fs"] = new BsonInt64(newSize);
             await TouchEditTimeAsync(project, file, ct);
 
-            if (!string.IsNullOrEmpty(oldSaveName) && oldSaveName != saveName)
+            if (isRevision)
             {
-                await DeleteStoredObjectsBestEffortAsync(oldSaveName, storage);
-            }
-
-            // Python File.upload_real_file schedules local thumbnails right
-            // after the rejected-upload/old-object work (app/models/file.py:867-891).
-            // The scheduler no-ops in server-side/Alibaba mode, so this branch
-            // only needs the image-type check. A scheduling failure must never
-            // fail an already-persisted upload; leave the previous honest
-            // status instead of advertising QUEUING.
-            if (_thumbnails is not null && file.Integer("t") == TypeImage)
-            {
-                try
-                {
-                    await _thumbnails.ScheduleAsync(
-                        file["_id"].AsObjectId, projectId, labelSession.Revision, ct);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    _logger?.LogWarning(
-                        "Thumbnail schedule after upload failed ({ErrorType})",
-                        exception.GetType().Name);
-                }
+                _logger?.LogDebug("Uploaded new revision {FileId}", file["_id"]);
             }
         }
         catch
@@ -704,19 +701,46 @@ public sealed partial class FileService
             TryDeleteTemp(tempPath);
         }
 
+        // Both locks are released: old-object cleanup and thumbnail
+        // scheduling are best-effort and must not block other mutations.
+        if (!string.IsNullOrEmpty(oldSaveName) && oldSaveName != saveName)
+        {
+            await DeleteStoredObjectsBestEffortAsync(oldSaveName, storage);
+        }
+
         if (isNew)
         {
             // create_file already counted it; the upload only adjusts file_size.
             _logger?.LogDebug("Created file {FileId}", file["_id"]);
         }
 
-        if (isRevision)
+        // Python File.upload_real_file schedules local thumbnails right
+        // after the rejected-upload/old-object work (app/models/file.py:867-891).
+        // The scheduler no-ops in server-side/Alibaba mode, so this branch
+        // only needs the image-type check. A scheduling failure must never
+        // fail an already-persisted upload; leave the previous honest
+        // status instead of advertising QUEUING.
+        if (_thumbnails is not null && file.Integer("t") == TypeImage)
         {
-            _logger?.LogDebug("Uploaded new revision {FileId}", file["_id"]);
+            try
+            {
+                await _thumbnails.ScheduleAsync(
+                    file["_id"].AsObjectId, projectId, revisionAtWrite, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                _logger?.LogWarning(
+                    "Thumbnail schedule after upload failed ({ErrorType})",
+                    exception.GetType().Name);
+            }
         }
 
         var data = await ToApiAsync(file, project, ct);
-        data["upload_overwrite"] = old is not null;
+        data["upload_overwrite"] = oldPre is not null;
         return data;
     }
 
