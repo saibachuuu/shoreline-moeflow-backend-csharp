@@ -21,9 +21,12 @@ public sealed class LabelRequestGuardHooks
 /// Request-level label guard, ported from app/services/label_lock.py:293-399.
 ///
 /// The guard resolves the project from the route, rejects ordinary requests
-/// while a recovery is pending, takes the shared project label lock for every
-/// non-OPTIONS request (reads included), enforces X-Label-Revision on writes
-/// after a bulk operation, and appends the current revision headers.
+/// while a recovery is pending, enforces X-Label-Revision on writes after a
+/// bulk operation, and appends the current revision headers. Reads never
+/// queue behind the project label lock: they only observe committed state,
+/// and the revision header tells the client which snapshot it saw. Writes
+/// still take the shared lock so label mutations serialize with bulk
+/// operations.
 ///
 /// It is intentionally not registered by Program.cs; the integration owner
 /// must place it inside the existing error middleware and after routing.
@@ -74,6 +77,17 @@ public sealed class LabelRequestGuard(
 
         if (request.Method == HttpMethods.Options)
         {
+            await InvokeAndAddHeadersAsync(context, pid, session: null);
+            return;
+        }
+
+        if (request.Method is "GET" or "HEAD")
+        {
+            // Reads never queue behind the project lock. A long writer (an
+            // upload or a bulk operation) must not block anyone who is only
+            // looking at the project; the revision header still reports the
+            // snapshot the response was built from. The recovery barrier
+            // above keeps reads out of a project mid-restore.
             await InvokeAndAddHeadersAsync(context, pid, session: null);
             return;
         }
